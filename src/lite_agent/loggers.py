@@ -1,3 +1,3 @@
 import logging
 
-logger = logging.getLogger("easy_agent")
+logger = logging.getLogger("lite_agent")

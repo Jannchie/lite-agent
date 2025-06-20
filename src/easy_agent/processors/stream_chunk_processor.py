@@ -69,7 +69,7 @@ class StreamChunkProcessor:
             if new_call.type:
                 current_call.type = new_call.type
 
-    def handle_tool_calls(self, tool_calls: list[ChatCompletionDeltaToolCall]) -> None:
+    def update_tool_calls(self, tool_calls: list[ChatCompletionDeltaToolCall]) -> None:
         """Handle tool call updates"""
         if not tool_calls:
             return

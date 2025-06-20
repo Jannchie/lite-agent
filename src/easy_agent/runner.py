@@ -19,7 +19,7 @@ class Runner:
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         if includes is None:
-            includes = ["final_message", "usage", "tool_call", "tool_call_result"]
+            includes = ["final_message", "usage", "tool_call", "tool_call_result", "tool_call_delta", "content_delta"]
         if isinstance(user_input, str):
             self.messages.append({"role": "user", "content": user_input})
         else:

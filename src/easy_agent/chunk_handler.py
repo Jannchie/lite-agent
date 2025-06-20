@@ -58,15 +58,27 @@ class ToolCallResultChunk(TypedDict):
     content: str
 
 
-class MessageDeltaChunk(TypedDict):
+class ContentDeltaChunk(TypedDict):
     """
     Define the type of message chunk
     """
 
-    type: Literal["delta"]
+    type: Literal["content_delta"]
+    delta: str
 
 
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk
+class ToolCallDeltaChunk(TypedDict):
+    """
+    Define the type of tool call delta chunk
+    """
+
+    type: Literal["tool_call_delta"]
+    tool_call_id: str
+    name: str
+    arguments_delta: str
+
+
+AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
 
 
 async def chunk_handler(
@@ -112,8 +124,18 @@ async def chunk_handler(
             continue
         else:
             processor.update_content(delta.content)
-            processor.handle_tool_calls(delta.tool_calls)
-
+            if delta.content:
+                yield ContentDeltaChunk(type="content_delta", delta=delta.content)
+            processor.update_tool_calls(delta.tool_calls)
+            if delta.tool_calls:
+                for tool_call in delta.tool_calls:
+                    if tool_call.function.arguments:
+                        yield ToolCallDeltaChunk(
+                            type="tool_call_delta",
+                            tool_call_id=processor.current_message.tool_calls[-1].id,
+                            name=processor.current_message.tool_calls[-1].function.name,
+                            arguments_delta=tool_call.function.arguments,
+                        )
         # Check if finished
         if choice.finish_reason and processor.current_message:
             current_message = processor.finalize_message()

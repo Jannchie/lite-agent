@@ -1,16 +1,22 @@
 [project]
-name = "easy-agent"
+name = "open-agents"
 version = "0.1.0"
 description = "A lightweight, extensible framework for building AI agent."
 readme = "README.md"
 authors = [{ name = "Jianqi Pan", email = "jannchie@gmail.com" }]
 requires-python = ">=3.10"
-dependencies = [
-    "funcall>=0.6.0",
-    "prompt-toolkit>=3.0.51",
-    "rich>=14.0.0",
+dependencies = ["funcall>=0.6.0", "prompt-toolkit>=3.0.51", "rich>=14.0.0"]
+keywords = [
+    "function call",
+    "openai",
+    "pydantic",
+    "rich",
+    "AI",
+    "tooling",
+    "agent framework",
+    "assistant",
+    "chatbot",
 ]
-keywords = ["function call", "openai", "pydantic", "rich", "AI", "tooling", "agent framework", "assistant", "chatbot"]
 license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Python :: 3",

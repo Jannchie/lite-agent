@@ -1,29 +1,9 @@
-from typing import Literal
-
 import litellm
 from funcall import Funcall
 from litellm.types.utils import ChatCompletionDeltaToolCall, StreamingChoices
-from pydantic import BaseModel
 
 from easy_agent.loggers import logger
-
-
-class ToolCallFunction(BaseModel):
-    name: str
-    arguments: str | None = None
-
-
-class ToolCall(BaseModel):
-    type: Literal["function"]
-    function: ToolCallFunction
-    id: str
-
-
-class AssistantMessage(BaseModel):
-    id: str
-    role: Literal["assistant"] = "assistant"
-    content: str = ""
-    tool_calls: list[ToolCall] | None = None
+from easy_agent.types import AssistantMessage, ToolCall, ToolCallFunction
 
 
 class StreamChunkProcessor:
@@ -40,7 +20,7 @@ class StreamChunkProcessor:
             id=chunk.id,
             index=choice.index,
             role=delta.role,
-            content=delta.content or "",
+            content="",
         )
         logger.debug("Initialized new message: %s", self.current_message.id)
 

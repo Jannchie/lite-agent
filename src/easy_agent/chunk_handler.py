@@ -78,7 +78,7 @@ class ToolCallDeltaChunk(TypedDict):
     arguments_delta: str
 
 
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
+AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk
 
 
 async def chunk_handler(
@@ -117,25 +117,21 @@ async def chunk_handler(
 
         choice = chunk.choices[0]
         delta = choice.delta
-
-        # Initialize or update message
-        if processor.current_message is None:
+        if not processor.current_message:
             processor.initialize_message(chunk, choice)
-            continue
-        else:
-            processor.update_content(delta.content)
-            if delta.content:
-                yield ContentDeltaChunk(type="content_delta", delta=delta.content)
-            processor.update_tool_calls(delta.tool_calls)
-            if delta.tool_calls:
-                for tool_call in delta.tool_calls:
-                    if tool_call.function.arguments:
-                        yield ToolCallDeltaChunk(
-                            type="tool_call_delta",
-                            tool_call_id=processor.current_message.tool_calls[-1].id,
-                            name=processor.current_message.tool_calls[-1].function.name,
-                            arguments_delta=tool_call.function.arguments,
-                        )
+        if delta.content:
+            yield ContentDeltaChunk(type="content_delta", delta=delta.content)
+        processor.update_content(delta.content)
+        processor.update_tool_calls(delta.tool_calls)
+        if delta.tool_calls:
+            for tool_call in delta.tool_calls:
+                if tool_call.function.arguments:
+                    yield ToolCallDeltaChunk(
+                        type="tool_call_delta",
+                        tool_call_id=processor.current_message.tool_calls[-1].id,
+                        name=processor.current_message.tool_calls[-1].function.name,
+                        arguments_delta=tool_call.function.arguments,
+                    )
         # Check if finished
         if choice.finish_reason and processor.current_message:
             current_message = processor.finalize_message()

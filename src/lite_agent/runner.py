@@ -27,6 +27,11 @@ class Runner:
 
         return self._run_aiter(max_steps, includes)
 
+    async def run_until_complete(self, user_input: RunnerMessages | str) -> list[AgentChunk]:
+        """Run the agent until it completes and return the final message."""
+        resp = self.run_stream(user_input, includes=["final_message", "usage", "tool_call", "tool_call_result"])
+        return [chunk async for chunk in resp]
+
     async def _run_aiter(self, max_steps: int, includes: list[Literal["usage", "final_message", "tool_call", "tool_call_result"]]) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         steps = 0

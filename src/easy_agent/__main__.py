@@ -1,8 +1,8 @@
 import asyncio
-import datetime
 import logging
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.validation import Validator
 from rich.console import Console
 from rich.logging import RichHandler
 
@@ -29,7 +29,7 @@ async def get_temperature(city: str) -> str:
 
 
 class RichChannel:
-    def __init__(self):
+    def __init__(self) -> None:
         self.console = Console()
         self.map = {
             "final_message": self.handle_final_message,
@@ -50,22 +50,19 @@ class RichChannel:
         self.new_turn = True
 
     def handle_tool_call(self, chunk: AgentChunk):
-        now = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
         name = chunk.get("name", "<unknown>")
         arguments = chunk.get("arguments", "")
-        self.console.print(f"[bold green]{now} 🛠️ [/bold green] [green]{name}[/green]([yellow]{arguments}[/yellow])")
+        self.console.print(f"🛠️  [green]{name}[/green]([yellow]{arguments}[/yellow])")
 
     def handle_tool_call_result(self, chunk: AgentChunk):
-        now = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
         name = chunk.get("name", "<unknown>")
         content = chunk.get("content", "")
-        self.console.print(f"[bold green]{now} 🛠️ [/bold green] [green]{name}[/green] → [yellow]{content}[/yellow]")
+        self.console.print(f"🛠️  [green]{name}[/green] → [yellow]{content}[/yellow]")
 
     def handle_tool_call_delta(self, chunk: AgentChunk): ...
     def handle_content_delta(self, chunk: ContentDeltaChunk):
         if self.new_turn:
-            now = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
-            self.console.print(f"[bold magenta]{now} 🤖[/bold magenta] ", end="")
+            self.console.print("🤖 ", end="")
             self.new_turn = False
         print(chunk["delta"], end="", flush=True)
 
@@ -85,13 +82,22 @@ async def main():
     session = PromptSession()
     rich_channel = RichChannel()
     runner = Runner(agent)
+    not_empty_validator = Validator.from_callable(
+        lambda text: bool(text.strip()),
+        error_message="Input cannot be empty.",
+        move_cursor_to_end=True,
+    )
     while True:
         try:
-            user_input = await session.prompt_async("Input: ")
+            user_input = await session.prompt_async(
+                "👤 ",
+                default="",
+                complete_while_typing=True,
+                validator=not_empty_validator,
+                validate_while_typing=False,
+            )
             if user_input.lower() in {"exit", "quit"}:
                 break
-            now = datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
-            rich_channel.console.print(f"[bold cyan]{now} 👤[/bold cyan] {user_input}")
             response = runner.run_stream(user_input)
             async for chunk in response:
                 rich_channel.handle(chunk)

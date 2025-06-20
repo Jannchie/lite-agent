@@ -22,7 +22,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Communications :: Chat",
 ]
 

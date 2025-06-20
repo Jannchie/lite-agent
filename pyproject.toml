@@ -1,7 +1,7 @@
 [project]
 name = "easy-agent"
-version = "0.4.0"
-description = "Add your description here"
+version = "0.0.0"
+description = "A lightweight, extensible framework for building AI agent."
 readme = "README.md"
 authors = [{ name = "Jianqi Pan", email = "jannchie@gmail.com" }]
 requires-python = ">=3.10"
@@ -10,7 +10,7 @@ dependencies = [
     "prompt-toolkit>=3.0.51",
     "rich>=14.0.0",
 ]
-keywords = ["function call", "openai", "pydantic", "rich", "AI", "tooling"]
+keywords = ["function call", "openai", "pydantic", "rich", "AI", "tooling", "agent framework", "assistant", "chatbot"]
 license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -20,7 +20,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Artificial Intelligence",
+    "Topic :: Communications :: Chat",
 ]
 
 [build-system]

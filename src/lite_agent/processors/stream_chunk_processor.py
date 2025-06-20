@@ -2,8 +2,8 @@ import litellm
 from funcall import Funcall
 from litellm.types.utils import ChatCompletionDeltaToolCall, StreamingChoices
 
-from easy_agent.loggers import logger
-from easy_agent.types import AssistantMessage, ToolCall, ToolCallFunction
+from lite_agent.loggers import logger
+from lite_agent.types import AssistantMessage, ToolCall, ToolCallFunction
 
 
 class StreamChunkProcessor:

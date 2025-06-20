@@ -1,5 +1,5 @@
 [project]
-name = "open-agents"
+name = "lite-agent"
 version = "0.1.0"
 description = "A lightweight, extensible framework for building AI agent."
 readme = "README.md"

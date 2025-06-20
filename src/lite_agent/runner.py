@@ -1,9 +1,9 @@
 from collections.abc import AsyncGenerator
 from typing import Literal
 
-from easy_agent.agent import Agent
-from easy_agent.chunk_handler import AgentChunk
-from easy_agent.types import AgentToolCallMessage, RunnerMessages
+from lite_agent.agent import Agent
+from lite_agent.chunk_handler import AgentChunk
+from lite_agent.types import AgentToolCallMessage, RunnerMessages
 
 
 class Runner:

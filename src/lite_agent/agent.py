@@ -3,8 +3,8 @@ from collections.abc import AsyncGenerator, Callable
 import litellm
 from funcall import Funcall
 
-from easy_agent.chunk_handler import AgentChunk, chunk_handler
-from easy_agent.types import RunnerMessages
+from lite_agent.chunk_handler import AgentChunk, chunk_handler
+from lite_agent.types import RunnerMessages
 
 
 class Agent:

@@ -4,9 +4,9 @@ from typing import Literal, TypedDict
 import litellm
 from funcall import Funcall
 
-from easy_agent.loggers import logger
-from easy_agent.processors import StreamChunkProcessor
-from easy_agent.processors.stream_chunk_processor import AssistantMessage
+from lite_agent.loggers import logger
+from lite_agent.processors import StreamChunkProcessor
+from lite_agent.processors.stream_chunk_processor import AssistantMessage
 
 
 class LiteLLMRawChunk(TypedDict):

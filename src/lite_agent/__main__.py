@@ -6,10 +6,10 @@ from prompt_toolkit.validation import Validator
 from rich.console import Console
 from rich.logging import RichHandler
 
-from easy_agent.agent import Agent
-from easy_agent.loggers import logger
-from easy_agent.runner import Runner
-from easy_agent.types import AgentChunk, ContentDeltaChunk
+from lite_agent.agent import Agent
+from lite_agent.loggers import logger
+from lite_agent.runner import Runner
+from lite_agent.types import AgentChunk, ContentDeltaChunk
 
 logging.basicConfig(level=logging.WARNING, handlers=[RichHandler()], format="%(message)s")
 logger.setLevel(logging.INFO)

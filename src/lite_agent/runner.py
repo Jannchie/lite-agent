@@ -1,8 +1,7 @@
 from collections.abc import AsyncGenerator
 
 from lite_agent.agent import Agent
-from lite_agent.chunk_handler import AgentChunk
-from lite_agent.types import AgentChunkType, AgentToolCallMessage, RunnerMessages
+from lite_agent.types import AgentChunk, AgentChunkType, AgentToolCallMessage, RunnerMessages
 
 
 class Runner:
@@ -40,7 +39,7 @@ class Runner:
             async for chunk in resp:
                 if chunk["type"] == "final_message":
                     message = chunk["message"]
-                    self.messages.append(message.model_dump()) # type: ignore
+                    self.messages.append(message.model_dump())  # type: ignore
                     finish_reason = chunk["finish_reason"]
                 elif chunk["type"] == "tool_call_result":
                     self.messages.append(

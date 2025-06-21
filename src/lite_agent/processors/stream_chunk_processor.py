@@ -1,6 +1,6 @@
 import litellm
 from funcall import Funcall
-from litellm.types.utils import ChatCompletionDeltaToolCall, StreamingChoices
+from litellm.types.utils import ChatCompletionDeltaToolCall, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.types import AssistantMessage, ToolCall, ToolCallFunction
@@ -11,11 +11,14 @@ class StreamChunkProcessor:
 
     def __init__(self, fc: Funcall) -> None:
         self.fc = fc
-        self.current_message: AssistantMessage = None
+        self.current_message: AssistantMessage | None = None
 
-    def initialize_message(self, chunk: litellm.ModelResponseStream, choice: StreamingChoices) -> None:
+    def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:
         """Initialize the message object"""
         delta = choice.delta
+        if delta.role != "assistant":
+            logger.warning("Skipping chunk with role: %s", delta.role)
+            return
         self.current_message = AssistantMessage(
             id=chunk.id,
             index=choice.index,
@@ -44,10 +47,12 @@ class StreamChunkProcessor:
             return
 
         for current_call, new_call in zip(self.current_message.tool_calls, tool_calls, strict=False):
-            if new_call.function.arguments:
+            if new_call.function.arguments and current_call.function.arguments:
                 current_call.function.arguments += new_call.function.arguments
-            if new_call.type:
+            if new_call.type and new_call.type == "function":
                 current_call.type = new_call.type
+            elif new_call.type:
+                logger.warning("Unexpected tool call type: %s", new_call.type)
 
     def update_tool_calls(self, tool_calls: list[ChatCompletionDeltaToolCall]) -> None:
         """Handle tool call updates"""
@@ -55,24 +60,32 @@ class StreamChunkProcessor:
             return
         for call in tool_calls:
             if call.id:
-                new_tool_call = ToolCall(
-                    id=call.id,
-                    type=call.type,
-                    function=ToolCallFunction(
-                        name=call.function.name or "",
-                        arguments=call.function.arguments,
-                    ),
-                    index=call.index,
-                )
-                if self.current_message.tool_calls is None:
-                    self.current_message.tool_calls = []
-                self.current_message.tool_calls.append(new_tool_call)
-            else:
+                if call.type == "function":
+                    new_tool_call = ToolCall(
+                        id=call.id,
+                        type=call.type,
+                        function=ToolCallFunction(
+                            name=call.function.name or "",
+                            arguments=call.function.arguments,
+                        ),
+                        index=call.index,
+                    )
+                    if self.current_message is not None:
+                        if self.current_message.tool_calls is None:
+                            self.current_message.tool_calls = []
+                        self.current_message.tool_calls.append(new_tool_call)
+                else:
+                    logger.warning("Unexpected tool call type: %s", call.type)
+            elif self.current_message is not None and self.current_message.tool_calls is not None and call.index is not None and 0 <= call.index < len(self.current_message.tool_calls):
                 existing_call = self.current_message.tool_calls[call.index]
                 if call.function.arguments:
+                    if existing_call.function.arguments is None:
+                        existing_call.function.arguments = ""
                     existing_call.function.arguments += call.function.arguments
+            else:
+                logger.warning("Cannot update tool call: current_message or tool_calls is None, or invalid index.")
 
-    def handle_usage_info(self, chunk: litellm.ModelResponseStream) -> litellm.Usage | None:
+    def handle_usage_info(self, chunk: ModelResponseStream) -> litellm.Usage | None:
         """Handle usage info, return whether this chunk should be skipped"""
         usage = getattr(chunk, "usage", None)
         if usage:
@@ -82,4 +95,7 @@ class StreamChunkProcessor:
     def finalize_message(self) -> AssistantMessage:
         """Finalize message processing"""
         logger.debug("Message finalized: %s", self.current_message)
+        if not self.current_message:
+            msg = "No current message to finalize"
+            raise ValueError(msg)
         return self.current_message

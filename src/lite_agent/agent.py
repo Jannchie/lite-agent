@@ -2,9 +2,10 @@ from collections.abc import AsyncGenerator, Callable
 
 import litellm
 from funcall import Funcall
+from litellm import CustomStreamWrapper
 
 from lite_agent.chunk_handler import AgentChunk, chunk_handler
-from lite_agent.types import RunnerMessages
+from lite_agent.types import AgentMessage, RunnerMessages
 
 
 class Agent:
@@ -14,7 +15,7 @@ class Agent:
         self.fc = Funcall(tools)
         self.model = model
 
-    def prepare_messages(self, messages: RunnerMessages) -> list[dict]:
+    def prepare_messages(self, messages: RunnerMessages) -> list[AgentMessage]:
         return [
             {
                 "role": "system",
@@ -33,4 +34,8 @@ class Agent:
             tool_choice="auto",
             stream=True,
         )
-        return chunk_handler(resp, self.fc)
+        # Ensure resp is a CustomStreamWrapper
+        if isinstance(resp, CustomStreamWrapper):
+            return chunk_handler(resp, self.fc)
+        msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
+        raise TypeError(msg)

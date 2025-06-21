@@ -14,10 +14,12 @@ class ToolCall(BaseModel):
     type: Literal["function"]
     function: ToolCallFunction
     id: str
+    index: int
 
 
 class AssistantMessage(BaseModel):
     id: str
+    index: int
     role: Literal["assistant"] = "assistant"
     content: str = ""
     tool_calls: list[ToolCall] | None = None
@@ -106,7 +108,7 @@ class FinalMessageChunk(TypedDict):
 
     type: Literal["final_message"]
     message: AssistantMessage
-    finish_reason: Literal["stop", "tool_calls"]
+    finish_reason: str | None  # Literal["stop", "tool_calls"]
 
 
 class ToolCallChunk(TypedDict):

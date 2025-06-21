@@ -71,7 +71,11 @@ upgrade = true
 package = true
 
 [dependency-groups]
-dev = ["pytest>=8.3.5", "pytest-cov>=6.1.1", "ruff>=0.11.10"]
+dev = [
+    "pytest>=8.3.5",
+ "pytest-cov>=6.1.1",
+ "ruff>=0.11.10",
+]
 
 [tool.coverage.run]
 omit = ["tests/*"]

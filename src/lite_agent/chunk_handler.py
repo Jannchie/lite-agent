@@ -1,5 +1,4 @@
 from collections.abc import AsyncGenerator
-from typing import Literal, TypedDict
 
 import litellm
 from funcall import Funcall
@@ -7,82 +6,10 @@ from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
-from lite_agent.processors.stream_chunk_processor import AssistantMessage
+from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallChunk, ToolCallDeltaChunk, ToolCallResultChunk, UsageChunk
 
 
-class LiteLLMRawChunk(TypedDict):
-    """
-    Define the type of chunk
-    """
-
-    type: Literal["litellm_raw"]
-    raw: ModelResponseStream
-
-
-class UsageChunk(TypedDict):
-    """
-    Define the type of usage info chunk
-    """
-
-    type: Literal["usage"]
-    usage: litellm.Usage
-
-
-class FinalMessageChunk(TypedDict):
-    """
-    Define the type of final message chunk
-    """
-
-    type: Literal["final_message"]
-    message: AssistantMessage
-    finish_reason: Literal["stop", "tool_calls"] | None
-
-
-class ToolCallChunk(TypedDict):
-    """
-    Define the type of tool call chunk
-    """
-
-    type: Literal["tool_call"]
-    name: str
-    arguments: str
-
-
-class ToolCallResultChunk(TypedDict):
-    """
-    Define the type of tool call result chunk
-    """
-
-    type: Literal["tool_call_result"]
-    tool_call_id: str
-    name: str
-    content: str
-
-
-class ContentDeltaChunk(TypedDict):
-    """
-    Define the type of message chunk
-    """
-
-    type: Literal["content_delta"]
-    delta: str
-
-
-class ToolCallDeltaChunk(TypedDict):
-    """
-    Define the type of tool call delta chunk
-    """
-
-    type: Literal["tool_call_delta"]
-    tool_call_id: str
-    name: str
-    arguments_delta: str
-
-
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
-
-
-async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: litellm.ModelResponseStream) -> UsageChunk | None:
+async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: ModelResponseStream) -> UsageChunk | None:
     usage = processor.handle_usage_info(chunk)
     if usage:
         return UsageChunk(type="usage", usage=usage)
@@ -103,7 +30,7 @@ async def handle_content_and_tool_calls(
         processor.update_content(delta.content)
     if delta.tool_calls is not None:
         processor.update_tool_calls(delta.tool_calls)
-        if delta.tool_calls:
+        if delta.tool_calls and processor.current_message and processor.current_message.tool_calls:
             results.extend(
                 [
                     ToolCallDeltaChunk(

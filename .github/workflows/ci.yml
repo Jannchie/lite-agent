@@ -5,22 +5,23 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.11"
-      - name: Install uv
-        run: |
-          pip install uv
+          python-version: "3.12"
+          activate-environment: true
+
       - name: Install dependencies
-        run: |
-          uv pip install .[dev]
+        run: uv sync
+
       - name: Run tests with coverage
         run: |
           pytest --cov=src --cov-report=xml

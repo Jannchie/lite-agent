@@ -3,7 +3,7 @@ from typing import Literal, TypedDict
 
 import litellm
 from funcall import Funcall
-from litellm.types.utils import Delta, StreamingChoices
+from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
@@ -16,7 +16,7 @@ class LiteLLMRawChunk(TypedDict):
     """
 
     type: Literal["litellm_raw"]
-    raw: litellm.ModelResponseStream
+    raw: ModelResponseStream
 
 
 class UsageChunk(TypedDict):
@@ -35,7 +35,7 @@ class FinalMessageChunk(TypedDict):
 
     type: Literal["final_message"]
     message: AssistantMessage
-    finish_reason: Literal["stop", "tool_calls"]
+    finish_reason: Literal["stop", "tool_calls"] | None
 
 
 class ToolCallChunk(TypedDict):
@@ -79,7 +79,7 @@ class ToolCallDeltaChunk(TypedDict):
     arguments_delta: str
 
 
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk
+AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
 
 
 async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: litellm.ModelResponseStream) -> UsageChunk | None:
@@ -91,7 +91,7 @@ async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: litellm.Mod
 
 async def handle_content_and_tool_calls(
     processor: StreamChunkProcessor,
-    chunk: litellm.ModelResponseStream,
+    chunk: ModelResponseStream,
     choice: StreamingChoices,
     delta: Delta,
 ) -> list[AgentChunk]:
@@ -100,21 +100,22 @@ async def handle_content_and_tool_calls(
         processor.initialize_message(chunk, choice)
     if delta.content:
         results.append(ContentDeltaChunk(type="content_delta", delta=delta.content))
-    processor.update_content(delta.content)
-    processor.update_tool_calls(delta.tool_calls)
-    if delta.tool_calls:
-        results.extend(
-            [
-                ToolCallDeltaChunk(
-                    type="tool_call_delta",
-                    tool_call_id=processor.current_message.tool_calls[-1].id,
-                    name=processor.current_message.tool_calls[-1].function.name,
-                    arguments_delta=tool_call.function.arguments,
-                )
-                for tool_call in delta.tool_calls
-                if tool_call.function.arguments
-            ],
-        )
+        processor.update_content(delta.content)
+    if delta.tool_calls is not None:
+        processor.update_tool_calls(delta.tool_calls)
+        if delta.tool_calls:
+            results.extend(
+                [
+                    ToolCallDeltaChunk(
+                        type="tool_call_delta",
+                        tool_call_id=processor.current_message.tool_calls[-1].id,
+                        name=processor.current_message.tool_calls[-1].function.name,
+                        arguments_delta=tool_call.function.arguments or "",
+                    )
+                    for tool_call in delta.tool_calls
+                    if tool_call.function.arguments
+                ],
+            )
     return results
 
 
@@ -134,10 +135,10 @@ async def handle_final_message_and_tool_calls(
                     ToolCallChunk(
                         type="tool_call",
                         name=tool_call.function.name,
-                        arguments=tool_call.function.arguments,
+                        arguments=tool_call.function.arguments or "",
                     ),
                 )
-                content = await fc.call_function_async(tool_call.function.name, tool_call.function.arguments)
+                content = await fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "")
                 results.append(
                     ToolCallResultChunk(
                         type="tool_call_result",
@@ -168,7 +169,7 @@ async def chunk_handler(
     """
     processor = StreamChunkProcessor(fc)
     async for chunk in resp:
-        if not isinstance(chunk, litellm.ModelResponseStream):
+        if not isinstance(chunk, ModelResponseStream):
             logger.debug("unexpected chunk type: %s", type(chunk))
             logger.debug("chunk content: %s", chunk)
             continue

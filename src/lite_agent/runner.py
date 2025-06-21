@@ -1,9 +1,8 @@
 from collections.abc import AsyncGenerator
-from typing import Literal
 
 from lite_agent.agent import Agent
 from lite_agent.chunk_handler import AgentChunk
-from lite_agent.types import AgentToolCallMessage, RunnerMessages
+from lite_agent.types import AgentChunkType, AgentToolCallMessage, RunnerMessages
 
 
 class Runner:
@@ -15,7 +14,7 @@ class Runner:
         self,
         user_input: RunnerMessages | str,
         max_steps: int = 20,
-        includes: list[Literal["usage", "final_message", "tool_call", "tool_call_result"]] | None = None,
+        includes: list[AgentChunkType] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         if includes is None:
@@ -32,7 +31,7 @@ class Runner:
         resp = self.run_stream(user_input, includes=["final_message", "usage", "tool_call", "tool_call_result"])
         return [chunk async for chunk in resp]
 
-    async def _run_aiter(self, max_steps: int, includes: list[Literal["usage", "final_message", "tool_call", "tool_call_result"]]) -> AsyncGenerator[AgentChunk, None]:
+    async def _run_aiter(self, max_steps: int, includes: list[AgentChunkType]) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         steps = 0
         finish_reason = None
@@ -41,7 +40,7 @@ class Runner:
             async for chunk in resp:
                 if chunk["type"] == "final_message":
                     message = chunk["message"]
-                    self.messages.append(message.model_dump())
+                    self.messages.append(message.model_dump()) # type: ignore
                     finish_reason = chunk["finish_reason"]
                 elif chunk["type"] == "tool_call_result":
                     self.messages.append(

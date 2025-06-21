@@ -1,6 +1,7 @@
 from typing import Literal, TypedDict
 
-import litellm
+from litellm import Usage
+from litellm.types.utils import ModelResponseStream
 from pydantic import BaseModel
 
 
@@ -42,7 +43,7 @@ class UserMessageContentItemImageURL(TypedDict):
 
 
 class AgentUserMessage(TypedDict):
-    role: Literal["user"] = "user"
+    role: Literal["user"]
     content: str | list[UserMessageContentItemText | UserMessageContentItemImageURL]
 
 
@@ -59,18 +60,18 @@ class AssistantMessageToolCall(TypedDict):
 
 
 class AgentAssistantMessage(TypedDict):
-    role: Literal["assistant"] = "assistant"
+    role: Literal["assistant"]
     content: str
     tool_calls: list[AssistantMessageToolCall] | None
 
 
 class AgentSystemMessage(TypedDict):
-    role: Literal["system"] = "system"
+    role: Literal["system"]
     content: str
 
 
 class AgentToolCallMessage(TypedDict):
-    role: Literal["tool"] = "tool"
+    role: Literal["tool"]
     tool_call_id: str
     content: str
 
@@ -86,7 +87,7 @@ class LiteLLMRawChunk(TypedDict):
     """
 
     type: Literal["litellm_raw"]
-    raw: litellm.ModelResponseStream
+    raw: ModelResponseStream
 
 
 class UsageChunk(TypedDict):
@@ -95,7 +96,7 @@ class UsageChunk(TypedDict):
     """
 
     type: Literal["usage"]
-    usage: litellm.Usage
+    usage: Usage
 
 
 class FinalMessageChunk(TypedDict):
@@ -150,3 +151,13 @@ class ToolCallDeltaChunk(TypedDict):
 
 
 AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
+
+AgentChunkType = Literal[
+    "litellm_raw",
+    "usage",
+    "final_message",
+    "tool_call",
+    "tool_call_result",
+    "content_delta",
+    "tool_call_delta",
+]

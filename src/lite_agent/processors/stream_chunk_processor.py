@@ -43,9 +43,14 @@ class StreamChunkProcessor:
 
     def _update_tool_calls(self, tool_calls: list[litellm.ChatCompletionMessageToolCall]) -> None:
         """Update existing tool calls"""
-        if not self.current_message or not self.current_message.tool_calls:
+        if not self.current_message:
             return
-
+        if not hasattr(self.current_message, "tool_calls"):
+            self.current_message.tool_calls = []
+        if not self.current_message.tool_calls:
+            return
+        if not tool_calls:
+            return
         for current_call, new_call in zip(self.current_message.tool_calls, tool_calls, strict=False):
             if new_call.function.arguments and current_call.function.arguments:
                 current_call.function.arguments += new_call.function.arguments

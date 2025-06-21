@@ -39,6 +39,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 200
+exclude = ["tests/*"]
 
 [tool.ruff.lint]
 select = ["ALL"]

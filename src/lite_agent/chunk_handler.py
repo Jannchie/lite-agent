@@ -65,6 +65,13 @@ async def handle_final_message_and_tool_calls(
                         arguments=tool_call.function.arguments or "",
                     ),
                 )
+                tool_func = fc.function_registry.get(tool_call.function.name)
+                if not tool_func:
+                    logger.warning("Tool function %s not found in registry", tool_call.function.name)
+                    continue
+                meta = fc.get_tool_meta(tool_call.function.name)
+                if meta["require_confirm"]:
+                    print(f"Tool call {tool_call.function.name} requires confirmation. Arguments: {tool_call.function.arguments}")
                 content = await fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "")
                 results.append(
                     ToolCallResultChunk(
@@ -74,7 +81,7 @@ async def handle_final_message_and_tool_calls(
                         content=str(content),
                     ),
                 )
-            except Exception as e:  # noqa: PERF203
+            except Exception as e:
                 logger.exception("Tool call %s failed", tool_call.id)
                 results.append(
                     ToolCallResultChunk(
@@ -94,7 +101,7 @@ async def chunk_handler(
     """
     Optimized chunk handler (refactored for simplicity)
     """
-    processor = StreamChunkProcessor(fc)
+    processor = StreamChunkProcessor()
     async for chunk in resp:
         if not isinstance(chunk, ModelResponseStream):
             logger.debug("unexpected chunk type: %s", type(chunk))

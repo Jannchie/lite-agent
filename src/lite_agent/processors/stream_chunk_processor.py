@@ -1,5 +1,4 @@
 import litellm
-from funcall import Funcall
 from litellm.types.utils import ChatCompletionDeltaToolCall, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
@@ -9,8 +8,7 @@ from lite_agent.types import AssistantMessage, ToolCall, ToolCallFunction
 class StreamChunkProcessor:
     """Processor for handling streaming responses"""
 
-    def __init__(self, fc: Funcall) -> None:
-        self.fc = fc
+    def __init__(self) -> None:
         self.current_message: AssistantMessage | None = None
 
     def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:

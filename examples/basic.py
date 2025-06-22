@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from funcall.decorators import tool
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
@@ -13,7 +14,7 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True)],
 )
 
-
+@tool(require_confirmation=True)
 async def get_whether(city: str) -> str:
     """Get the weather for a city."""
     await asyncio.sleep(1)
@@ -34,8 +35,8 @@ async def main():
         tools=[get_whether, get_temperature],
     )
     runner = Runner(agent)
-    resp = await runner.run_until_complete("What is the weather in New York? And what is the temperature there?")
-    for chunk in resp:
+    resp = runner.run_stream("What is the weather in New York? And what is the temperature there?")
+    async for chunk in resp:
         print(chunk)
 
 

@@ -6,7 +6,7 @@ from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
-from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallChunk, ToolCallDeltaChunk, ToolCallResultChunk, UsageChunk
+from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, RequireConfirmChunk, ToolCallChunk, ToolCallDeltaChunk, ToolCallResultChunk, UsageChunk
 
 
 async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: ModelResponseStream) -> UsageChunk | None:
@@ -56,6 +56,26 @@ async def handle_final_message_and_tool_calls(
     results.append(FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason))
     tool_calls = current_message.tool_calls
     if tool_calls:
+        require_confirm_chunks = []
+        for tool_call in tool_calls:
+            tool_func = fc.function_registry.get(tool_call.function.name)
+            if not tool_func:
+                logger.warning("Tool function %s not found in registry", tool_call.function.name)
+                continue
+
+            meta = fc.get_tool_meta(tool_call.function.name)
+            if meta["require_confirm"]:
+                require_confirm_chunks.append(
+                    RequireConfirmChunk(
+                        type="require_confirm",
+                        tool_call_name=tool_call.function.name,
+                        arguments=tool_call.function.arguments,
+                    ),
+                )
+        if require_confirm_chunks:
+            results.extend(require_confirm_chunks)
+            return results
+
         for tool_call in tool_calls:
             try:
                 results.append(
@@ -65,13 +85,6 @@ async def handle_final_message_and_tool_calls(
                         arguments=tool_call.function.arguments or "",
                     ),
                 )
-                tool_func = fc.function_registry.get(tool_call.function.name)
-                if not tool_func:
-                    logger.warning("Tool function %s not found in registry", tool_call.function.name)
-                    continue
-                meta = fc.get_tool_meta(tool_call.function.name)
-                if meta["require_confirm"]:
-                    print(f"Tool call {tool_call.function.name} requires confirmation. Arguments: {tool_call.function.arguments}")
                 content = await fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "")
                 results.append(
                     ToolCallResultChunk(
@@ -81,7 +94,7 @@ async def handle_final_message_and_tool_calls(
                         content=str(content),
                     ),
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: PERF203
                 logger.exception("Tool call %s failed", tool_call.id)
                 results.append(
                     ToolCallResultChunk(
@@ -127,5 +140,7 @@ async def chunk_handler(
         if choice.finish_reason and processor.current_message:
             for result in await handle_final_message_and_tool_calls(processor, choice, fc):
                 yield result
+                if isinstance(result, dict) and result.get("type") == "require_confirm":
+                    return
             continue
         yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)

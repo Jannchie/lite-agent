@@ -14,6 +14,7 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True)],
 )
 
+
 @tool(require_confirmation=True)
 async def get_whether(city: str) -> str:
     """Get the weather for a city."""
@@ -35,7 +36,7 @@ async def main():
         tools=[get_whether, get_temperature],
     )
     runner = Runner(agent)
-    resp = runner.run_stream("What is the weather in New York? And what is the temperature there?")
+    resp = runner.run_stream("What is the weather in New York? And what is the temperature there?", includes=["final_message", "usage", "tool_call", "tool_call_result", "require_confirm"])
     async for chunk in resp:
         print(chunk)
 

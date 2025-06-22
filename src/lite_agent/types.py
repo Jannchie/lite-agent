@@ -152,7 +152,17 @@ class ToolCallDeltaChunk(TypedDict):
     arguments_delta: str
 
 
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
+class RequireConfirmChunk(TypedDict):
+    """
+    Define the type of require confirm chunk
+    """
+
+    type: Literal["require_confirm"]
+    tool_call_name: str
+    arguments: str | None
+
+
+AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | RequireConfirmChunk
 
 AgentChunkType = Literal[
     "litellm_raw",
@@ -162,4 +172,5 @@ AgentChunkType = Literal[
     "tool_call_result",
     "content_delta",
     "tool_call_delta",
+    "require_confirm",
 ]

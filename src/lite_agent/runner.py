@@ -34,7 +34,8 @@ class Runner:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         steps = 0
         finish_reason = None
-        while finish_reason != "stop" and steps < max_steps:
+        require_confirm = False
+        while finish_reason != "stop" and steps < max_steps and not require_confirm:
             resp = await self.agent.stream_async(self.messages)
             async for chunk in resp:
                 if chunk["type"] == "final_message":
@@ -51,4 +52,6 @@ class Runner:
                     )
                 if chunk["type"] in includes:
                     yield chunk
+                if chunk["type"] == "require_confirm":
+                    require_confirm = True
             steps += 1

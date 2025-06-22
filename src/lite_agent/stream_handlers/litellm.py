@@ -107,7 +107,7 @@ async def handle_final_message_and_tool_calls(
     return results
 
 
-async def chunk_handler(
+async def litellm_stream_handler(
     resp: litellm.CustomStreamWrapper,
     fc: Funcall,
 ) -> AsyncGenerator[AgentChunk, None]:

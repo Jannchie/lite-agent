@@ -4,8 +4,8 @@ import litellm
 from funcall import Funcall
 from litellm import CustomStreamWrapper
 
-from lite_agent.chunk_handler import AgentChunk, chunk_handler
-from lite_agent.types import AgentMessage, RunnerMessages
+from lite_agent.stream_handlers import litellm_stream_handler
+from lite_agent.types import AgentChunk, AgentMessage, RunnerMessages
 
 
 class Agent:
@@ -36,6 +36,6 @@ class Agent:
         )
         # Ensure resp is a CustomStreamWrapper
         if isinstance(resp, CustomStreamWrapper):
-            return chunk_handler(resp, self.fc)
+            return litellm_stream_handler(resp, self.fc)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)

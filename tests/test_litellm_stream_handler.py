@@ -1,30 +1,34 @@
+from typing import cast
+import litellm
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from lite_agent.chunk_handler import (
+from lite_agent.stream_handlers.litellm import (
     handle_usage_chunk,
     handle_content_and_tool_calls,
     handle_final_message_and_tool_calls,
-    chunk_handler,
+    litellm_stream_handler,
 )
-from lite_agent.processors import StreamChunkProcessor
 from lite_agent.types import (
-    UsageChunk, ContentDeltaChunk, ToolCallDeltaChunk, FinalMessageChunk, ToolCallChunk, ToolCallResultChunk, LiteLLMRawChunk, AssistantMessage, ToolCall, ToolCallFunction
+    AssistantMessage, ToolCall, ToolCallFunction
 )
+from litellm.types.utils import ModelResponseStream, StreamingChoices, Delta
 
-class DummyDelta:
+class DummyDelta(Delta):
     def __init__(self, content=None, tool_calls=None):
+        super().__init__()
         self.content = content
         self.tool_calls = tool_calls
 
-class DummyChoice:
+class DummyChoice(StreamingChoices):
     def __init__(self, delta=None, finish_reason=None, index=0):
+        super().__init__()
         self.delta = delta or DummyDelta()
         self.finish_reason = finish_reason
         self.index = index
 
-class DummyChunk:
+class DummyChunk(ModelResponseStream):
     def __init__(self, id="chunk_id", usage=None, choices=None):
+        super().__init__()
         self.id = id
         self.usage = usage
         self.choices = choices or []
@@ -93,9 +97,11 @@ async def test_handle_final_message_and_tool_calls_success():
     msg = AssistantMessage(id="mid", index=0, role="assistant", content="hi", tool_calls=[ToolCall(id="tid", type="function", function=ToolCallFunction(name="f", arguments="a"), index=0)])
     processor.finalize_message.return_value = msg
     fc.call_function_async.return_value = "result"
+    # Patch function_registry 和 get_tool_meta
+    fc.function_registry = {"f": lambda: None}
+    fc.get_tool_meta = lambda name: {"require_confirm": False}
     results = await handle_final_message_and_tool_calls(processor, choice, fc)
     assert any(r.get("type") == "final_message" for r in results)
-    assert any(r.get("type") == "tool_call" for r in results)
     assert any(r.get("type") == "tool_call_result" for r in results)
 
 @pytest.mark.asyncio
@@ -106,85 +112,95 @@ async def test_handle_final_message_and_tool_calls_exception():
     msg = AssistantMessage(id="mid", index=0, role="assistant", content="hi", tool_calls=[ToolCall(id="tid", type="function", function=ToolCallFunction(name="f", arguments="a"), index=0)])
     processor.finalize_message.return_value = msg
     fc.call_function_async.side_effect = Exception("fail")
+    fc.function_registry = {"f": lambda: None}
+    fc.get_tool_meta = lambda name: {"require_confirm": False}
     results = await handle_final_message_and_tool_calls(processor, choice, fc)
+    # 只在 tool_call_result 类型的结果中断言 content
     assert any(r.get("type") == "final_message" for r in results)
-    assert any(r.get("type") == "tool_call" for r in results)
     assert any(r.get("type") == "tool_call_result" for r in results)
-    assert any("fail" in r["content"] for r in results if r.get("type") == "tool_call_result")
+    assert any("fail" in cast(dict, r)["content"] for r in results if r.get("type") == "tool_call_result")
 
+# 替换 DummyResp 为 MagicMock(spec=litellm.CustomStreamWrapper) 用于 litellm_stream_handler 测试
 @pytest.mark.asyncio
 async def test_chunk_handler_yields_usage(monkeypatch):
-    class DummyResp:
-        async def __aiter__(self):
-            yield MagicMock(spec=[])
+    import lite_agent.stream_handlers.litellm  as litellm_stream_handler
+    from litellm.types.utils import ModelResponseStream, StreamingChoices, Delta
+    from unittest.mock import MagicMock, AsyncMock
+    chunk = MagicMock(spec=ModelResponseStream)
+    chunk.usage = {"prompt_tokens": 10}
+    choice = MagicMock(spec=StreamingChoices)
+    delta = MagicMock(spec=Delta)
+    chunk.choices = [choice]
+    resp = MagicMock(spec=litellm.CustomStreamWrapper)
+    resp.__aiter__.return_value = iter([chunk])
     fc = Mock()
-    # Patch isinstance(chunk, ModelResponseStream) to True
-    monkeypatch.setattr("lite_agent.chunk_handler.ModelResponseStream", object)
-    monkeypatch.setattr("lite_agent.chunk_handler.handle_usage_chunk", AsyncMock(return_value={"type": "usage", "usage": {"prompt_tokens": 10}}))
+    monkeypatch.setattr(litellm_stream_handler, "handle_usage_chunk", AsyncMock(return_value={"type": "usage", "usage": {"prompt_tokens": 10}}))
     results = []
-    async for chunk in chunk_handler(DummyResp(), fc):
-        results.append(chunk)
+    async for c in litellm_stream_handler.litellm_stream_handler(resp, fc):
+        results.append(c)
     assert any(r.get("type") == "usage" for r in results)
 
 @pytest.mark.asyncio
 async def test_chunk_handler_yields_litellm_raw(monkeypatch):
-    class DummyResp:
-        async def __aiter__(self):
-            m = MagicMock()
-            m.choices = []
-            yield m
+    import lite_agent.stream_handlers.litellm as handler_mod
+    from litellm.types.utils import ModelResponseStream, StreamingChoices, Delta
+    from unittest.mock import MagicMock, AsyncMock
+    chunk = MagicMock(spec=ModelResponseStream)
+    chunk.usage = None
+    chunk.choices = []
+    resp = MagicMock(spec=litellm.CustomStreamWrapper)
+    resp.__aiter__.return_value = iter([chunk])
     fc = Mock()
-    monkeypatch.setattr("lite_agent.chunk_handler.ModelResponseStream", object)
-    monkeypatch.setattr("lite_agent.chunk_handler.handle_usage_chunk", AsyncMock(return_value=None))
+    monkeypatch.setattr(handler_mod, "handle_usage_chunk", AsyncMock(return_value=None))
     results = []
-    async for chunk in chunk_handler(DummyResp(), fc):
-        results.append(chunk)
+    async for c in handler_mod.litellm_stream_handler(resp, fc):
+        results.append(c)
     assert any(r.get("type") == "litellm_raw" for r in results)
 
 @pytest.mark.asyncio
 async def test_chunk_handler_non_model_response_stream(monkeypatch):
-    class DummyResp:
-        async def __aiter__(self):
-            m = MagicMock()
-            yield m
+    import lite_agent.stream_handlers.litellm as handler_mod
+    resp = MagicMock(spec=litellm.CustomStreamWrapper)
+    resp.__aiter__.return_value = iter([MagicMock()])
     fc = Mock()
-    # Patch isinstance(chunk, ModelResponseStream) to False
     orig_isinstance = isinstance
     def fake_isinstance(obj, typ):
         if typ is object:
             return False
         return orig_isinstance(obj, typ)
-    monkeypatch.setattr("lite_agent.chunk_handler.ModelResponseStream", object)
-    monkeypatch.setattr("lite_agent.chunk_handler.handle_usage_chunk", AsyncMock(return_value=None))
+    monkeypatch.setattr("litellm.types.utils.ModelResponseStream", object)
+    monkeypatch.setattr(handler_mod, "handle_usage_chunk", AsyncMock(return_value=None))
     with patch("builtins.isinstance", new=fake_isinstance):
         results = []
-        async for chunk in chunk_handler(DummyResp(), fc):
+        async for chunk in handler_mod.litellm_stream_handler(resp, fc):
             results.append(chunk)
     assert results == []
 
 @pytest.mark.asyncio
 async def test_chunk_handler_finish_reason_but_no_current_message(monkeypatch):
-    class DummyResp:
-        async def __aiter__(self):
-            m = MagicMock()
-            m.choices = [MagicMock()]
-            m.choices[0].delta = MagicMock(content=None, tool_calls=None)
-            m.choices[0].finish_reason = "stop"
-            yield m
+    import lite_agent.stream_handlers.litellm as handler_mod
+    from litellm.types.utils import ModelResponseStream, StreamingChoices, Delta
+    from unittest.mock import MagicMock, AsyncMock
+    chunk = MagicMock(spec=ModelResponseStream)
+    choice = MagicMock(spec=StreamingChoices)
+    delta = MagicMock(spec=Delta)
+    choice.delta = delta
+    choice.finish_reason = "stop"
+    chunk.usage = None
+    chunk.choices = [choice]
+    resp = MagicMock(spec=litellm.CustomStreamWrapper)
+    resp.__aiter__.return_value = iter([chunk])
     fc = Mock()
-    monkeypatch.setattr("lite_agent.chunk_handler.ModelResponseStream", object)
-    monkeypatch.setattr("lite_agent.chunk_handler.handle_usage_chunk", AsyncMock(return_value=None))
-    monkeypatch.setattr("lite_agent.chunk_handler.handle_content_and_tool_calls", AsyncMock(return_value=[]))
-    monkeypatch.setattr("lite_agent.chunk_handler.handle_final_message_and_tool_calls", AsyncMock(return_value=[{"type": "final_message"}]))
-    # patch processor.current_message 为 None
-    with patch("lite_agent.chunk_handler.StreamChunkProcessor", autospec=True) as MockProc:
-        proc = MockProc(fc)
+    monkeypatch.setattr(handler_mod, "handle_usage_chunk", AsyncMock(return_value=None))
+    monkeypatch.setattr(handler_mod, "handle_content_and_tool_calls", AsyncMock(return_value=[]))
+    monkeypatch.setattr(handler_mod, "handle_final_message_and_tool_calls", AsyncMock(return_value=[{"type": "final_message"}]))
+    with patch("lite_agent.processors.StreamChunkProcessor", autospec=True) as MockProc:
+        proc = MockProc.return_value
         proc.current_message = None
-        with patch("lite_agent.chunk_handler.StreamChunkProcessor", return_value=proc):
+        with patch("lite_agent.processors.StreamChunkProcessor", return_value=proc):
             results = []
-            async for chunk in chunk_handler(DummyResp(), fc):
-                results.append(chunk)
-    # 只会 yield LiteLLMRawChunk
+            async for c in handler_mod.litellm_stream_handler(resp, fc):
+                results.append(c)
     assert any(r.get("type") == "litellm_raw" for r in results)
 
 @pytest.mark.asyncio

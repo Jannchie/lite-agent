@@ -20,11 +20,17 @@ async def test_stream_async_success():
     fake_resp = MagicMock()
     with patch("lite_agent.agent.litellm.acompletion", new=AsyncMock(return_value=fake_resp)):
         with patch("lite_agent.agent.CustomStreamWrapper", new=lambda x: True):
-            with patch("lite_agent.agent.chunk_handler", new=MagicMock(return_value="GENERATOR")):
-                # Patch isinstance to always True for CustomStreamWrapper
+            # Patch Agent模块作用域下的litellm_stream_handler
+            async def fake_async_gen(*args, **kwargs):
+                yield "GENERATOR"
+            with patch("lite_agent.agent.litellm_stream_handler", new=fake_async_gen):
                 with patch("lite_agent.agent.isinstance", new=lambda obj, typ: True):
                     result = await agent.stream_async([{"role": "user", "content": "hi"}])
-                    assert result == "GENERATOR"
+                    assert hasattr(result, "__aiter__")
+                    items = []
+                    async for item in result:
+                        items.append(item)
+                    assert items == ["GENERATOR"]
 
 @pytest.mark.asyncio
 async def test_stream_async_typeerror():

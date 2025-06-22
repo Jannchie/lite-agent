@@ -14,6 +14,8 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True)],
 )
 
+logger = logging.getLogger("lite_agent")
+logger.setLevel(logging.INFO)
 
 @tool(require_confirmation=True)
 async def get_whether(city: str) -> str:
@@ -38,7 +40,7 @@ async def main():
     runner = Runner(agent)
     resp = runner.run_stream("What is the weather in New York? And what is the temperature there?", includes=["final_message", "usage", "tool_call", "tool_call_result", "require_confirm"])
     async for chunk in resp:
-        print(chunk)
+        logger.info(chunk)
 
 
 if __name__ == "__main__":

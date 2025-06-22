@@ -47,8 +47,7 @@ class DummyDeltaToolCall:
 
 @pytest.fixture
 def processor():
-    fc = Mock()
-    return StreamChunkProcessor(fc)
+    return StreamChunkProcessor()
 
 
 def test_initialize_message_sets_current_message(processor):
@@ -101,16 +100,6 @@ def test_update_tool_calls(processor):
     assert processor.current_message.tool_calls[0].function.arguments == "ab"
 
 
-def test_update_tool_calls_type(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
 def test_update_tool_calls_unexpected_type(processor):
     chunk = DummyChunk()
     choice = DummyChoice()
@@ -120,11 +109,6 @@ def test_update_tool_calls_unexpected_type(processor):
     processor._update_tool_calls(new_calls)
     assert processor.current_message.tool_calls[0].type == "function"
 
-
-def test_update_tool_calls_no_current_message(processor):
-    processor.current_message = None
-    processor._update_tool_calls([DummyToolCall()])
-    assert processor.current_message is None
 
 
 def test_update_tool_calls_no_tool_calls(processor):
@@ -203,444 +187,30 @@ def test_update_tool_calls_no_tool_calls_attr(processor):
     assert hasattr(processor.current_message, "tool_calls")
 
 
-def test_update_tool_calls_tool_call_type(processor):
+@pytest.mark.parametrize("current_type,new_type,expected_type", [
+    ("function", "function", "function"),
+    ("function", "unexpected", "function"),
+    ("function", None, 'function'),
+    ("function", "", "function"),
+    (None, None, None),
+    (None, "function", "function"),  
+    (None, "", None),
+])
+def test_update_tool_calls_tool_call_type_param(processor, current_type, new_type, expected_type):
     chunk = DummyChunk()
     choice = DummyChoice()
     processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
+    processor.current_message.tool_calls = [DummyToolCall(type_=current_type)]
+    new_calls = [DummyToolCall(type_=new_type)]
     processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
+    assert processor.current_message.tool_calls[0].type == expected_type
 
 
-def test_update_tool_calls_tool_call_type_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_function(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="function")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_function_unexpected(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="unexpected")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_function_none(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_=None)]
-    new_calls = [DummyToolCall(type_=None)]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type is None
-
-
-def test_update_tool_calls_tool_call_type_function_function_function_function_function_function_function_function_function_function_empty(processor):
-    chunk = DummyChunk()
-    choice = DummyChoice()
-    processor.initialize_message(chunk, choice)
-    processor.current_message.tool_calls = [DummyToolCall(type_="function")]
-    new_calls = [DummyToolCall(type_="")]
-    processor._update_tool_calls(new_calls)
-    assert processor.current_message.tool_calls[0].type == "function"
+def test_update_tool_calls_no_current_message(processor):
+    processor.current_message = None
+    tool_calls = [DummyDeltaToolCall(id="id1", type_="function", function=DummyFunction(name="f", arguments="a"), index=0)]
+    processor.update_tool_calls(tool_calls)
+    assert processor.current_message is None
 
 
 def test_handle_usage_info(processor):

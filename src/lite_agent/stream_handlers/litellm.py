@@ -115,12 +115,11 @@ async def litellm_stream_handler(
     Optimized chunk handler (refactored for simplicity)
     """
     processor = StreamChunkProcessor()
-    async for chunk in resp:
+    async for chunk in resp:  # type: ignore
         if not isinstance(chunk, ModelResponseStream):
             logger.debug("unexpected chunk type: %s", type(chunk))
             logger.debug("chunk content: %s", chunk)
             continue
-
         # Handle usage info
         usage_chunk = await handle_usage_chunk(processor, chunk)
         if usage_chunk:

@@ -1,4 +1,5 @@
 from typing import cast
+from funcall import Funcall
 import litellm
 import pytest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -120,6 +121,24 @@ async def test_handle_final_message_and_tool_calls_exception():
     assert any(r.get("type") == "tool_call_result" for r in results)
     assert any("fail" in cast(dict, r)["content"] for r in results if r.get("type") == "tool_call_result")
 
+@pytest.mark.asyncio
+async def test_handle_final_message_and_tool_calls_require_confirm():
+    processor = MagicMock()
+    fc = AsyncMock()
+    choice = DummyChoice(finish_reason="stop")
+    msg = AssistantMessage(
+        id="mid",
+        index=0,
+        role="assistant",
+        content="hi",
+        tool_calls=[ToolCall(id="tid", type="function", function=ToolCallFunction(name="f", arguments="a"), index=0)]
+    )
+    processor.finalize_message.return_value = msg
+    fc.function_registry = {"f": lambda: None}
+    fc.get_tool_meta = lambda name: {"require_confirm": True}
+    results = await handle_final_message_and_tool_calls(processor, choice, fc)
+    assert any(r.get("type") == "require_confirm" for r in results)
+
 # 替换 DummyResp 为 MagicMock(spec=litellm.CustomStreamWrapper) 用于 litellm_stream_handler 测试
 @pytest.mark.asyncio
 async def test_chunk_handler_yields_usage(monkeypatch):
@@ -236,3 +255,10 @@ async def test_handle_usage_chunk_exception():
     # 应该抛出异常
     with pytest.raises(Exception, match="fail"):
         await handle_usage_chunk(processor, chunk)
+
+@pytest.mark.asyncio
+async def test_litellm_stream_handler_yields_require_confirm(monkeypatch):
+    from lite_agent.stream_handlers import litellm_stream_handler
+    fc = MagicMock()
+    resp = MagicMock(spec=litellm.CustomStreamWrapper)
+    litellm_stream_handler(resp, fc)

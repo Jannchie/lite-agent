@@ -1,10 +1,10 @@
 import asyncio
 
+from channels.rich_channel import RichChannel
 from prompt_toolkit import PromptSession
 from prompt_toolkit.validation import Validator
 
 from lite_agent.agent import Agent
-from lite_agent.channels.rich_channel import RichChannel
 from lite_agent.runner import Runner
 
 

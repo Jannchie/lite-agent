@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-
 import pytest
 
 from lite_agent.processors.stream_chunk_processor import StreamChunkProcessor
@@ -63,7 +61,7 @@ def test_initialize_message_skips_non_assistant(processor):
     chunk = DummyChunk()
     choice = DummyChoice(delta=DummyDelta(role="user"))
     processor.initialize_message(chunk, choice)
-    assert processor.current_message is None
+    assert processor.is_initialized is False
 
 
 def test_update_content(processor):
@@ -76,9 +74,8 @@ def test_update_content(processor):
 
 
 def test_update_content_no_message(processor):
-    processor.current_message = None
     processor.update_content("should not fail")
-    assert processor.current_message is None
+    assert processor.is_initialized is False
 
 
 def test_initialize_tool_calls(processor):
@@ -108,7 +105,6 @@ def test_update_tool_calls_unexpected_type(processor):
     new_calls = [DummyToolCall(type_="unexpected")]
     processor._update_tool_calls(new_calls)
     assert processor.current_message.tool_calls[0].type == "function"
-
 
 
 def test_update_tool_calls_no_tool_calls(processor):
@@ -187,15 +183,18 @@ def test_update_tool_calls_no_tool_calls_attr(processor):
     assert hasattr(processor.current_message, "tool_calls")
 
 
-@pytest.mark.parametrize("current_type,new_type,expected_type", [
-    ("function", "function", "function"),
-    ("function", "unexpected", "function"),
-    ("function", None, 'function'),
-    ("function", "", "function"),
-    (None, None, None),
-    (None, "function", "function"),  
-    (None, "", None),
-])
+@pytest.mark.parametrize(
+    "current_type,new_type,expected_type",
+    [
+        ("function", "function", "function"),
+        ("function", "unexpected", "function"),
+        ("function", None, "function"),
+        ("function", "", "function"),
+        (None, None, None),
+        (None, "function", "function"),
+        (None, "", None),
+    ],
+)
 def test_update_tool_calls_tool_call_type_param(processor, current_type, new_type, expected_type):
     chunk = DummyChunk()
     choice = DummyChoice()
@@ -207,10 +206,8 @@ def test_update_tool_calls_tool_call_type_param(processor, current_type, new_typ
 
 
 def test_update_tool_calls_no_current_message(processor):
-    processor.current_message = None
     tool_calls = [DummyDeltaToolCall(id="id1", type_="function", function=DummyFunction(name="f", arguments="a"), index=0)]
     processor.update_tool_calls(tool_calls)
-    assert processor.current_message is None
 
 
 def test_handle_usage_info(processor):
@@ -229,14 +226,8 @@ def test_finalize_message(processor):
     chunk = DummyChunk()
     choice = DummyChoice()
     processor.initialize_message(chunk, choice)
-    msg = processor.finalize_message()
+    msg = processor.current_message
     assert isinstance(msg, AssistantMessage)
-
-
-def test_finalize_message_no_message(processor):
-    processor.current_message = None
-    with pytest.raises(ValueError):
-        processor.finalize_message()
 
 
 def test_update_tool_calls_method(processor):
@@ -281,7 +272,5 @@ def test_update_tool_calls_method_no_tool_calls(processor):
 
 
 def test_update_tool_calls_method_no_current_message(processor):
-    processor.current_message = None
-    tool_calls = [DummyDeltaToolCall(id="id1", type_="function", function=DummyFunction(name="f", arguments="a"), index=0)]
-    processor.update_tool_calls(tool_calls)
-    assert processor.current_message is None
+    with pytest.raises(ValueError):  # noqa: PT011
+        assert processor.current_message is None

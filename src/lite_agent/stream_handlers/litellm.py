@@ -24,14 +24,14 @@ async def handle_content_and_tool_calls(
     delta: Delta,
 ) -> list[AgentChunk]:
     results: list[AgentChunk] = []
-    if not processor.current_message:
+    if not processor.is_initialized:
         processor.initialize_message(chunk, choice)
     if delta.content:
         results.append(ContentDeltaChunk(type="content_delta", delta=delta.content))
         processor.update_content(delta.content)
     if delta.tool_calls is not None:
         processor.update_tool_calls(delta.tool_calls)
-        if delta.tool_calls and processor.current_message and processor.current_message.tool_calls:
+        if delta.tool_calls and processor.current_message.tool_calls:
             results.extend(
                 [
                     ToolCallDeltaChunk(
@@ -121,6 +121,6 @@ async def litellm_stream_handler(
         for result in await handle_content_and_tool_calls(processor, chunk, choice, delta):
             yield result
         # Check if finished
-        if choice.finish_reason and processor.current_message:
-            current_message = processor.finalize_message()
+        if choice.finish_reason:
+            current_message = processor.current_message
             yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)

@@ -1,8 +1,9 @@
-from typing import Literal, TypedDict
+from typing import Literal
 
 from litellm import Usage
 from litellm.types.utils import ModelResponseStream
 from pydantic import BaseModel
+from rich import Any
 
 
 class ToolCallFunction(BaseModel):
@@ -25,65 +26,53 @@ class AssistantMessage(BaseModel):
     tool_calls: list[ToolCall] | None = None
 
 
-class Message(TypedDict):
+class Message(BaseModel):
     role: str
     content: str
 
 
-class UserMessageContentItemText(TypedDict):
+class UserMessageContentItemText(BaseModel):
     type: Literal["text"]
     text: str
 
 
-class UserMessageContentItemImageURLImageURL(TypedDict):
+class UserMessageContentItemImageURLImageURL(BaseModel):
     url: str
 
 
-class UserMessageContentItemImageURL(TypedDict):
+class UserMessageContentItemImageURL(BaseModel):
     type: Literal["image_url"]
     image_url: UserMessageContentItemImageURLImageURL
 
 
-class AgentUserMessage(TypedDict):
+class AgentUserMessage(BaseModel):
     role: Literal["user"]
     content: str | list[UserMessageContentItemText | UserMessageContentItemImageURL]
 
 
-class AssistantMessageToolCallFunction(TypedDict):
-    name: str
-    arguments: str
-
-
-class AssistantMessageToolCall(TypedDict):
-    id: str
-    type: Literal["function"]
-    function: AssistantMessageToolCallFunction
-    tool_call_id: str
-
-
-class AgentAssistantMessage(TypedDict):
+class AgentAssistantMessage(BaseModel):
     role: Literal["assistant"]
     content: str
-    tool_calls: list[AssistantMessageToolCall] | None
+    tool_calls: list[ToolCall] | None = None
 
 
-class AgentSystemMessage(TypedDict):
+class AgentSystemMessage(BaseModel):
     role: Literal["system"]
     content: str
 
 
-class AgentToolCallMessage(TypedDict):
+class AgentToolCallMessage(BaseModel):
     role: Literal["tool"]
     tool_call_id: str
     content: str
 
 
-RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentToolCallMessage
+RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentToolCallMessage | AgentSystemMessage
 AgentMessage = RunnerMessage | AgentSystemMessage
-RunnerMessages = list[RunnerMessage]
+RunnerMessages = list[RunnerMessage | dict[str, Any]]
 
 
-class LiteLLMRawChunk(TypedDict):
+class LiteLLMRawChunk(BaseModel):
     """
     Define the type of chunk
     """
@@ -92,7 +81,7 @@ class LiteLLMRawChunk(TypedDict):
     raw: ModelResponseStream
 
 
-class UsageChunk(TypedDict):
+class UsageChunk(BaseModel):
     """
     Define the type of usage info chunk
     """
@@ -101,17 +90,17 @@ class UsageChunk(TypedDict):
     usage: Usage
 
 
-class FinalMessageChunk(TypedDict):
+class FinalMessageChunk(BaseModel):
     """
     Define the type of final message chunk
     """
 
     type: Literal["final_message"]
     message: AssistantMessage
-    finish_reason: str | None  # Literal["stop", "tool_calls"]
+    finish_reason: str | None = None  # Literal["stop", "tool_calls"]
 
 
-class ToolCallChunk(TypedDict):
+class ToolCallChunk(BaseModel):
     """
     Define the type of tool call chunk
     """
@@ -121,7 +110,7 @@ class ToolCallChunk(TypedDict):
     arguments: str
 
 
-class ToolCallResultChunk(TypedDict):
+class ToolCallResultChunk(BaseModel):
     """
     Define the type of tool call result chunk
     """
@@ -132,7 +121,7 @@ class ToolCallResultChunk(TypedDict):
     content: str
 
 
-class ContentDeltaChunk(TypedDict):
+class ContentDeltaChunk(BaseModel):
     """
     Define the type of message chunk
     """
@@ -141,7 +130,7 @@ class ContentDeltaChunk(TypedDict):
     delta: str
 
 
-class ToolCallDeltaChunk(TypedDict):
+class ToolCallDeltaChunk(BaseModel):
     """
     Define the type of tool call delta chunk
     """
@@ -152,14 +141,14 @@ class ToolCallDeltaChunk(TypedDict):
     arguments_delta: str
 
 
-class RequireConfirmChunk(TypedDict):
+class RequireConfirmChunk(BaseModel):
     """
     Define the type of require confirm chunk
     """
 
     type: Literal["require_confirm"]
     tool_call_name: str
-    arguments: str | None
+    arguments: str | None = None
 
 
 AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | RequireConfirmChunk

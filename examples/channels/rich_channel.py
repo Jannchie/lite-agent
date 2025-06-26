@@ -18,7 +18,7 @@ class RichChannel:
         self.new_turn = True
 
     async def handle(self, chunk: AgentChunk):
-        handler = self.map[chunk["type"]]
+        handler = self.map[chunk.type]
         return await handler(chunk)
 
     async def handle_final_message(self, _chunk: AgentChunk):
@@ -26,13 +26,13 @@ class RichChannel:
         self.new_turn = True
 
     async def handle_tool_call(self, chunk: AgentChunk):
-        name = chunk.get("name", "<unknown>")
-        arguments = chunk.get("arguments", "")
+        name = getattr(chunk, "name", "<unknown>")
+        arguments = getattr(chunk, "arguments", "")
         self.console.print(f"🛠️  [green]{name}[/green]([yellow]{arguments}[/yellow])")
 
     async def handle_tool_call_result(self, chunk: AgentChunk):
-        name = chunk.get("name", "<unknown>")
-        content = chunk.get("content", "")
+        name = getattr(chunk, "name", "<unknown>")
+        content = getattr(chunk, "content", "")
         self.console.print(f"🛠️  [green]{name}[/green] → [yellow]{content}[/yellow]")
 
     async def handle_tool_call_delta(self, chunk: AgentChunk): ...
@@ -40,12 +40,11 @@ class RichChannel:
         if self.new_turn:
             self.console.print("🤖 ", end="")
             self.new_turn = False
-        print(chunk["delta"], end="", flush=True)
+        print(chunk.delta, end="", flush=True)
 
     async def handle_usage(self, chunk: AgentChunk):
         if False:
-            usage = chunk["usage"]
+            usage = chunk.usage
             self.console.print(f"In: {usage.prompt_tokens}, Out: {usage.completion_tokens}, Total: {usage.total_tokens}")
 
-    async def handle_require_confirm(self, chunk: AgentChunk):
-        ...
+    async def handle_require_confirm(self, chunk: AgentChunk): ...

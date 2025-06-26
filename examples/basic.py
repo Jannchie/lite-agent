@@ -45,7 +45,9 @@ async def main():
     )
     async for chunk in resp:
         logger.info(chunk)
-    resp = runner.run_continue()
+    resp = runner.run_continue_stream(
+        includes=["final_message", "usage", "tool_call", "tool_call_result"],
+    )
     async for chunk in resp:
         logger.info(chunk)
 

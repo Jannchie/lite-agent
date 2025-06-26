@@ -3,10 +3,11 @@ from collections.abc import AsyncGenerator, Callable
 import litellm
 from funcall import Funcall
 from litellm import CustomStreamWrapper
+from pydantic import BaseModel
 
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
-from lite_agent.types import AgentChunk, AgentMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
+from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
 
 
 class Agent:
@@ -16,14 +17,15 @@ class Agent:
         self.fc = Funcall(tools)
         self.model = model
 
-    def prepare_messages(self, messages: RunnerMessages) -> list[AgentMessage]:
-        return [
-            {
-                "role": "system",
-                "content": f"You are {self.name}. {self.instructions}",
-            },
+    def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
+        final_messages = [
+            AgentSystemMessage(
+                role="system",
+                content=f"You are {self.name}. {self.instructions}",
+            ),
             *messages,
         ]
+        return [message.model_dump() if isinstance(message, BaseModel) else message for message in final_messages]
 
     async def stream_async(self, messages: RunnerMessages) -> AsyncGenerator[AgentChunk, None]:
         self.message_histories = self.prepare_messages(messages)

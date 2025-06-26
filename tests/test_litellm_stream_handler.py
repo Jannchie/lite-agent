@@ -10,7 +10,7 @@ from lite_agent.stream_handlers.litellm import (
     handle_usage_chunk,
     litellm_stream_handler,
 )
-from lite_agent.types import ToolCall, ToolCallFunction
+from lite_agent.types import ToolCall, ToolCallFunction, Usage, UsageChunk
 
 
 class DummyDelta(Delta):
@@ -54,10 +54,10 @@ class DummyFunction:
 async def test_handle_usage_chunk_with_usage():
     processor = MagicMock()
     chunk = DummyChunk(usage={"prompt_tokens": 10})
-    processor.handle_usage_info.return_value = {"prompt_tokens": 10}
+    processor.handle_usage_info.return_value = Usage(prompt_tokens=10, completion_tokens=0, total_tokens=10)
     result = await handle_usage_chunk(processor, chunk)
     assert result is not None
-    assert result["usage"] == {"prompt_tokens": 10}
+    assert result.usage == Usage(prompt_tokens=10, completion_tokens=0, total_tokens=10)
 
 
 @pytest.mark.asyncio
@@ -82,8 +82,8 @@ async def test_handle_content_and_tool_calls_content_and_tool_calls():
     processor.current_message = MagicMock()
     processor.current_message.tool_calls = [DummyToolCall(tid="tid", function=DummyFunction(name="f", arguments="a"))]  # type: ignore
     results = await handle_content_and_tool_calls(processor, chunk, choice, delta)
-    assert any(r.get("type") == "content_delta" for r in results)
-    assert any(r.get("type") == "tool_call_delta" for r in results)
+    assert any(r.type == "content_delta" for r in results)
+    assert any(r.type == "tool_call_delta" for r in results)
 
 
 @pytest.mark.asyncio
@@ -108,11 +108,12 @@ async def test_chunk_handler_yields_usage(monkeypatch):
     chunk.choices = [choice]
     resp = MagicMock(spec=litellm.CustomStreamWrapper)
     resp.__aiter__.return_value = iter([chunk])
-    monkeypatch.setattr(litellm_stream_handler, "handle_usage_chunk", AsyncMock(return_value={"type": "usage", "usage": {"prompt_tokens": 10}}))
+    monkeypatch.setattr(litellm_stream_handler, "handle_usage_chunk", AsyncMock(return_value=UsageChunk(type="usage", usage=Usage(prompt_tokens=10))))
     results = []
     async for c in litellm_stream_handler.litellm_stream_handler(resp):
         results.append(c)
-    assert any(r.get("type") == "usage" for r in results)
+        print(c)
+    assert any(r.type == "usage" for r in results)
 
 
 @pytest.mark.asyncio
@@ -126,7 +127,7 @@ async def test_chunk_handler_yields_litellm_raw(monkeypatch):
     results = []
     async for c in handler_mod.litellm_stream_handler(resp):
         results.append(c)
-    assert any(r.get("type") == "litellm_raw" for r in results)
+    assert any(r.type == "litellm_raw" for r in results)
 
 
 @pytest.mark.asyncio

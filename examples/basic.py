@@ -33,13 +33,16 @@ async def get_temperature(city: str) -> str:
 
 async def main():
     agent = Agent(
-        model="gpt-4.1",
+        model="gpt-4.1-nano",
         name="Weather Assistant",
         instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses.",
         tools=[get_whether, get_temperature],
     )
     runner = Runner(agent)
-    resp = runner.run_stream("What is the weather in New York? And what is the temperature there?", includes=["final_message", "usage", "tool_call", "tool_call_result", "require_confirm"])
+    resp = runner.run_stream(
+        "What is the weather in New York? And what is the temperature there?",
+        includes=["final_message", "usage", "tool_call", "tool_call_result"],
+    )
     async for chunk in resp:
         logger.info(chunk)
 

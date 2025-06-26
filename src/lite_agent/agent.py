@@ -4,8 +4,9 @@ import litellm
 from funcall import Funcall
 from litellm import CustomStreamWrapper
 
+from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
-from lite_agent.types import AgentChunk, AgentMessage, RunnerMessages
+from lite_agent.types import AgentChunk, AgentMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
 
 
 class Agent:
@@ -40,3 +41,36 @@ class Agent:
             return litellm_stream_handler(resp)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
+
+    async def handle_tool_calls(self, tool_calls: list[ToolCall] | None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:
+        if not tool_calls:
+            return
+        if tool_calls:
+            for tool_call in tool_calls:
+                tool_func = self.fc.function_registry.get(tool_call.function.name)
+                if not tool_func:
+                    logger.warning("Tool function %s not found in registry", tool_call.function.name)
+                    continue
+
+            for tool_call in tool_calls:
+                try:
+                    yield ToolCallChunk(
+                        type="tool_call",
+                        name=tool_call.function.name,
+                        arguments=tool_call.function.arguments or "",
+                    )
+                    content = await self.fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "")
+                    yield ToolCallResultChunk(
+                        type="tool_call_result",
+                        tool_call_id=tool_call.id,
+                        name=tool_call.function.name,
+                        content=str(content),
+                    )
+                except Exception as e:  # noqa: PERF203
+                    logger.exception("Tool call %s failed", tool_call.id)
+                    yield ToolCallResultChunk(
+                        type="tool_call_result",
+                        tool_call_id=tool_call.id,
+                        name=tool_call.function.name,
+                        content=str(e),
+                    )

@@ -1,7 +1,6 @@
 from collections.abc import AsyncGenerator
 
 from lite_agent.agent import Agent
-from lite_agent.stream_handlers.litellm import handle_tool_calls
 from lite_agent.types import AgentChunk, AgentChunkType, AgentToolCallMessage, RunnerMessages
 
 
@@ -47,14 +46,16 @@ class Runner:
                     finish_reason = chunk["finish_reason"]
                     if finish_reason == "tool_calls":
                         # Handle tool calls if the finish reason is tool_calls
-                        tool_calls_result = await handle_tool_calls(message, self.agent.fc)
-                        for tool_call in tool_calls_result:
-                            if tool_call["type"] == "tool_call_result":
+                        async for tool_call_chunk in self.agent.handle_tool_calls(chunk["message"].tool_calls):
+                            if tool_call_chunk["type"] == "tool_call":
+                                yield tool_call_chunk
+                            if tool_call_chunk["type"] == "tool_call_result":
+                                yield tool_call_chunk
                                 self.messages.append(
                                     AgentToolCallMessage(
                                         role="tool",
-                                        tool_call_id=tool_call["tool_call_id"],
-                                        content=tool_call["content"],
+                                        tool_call_id=tool_call_chunk["tool_call_id"],
+                                        content=tool_call_chunk["content"],
                                     ),
                                 )
             steps += 1

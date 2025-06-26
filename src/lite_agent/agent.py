@@ -31,11 +31,12 @@ class Agent:
             model=self.model,
             messages=self.message_histories,
             tools=tools,
-            tool_choice="auto",
+            tool_choice="auto",  # TODO: make this configurable
             stream=True,
         )
+
         # Ensure resp is a CustomStreamWrapper
         if isinstance(resp, CustomStreamWrapper):
-            return litellm_stream_handler(resp, self.fc)
+            return litellm_stream_handler(resp)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)

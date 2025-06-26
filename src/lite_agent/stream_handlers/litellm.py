@@ -2,11 +2,12 @@ from collections.abc import AsyncGenerator
 
 import litellm
 from funcall import Funcall
+from funcall.types import Context
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
-from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, RequireConfirmChunk, ToolCallChunk, ToolCallDeltaChunk, ToolCallResultChunk, UsageChunk
+from lite_agent.types import AgentChunk, AssistantMessage, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallChunk, ToolCallDeltaChunk, ToolCallResultChunk, UsageChunk
 
 
 async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: ModelResponseStream) -> UsageChunk | None:
@@ -46,35 +47,19 @@ async def handle_content_and_tool_calls(
     return results
 
 
-async def handle_final_message_and_tool_calls(
-    processor: StreamChunkProcessor,
-    choice: StreamingChoices,
-    fc: Funcall,
+async def handle_tool_calls(
+    message: AssistantMessage,
+    funcall: Funcall,
+    context: Context | None = None,
 ) -> list[AgentChunk]:
     results: list[AgentChunk] = []
-    current_message = processor.finalize_message()
-    results.append(FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason))
-    tool_calls = current_message.tool_calls
+    tool_calls = message.tool_calls
     if tool_calls:
-        require_confirm_chunks = []
         for tool_call in tool_calls:
-            tool_func = fc.function_registry.get(tool_call.function.name)
+            tool_func = funcall.function_registry.get(tool_call.function.name)
             if not tool_func:
                 logger.warning("Tool function %s not found in registry", tool_call.function.name)
                 continue
-
-            meta = fc.get_tool_meta(tool_call.function.name)
-            if meta["require_confirm"]:
-                require_confirm_chunks.append(
-                    RequireConfirmChunk(
-                        type="require_confirm",
-                        tool_call_name=tool_call.function.name,
-                        arguments=tool_call.function.arguments,
-                    ),
-                )
-        if require_confirm_chunks:
-            results.extend(require_confirm_chunks)
-            return results
 
         for tool_call in tool_calls:
             try:
@@ -85,7 +70,7 @@ async def handle_final_message_and_tool_calls(
                         arguments=tool_call.function.arguments or "",
                     ),
                 )
-                content = await fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "")
+                content = await funcall.call_function_async(tool_call.function.name, tool_call.function.arguments or "", context=context)
                 results.append(
                     ToolCallResultChunk(
                         type="tool_call_result",
@@ -109,13 +94,14 @@ async def handle_final_message_and_tool_calls(
 
 async def litellm_stream_handler(
     resp: litellm.CustomStreamWrapper,
-    fc: Funcall,
 ) -> AsyncGenerator[AgentChunk, None]:
     """
     Optimized chunk handler (refactored for simplicity)
     """
     processor = StreamChunkProcessor()
     async for chunk in resp:  # type: ignore
+        yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
+
         if not isinstance(chunk, ModelResponseStream):
             logger.debug("unexpected chunk type: %s", type(chunk))
             logger.debug("chunk content: %s", chunk)
@@ -128,7 +114,6 @@ async def litellm_stream_handler(
 
         # Get choice and delta data
         if not chunk.choices:
-            yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
             continue
 
         choice = chunk.choices[0]
@@ -137,9 +122,5 @@ async def litellm_stream_handler(
             yield result
         # Check if finished
         if choice.finish_reason and processor.current_message:
-            for result in await handle_final_message_and_tool_calls(processor, choice, fc):
-                yield result
-                if isinstance(result, dict) and result.get("type") == "require_confirm":
-                    return
-            continue
-        yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
+            current_message = processor.finalize_message()
+            yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)

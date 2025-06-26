@@ -17,6 +17,7 @@ logging.basicConfig(
 logger = logging.getLogger("lite_agent")
 logger.setLevel(logging.INFO)
 
+
 @tool(require_confirmation=True)
 async def get_whether(city: str) -> str:
     """Get the weather for a city."""

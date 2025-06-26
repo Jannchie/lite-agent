@@ -39,7 +39,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 200
-exclude = ["tests/*"]
+# exclude = ["tests/*"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -62,10 +62,11 @@ ignore = [
     "RUF012",
     "T201",
     "PT009",
+    "ANN204",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/*" = ["S101"]
+"**/tests/**/*" = ["S101", "PLC0415", "PERF401", "ANN001"]
 
 [tool.uv]
 upgrade = true

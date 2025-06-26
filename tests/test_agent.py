@@ -2,11 +2,12 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from lite_agent.agent import Agent
+from lite_agent.types import RunnerMessage
 
 @pytest.mark.asyncio
 async def test_prepare_messages():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
-    messages = [{"role": "user", "content": "hi"}]
+    messages: list[RunnerMessage] = [{"role": "user", "content": "hi"}]
     result = agent.prepare_messages(messages)
     assert result[0]["role"] == "system"
     assert "TestBot" in result[0]["content"]

@@ -42,6 +42,21 @@ class Agent:
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
+    async def list_require_confirm_tools(self, tool_calls: list[ToolCall] | None) -> list[ToolCall]:
+        if not tool_calls:
+            return []
+        results = []
+        for tool_call in tool_calls:
+            tool_func = self.fc.function_registry.get(tool_call.function.name)
+            if not tool_func:
+                logger.warning("Tool function %s not found in registry", tool_call.function.name)
+                continue
+            tool_meta = self.fc.get_tool_meta(tool_call.function.name)
+            if tool_meta["require_confirm"]:
+                logger.debug("Tool call %s requires confirmation", tool_call.id)
+                results.append(tool_call)
+        return results
+
     async def handle_tool_calls(self, tool_calls: list[ToolCall] | None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:
         if not tool_calls:
             return

@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("lite_agent")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 @tool(require_confirmation=True)
@@ -43,6 +43,9 @@ async def main():
         "What is the weather in New York? And what is the temperature there?",
         includes=["final_message", "usage", "tool_call", "tool_call_result"],
     )
+    async for chunk in resp:
+        logger.info(chunk)
+    resp = runner.run_continue()
     async for chunk in resp:
         logger.info(chunk)
 

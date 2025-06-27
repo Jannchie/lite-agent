@@ -1,12 +1,12 @@
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import AgentChunk, Runner
 from lite_agent.stream_handlers.litellm import FinalMessageChunk
-from lite_agent.types import AssistantMessage
+from lite_agent.types import AgentUserMessage, AssistantMessage, ToolCall, ToolCallFunction
 
 
 class DummyAgent(Agent):
@@ -49,5 +49,148 @@ async def test_run_stream():
         assert chunk.message.role == "assistant"
         assert chunk.message.content == "done"
         results.append(chunk)
-    assert hasattr(gen, "__aiter__")
+
     assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_runner_init():
+    """Test Runner initialization"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+    assert runner.agent == agent
+    assert runner.messages == []
+
+
+@pytest.mark.asyncio
+async def test_runner_append_message():
+    """Test Runner append_message method"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    # Test appending string message directly via append_message
+    user_msg = AgentUserMessage(role="user", content="Hello")
+    runner.append_message(user_msg)
+    assert len(runner.messages) == 1
+    assert runner.messages[0].role == "user"
+    assert runner.messages[0].content == "Hello"
+
+    # Test appending message object from dict
+    user_msg_dict = {"role": "user", "content": "How are you?"}
+    runner.append_message(user_msg_dict)
+    assert len(runner.messages) == 2
+    assert runner.messages[1].content == "How are you?"
+
+
+@pytest.mark.asyncio
+async def test_run_stream_with_list_input():
+    """Test run_stream with list of messages as input"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    messages = [
+        AgentUserMessage(role="user", content="First message"),
+        AgentUserMessage(role="user", content="Second message"),
+    ]
+
+    gen = runner.run_stream(messages)
+    results = []
+    async for chunk in gen:
+        results.append(chunk)
+
+    assert len(results) == 1
+    # Messages include the two input messages plus the assistant response
+    assert len(runner.messages) == 3
+
+
+@pytest.mark.asyncio
+async def test_run_stream_with_record_to():
+    """Test run_stream with record_to parameter"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    gen = runner.run_stream("hello", record_to="test_record.jsonl")
+    results = []
+    async for chunk in gen:
+        results.append(chunk)
+
+    assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_stream_with_max_steps():
+    """Test run_stream with custom max_steps"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    gen = runner.run_stream("hello", max_steps=5)
+    results = []
+    async for chunk in gen:
+        results.append(chunk)
+
+    assert len(results) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_continue_stream_with_invalid_last_message():
+    """Test run_continue_stream when last message is not from assistant"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    # Add a user message as the last message
+    user_msg_dict = {"role": "user", "content": "Hello"}
+    runner.append_message(user_msg_dict)
+
+    with pytest.raises(ValueError, match="Cannot continue running without a valid last message from the assistant"):
+        async for _ in runner.run_continue_stream():
+            pass
+
+
+@pytest.mark.asyncio
+async def test_run_continue_stream_with_empty_messages():
+    """Test run_continue_stream when there are no messages"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    with pytest.raises(ValueError, match="Cannot continue running without a valid last message from the assistant"):
+        async for _ in runner.run_continue_stream():
+            pass
+
+
+@pytest.mark.asyncio
+async def test_run_continue_stream_with_tool_calls():
+    """Test run_continue_stream with tool calls in last assistant message"""
+    agent = DummyAgent()
+    runner = Runner(agent=agent)
+
+    # Create an assistant message with tool calls using AgentAssistantMessage
+    tool_call = ToolCall(
+        id="test_id",
+        function=ToolCallFunction(name="test_tool", arguments="{}"),
+        type="function",
+        index=0,
+    )
+
+    from lite_agent.types import AgentAssistantMessage
+
+    assistant_msg = AgentAssistantMessage(
+        role="assistant",
+        content="Let me call a tool",
+        tool_calls=[tool_call],
+    )
+
+    runner.messages.append(assistant_msg)
+
+    # Mock the agent.handle_tool_calls method
+    from lite_agent.types import ToolCallChunk, ToolCallResultChunk
+
+    async def mock_handle_tool_calls(_) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # type: ignore
+        yield ToolCallChunk(type="tool_call", name="test_tool", arguments="{}")
+        yield ToolCallResultChunk(type="tool_call_result", tool_call_id="test_id", name="test_tool", content="result")
+
+    with patch.object(agent, "handle_tool_calls", side_effect=mock_handle_tool_calls):
+        results = []
+        async for chunk in runner.run_continue_stream():
+            results.append(chunk)
+
+        assert len(results) >= 2  # At least the tool call chunks

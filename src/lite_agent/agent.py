@@ -1,10 +1,10 @@
 from collections.abc import AsyncGenerator, Callable, Sequence
+from pathlib import Path
 
 import litellm
 from funcall import Funcall
 from litellm import CustomStreamWrapper
 from pydantic import BaseModel
-from rich.logging import Path
 
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
@@ -12,12 +12,11 @@ from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, Too
 
 
 class Agent:
-    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None, record_to: Path | None = None) -> None:
+    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None) -> None:
         self.name = name
         self.instructions = instructions
         self.fc = Funcall(tools)
         self.model = model
-        self.record_to = record_to
 
     def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
         final_messages = [
@@ -29,7 +28,7 @@ class Agent:
         ]
         return [message.model_dump() if isinstance(message, BaseModel) else message for message in final_messages]
 
-    async def stream_async(self, messages: RunnerMessages) -> AsyncGenerator[AgentChunk, None]:
+    async def stream_async(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         self.message_histories = self.prepare_messages(messages)
         tools = self.fc.get_tools(target="litellm")
         resp = await litellm.acompletion(
@@ -42,7 +41,7 @@ class Agent:
 
         # Ensure resp is a CustomStreamWrapper
         if isinstance(resp, CustomStreamWrapper):
-            return litellm_stream_handler(resp, record_to=self.record_to)
+            return litellm_stream_handler(resp, record_to=record_to_file)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
@@ -57,7 +56,7 @@ class Agent:
                 continue
             tool_meta = self.fc.get_tool_meta(tool_call.function.name)
             if tool_meta["require_confirm"]:
-                logger.debug("Tool call %s requires confirmation", tool_call.id)
+                logger.debug('Tool call "%s" requires confirmation', tool_call.id)
                 results.append(tool_call)
         return results
 

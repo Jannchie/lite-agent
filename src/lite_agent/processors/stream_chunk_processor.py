@@ -23,7 +23,7 @@ class StreamChunkProcessor:
             role=delta.role,
             content="",
         )
-        logger.debug("Initialized new message: %s", self._current_message.id)
+        logger.debug('Initialized new message: "%s"', self._current_message.id)
 
     def update_content(self, content: str) -> None:
         """Update message content"""

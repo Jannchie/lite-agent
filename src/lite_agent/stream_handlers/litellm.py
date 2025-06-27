@@ -1,14 +1,13 @@
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
+import aiofiles
 import litellm
-from funcall import Funcall
-from funcall.types import Context
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
-from lite_agent.types import AgentChunk, AssistantMessage, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallChunk, ToolCallDeltaChunk, ToolCallResultChunk, UsageChunk
+from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallDeltaChunk, UsageChunk
 
 
 async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: ModelResponseStream) -> UsageChunk | None:
@@ -48,51 +47,6 @@ async def handle_content_and_tool_calls(
     return results
 
 
-async def handle_tool_calls(
-    message: AssistantMessage,
-    funcall: Funcall,
-    context: Context | None = None,
-) -> list[AgentChunk]:
-    results: list[AgentChunk] = []
-    tool_calls = message.tool_calls
-    if tool_calls:
-        for tool_call in tool_calls:
-            tool_func = funcall.function_registry.get(tool_call.function.name)
-            if not tool_func:
-                logger.warning("Tool function %s not found in registry", tool_call.function.name)
-                continue
-
-        for tool_call in tool_calls:
-            try:
-                results.append(
-                    ToolCallChunk(
-                        type="tool_call",
-                        name=tool_call.function.name,
-                        arguments=tool_call.function.arguments or "",
-                    ),
-                )
-                content = await funcall.call_function_async(tool_call.function.name, tool_call.function.arguments or "", context=context)
-                results.append(
-                    ToolCallResultChunk(
-                        type="tool_call_result",
-                        tool_call_id=tool_call.id,
-                        name=tool_call.function.name,
-                        content=str(content),
-                    ),
-                )
-            except Exception as e:  # noqa: PERF203
-                logger.exception("Tool call %s failed", tool_call.id)
-                results.append(
-                    ToolCallResultChunk(
-                        type="tool_call_result",
-                        tool_call_id=tool_call.id,
-                        name=tool_call.function.name,
-                        content=str(e),
-                    ),
-                )
-    return results
-
-
 async def litellm_stream_handler(
     resp: litellm.CustomStreamWrapper,
     record_to: Path | None = None,
@@ -103,7 +57,11 @@ async def litellm_stream_handler(
     processor = StreamChunkProcessor()
     record_file = None
     if record_to:
-        record_file = record_to.open("a", encoding="utf-8")
+        # check directory exists
+        if not record_to.parent.exists():
+            logger.warning('Record directory "%s" does not exist, creating it.', record_to.parent)
+            record_to.parent.mkdir(parents=True, exist_ok=True)
+        record_file = await aiofiles.open(record_to, "a", encoding="utf-8")
     try:
         async for chunk in resp:  # type: ignore
             if not isinstance(chunk, ModelResponseStream):
@@ -111,8 +69,8 @@ async def litellm_stream_handler(
                 logger.warning("chunk content: %s", chunk)
                 continue
             if record_file:
-                record_file.write(chunk.model_dump_json() + "\n")
-                record_file.flush()  # 确保数据立即写入磁盘
+                await record_file.write(chunk.model_dump_json() + "\n")
+                await record_file.flush()  # 异步刷新数据到磁盘
             yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
             # Handle usage info
             usage_chunk = await handle_usage_chunk(processor, chunk)
@@ -134,4 +92,4 @@ async def litellm_stream_handler(
                 yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)
     finally:
         if record_file:
-            record_file.close()
+            await record_file.close()

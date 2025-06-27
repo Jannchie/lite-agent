@@ -5,7 +5,12 @@ description = "A lightweight, extensible framework for building AI agent."
 readme = "README.md"
 authors = [{ name = "Jianqi Pan", email = "jannchie@gmail.com" }]
 requires-python = ">=3.10"
-dependencies = ["funcall>=0.7.0", "prompt-toolkit>=3.0.51", "rich>=14.0.0"]
+dependencies = [
+    "aiofiles>=24.1.0",
+    "funcall>=0.7.0",
+    "prompt-toolkit>=3.0.51",
+    "rich>=14.0.0",
+]
 keywords = [
     "function call",
     "openai",
@@ -73,7 +78,11 @@ upgrade = true
 package = true
 
 [dependency-groups]
-dev = ["pytest>=8.3.5", "pytest-cov>=6.1.1", "ruff>=0.11.10"]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-cov>=6.1.1",
+    "ruff>=0.11.10",
+]
 
 [tool.coverage.run]
 omit = ["tests/*"]

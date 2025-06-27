@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from funcall.decorators import tool
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
@@ -17,6 +18,13 @@ logger = logging.getLogger("lite_agent")
 logger.setLevel(logging.DEBUG)
 
 
+@tool(require_confirmation=True)
+async def get_whether(city: str) -> str:
+    """Get the weather for a city."""
+    await asyncio.sleep(1)
+    return f"The weather in {city} is sunny with a few clouds."
+
+
 async def get_temperature(city: str) -> str:
     """Get the temperature for a city."""
     await asyncio.sleep(1)
@@ -27,16 +35,22 @@ agent = Agent(
     model="gpt-4.1-nano",
     name="Weather Assistant",
     instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses.",
-    tools=[get_temperature],
+    tools=[get_whether, get_temperature],
 )
 
 
 async def main():
     runner = Runner(agent)
     resp = runner.run_stream(
-        "What is the temperature in New York?",
+        "What is the weather in New York? And what is the temperature there?",
         includes=["final_message", "usage", "tool_call", "tool_call_result"],
-        record_to="tests/mocks/basic/1.jsonl",
+        record_to="tests/mocks/confirm_and_continue/1.jsonl",
+    )
+    async for chunk in resp:
+        logger.info(chunk)
+    resp = runner.run_continue_stream(
+        includes=["final_message", "usage", "tool_call", "tool_call_result"],
+        record_to="tests/mocks/confirm_and_continue/2.jsonl",
     )
     async for chunk in resp:
         logger.info(chunk)

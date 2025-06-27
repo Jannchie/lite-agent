@@ -13,7 +13,7 @@ class DummyAgent(Agent):
     def __init__(self) -> None:
         super().__init__(model="dummy-model", name="Dummy Agent", instructions="This is a dummy agent for testing.")
 
-    async def stream_async(self, _message) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
+    async def stream_async(self, message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore  # noqa: ARG002
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
@@ -24,7 +24,7 @@ class DummyAgent(Agent):
 async def test_run_until_complete():
     mock_agent = Mock()
 
-    async def async_gen(_: object) -> AsyncGenerator[FinalMessageChunk, None]:
+    async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[FinalMessageChunk, None]:  # noqa: ARG001
         yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
     mock_agent.stream_async = AsyncMock(side_effect=async_gen)

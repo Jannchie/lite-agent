@@ -120,9 +120,15 @@ class Runner:
             if chunk.type in includes:
                 yield chunk
 
-    async def run_until_complete(self, user_input: RunnerMessages | str, max_steps: int = 20, includes: list[AgentChunkType] | None = None) -> list[AgentChunk]:
+    async def run_until_complete(
+        self,
+        user_input: RunnerMessages | str,
+        max_steps: int = 20,
+        includes: list[AgentChunkType] | None = None,
+        record_to: PathLike | str | None = None,
+    ) -> list[AgentChunk]:
         """Run the agent until it completes and return the final message."""
-        resp = self.run_stream(user_input, max_steps, includes)
+        resp = self.run_stream(user_input, max_steps, includes, record_to=record_to)
         return [chunk async for chunk in resp]
 
     def append_message(self, message: RunnerMessage | dict) -> None:

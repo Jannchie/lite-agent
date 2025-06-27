@@ -118,7 +118,7 @@ class TestAppendMessage:
         """测试字典格式缺少 role 字段时抛出异常"""
         invalid_dict = {"content": "Missing role field"}
 
-        with pytest.raises(ValueError, match="Message must have a 'role' field."):
+        with pytest.raises(ValueError, match="Message must have a 'role' or 'type' field."):
             self.runner.append_message(invalid_dict)
 
     def test_append_message_multiple_messages(self):
@@ -173,12 +173,21 @@ class TestAppendMessage:
 
         self.runner.append_message(assistant_dict)
 
-        assert len(self.runner.messages) == 1
+        # 在新格式中，应该产生 2 个消息：assistant message + function call message
+        assert len(self.runner.messages) == 2
+
+        # 第一个消息应该是不含 tool_calls 的 assistant message
         assert isinstance(self.runner.messages[0], AgentAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
         assert self.runner.messages[0].content == "I'll help you with that."
-        assert self.runner.messages[0].tool_calls is not None
-        assert len(self.runner.messages[0].tool_calls) == 1
+
+        # 第二个消息应该是 function call message
+        from lite_agent.types import AgentFunctionToolCallMessage
+        assert isinstance(self.runner.messages[1], AgentFunctionToolCallMessage)
+        assert self.runner.messages[1].type == "function_call"
+        assert self.runner.messages[1].function_call_id == "call_123"
+        assert self.runner.messages[1].name == "get_weather"
+        assert self.runner.messages[1].arguments == '{"city": "New York"}'
 
     def test_append_message_empty_content(self):
         """测试添加空内容消息"""

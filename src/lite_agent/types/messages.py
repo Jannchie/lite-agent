@@ -42,7 +42,6 @@ class AgentUserMessage(BaseModel):
 class AgentAssistantMessage(BaseModel):
     role: Literal["assistant"]
     content: str
-    tool_calls: Sequence[ToolCall] | None = None
 
 
 class AgentSystemMessage(BaseModel):
@@ -56,6 +55,20 @@ class AgentToolCallMessage(BaseModel):
     content: str
 
 
-RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentToolCallMessage | AgentSystemMessage
+class AgentFunctionToolCallMessage(BaseModel):
+    arguments: str
+    type: Literal["function_call"]
+    function_call_id: str
+    name: str
+    content: str
+
+
+class AgentFunctionCallOutput(BaseModel):
+    call_id: str
+    output: str
+    type: Literal["function_call_output"]
+
+
+RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentToolCallMessage | AgentSystemMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput
 AgentMessage = RunnerMessage | AgentSystemMessage
 RunnerMessages = Sequence[RunnerMessage | dict[str, Any]]

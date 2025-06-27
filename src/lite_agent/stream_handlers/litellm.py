@@ -92,7 +92,7 @@ async def litellm_stream_handler(
     record_file: AsyncTextIOWrapper | None = None
     record_path = ensure_record_file(record_to)
     if record_path:
-        record_file = await aiofiles.open(record_path, "a", encoding="utf-8")
+        record_file = await aiofiles.open(record_path, "w", encoding="utf-8")
     try:
         async for chunk in resp:  # type: ignore
             if not isinstance(chunk, ModelResponseStream):

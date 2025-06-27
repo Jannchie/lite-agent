@@ -5,10 +5,23 @@ from typing import TYPE_CHECKING
 
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
-from lite_agent.types import AgentAssistantMessage, AgentChunk, AgentChunkType, AgentSystemMessage, AgentToolCallMessage, AgentUserMessage, RunnerMessage, RunnerMessages
+from lite_agent.types import (
+    AgentAssistantMessage,
+    AgentChunk,
+    AgentChunkType,
+    AgentFunctionCallOutput,
+    AgentFunctionToolCallMessage,
+    AgentSystemMessage,
+    AgentToolCallMessage,
+    AgentUserMessage,
+    RunnerMessage,
+    RunnerMessages,
+    ToolCall,
+    ToolCallFunction,
+)
 
 if TYPE_CHECKING:
-    from lite_agent.types import ToolCall
+    from lite_agent.types import AssistantMessage
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
@@ -44,11 +57,12 @@ class Runner:
             if tool_call_chunk.type == "tool_call_result":
                 if tool_call_chunk.type in includes:
                     yield tool_call_chunk
+                # Create function call output in responses format
                 self.messages.append(
-                    AgentToolCallMessage(
-                        role="tool",
-                        tool_call_id=tool_call_chunk.tool_call_id,
-                        content=tool_call_chunk.content,
+                    AgentFunctionCallOutput(
+                        type="function_call_output",
+                        call_id=tool_call_chunk.tool_call_id,
+                        output=tool_call_chunk.content,
                     ),
                 )
 
@@ -86,15 +100,20 @@ class Runner:
 
                 if chunk.type == "final_message":
                     message = chunk.message
-                    self.messages.append(message)  # type: ignore
+                    # Convert to responses format and add to messages
+                    await self._convert_final_message_to_responses_format(message)
                     finish_reason = chunk.finish_reason
                     if finish_reason == "tool_calls":
-                        # Handle tool calls if the finish reason is tool_calls
-                        require_confirm_tools = await self.agent.list_require_confirm_tools(message.tool_calls)
-                        if require_confirm_tools:
-                            return
-                        async for tool_chunk in self._handle_tool_calls(message.tool_calls, includes):
-                            yield tool_chunk
+                        # Find pending function calls in responses format
+                        pending_function_calls = self._find_pending_function_calls()
+                        if pending_function_calls:
+                            # Convert to ToolCall format for existing handler
+                            tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+                            require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
+                            if require_confirm_tools:
+                                return
+                            async for tool_chunk in self._handle_tool_calls(tool_calls, includes):
+                                yield tool_chunk
             steps += 1
 
     async def run_continue_until_complete(
@@ -122,15 +141,33 @@ class Runner:
     ) -> AsyncGenerator[AgentChunk, None]:
         """Continue running the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
-        last_message = self.messages[-1] if self.messages else None
-        if not last_message or last_message.role != "assistant":
-            msg = "Cannot continue running without a valid last message from the assistant."
+
+        # Find pending function calls in responses format
+        pending_function_calls = self._find_pending_function_calls()
+        if pending_function_calls:
+            # Convert to ToolCall format for existing handler
+            tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+            async for tool_chunk in self._handle_tool_calls(tool_calls, includes):
+                yield tool_chunk
+            async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to)):
+                if chunk.type in includes:
+                    yield chunk
+        else:
+            # Check if there are any messages and what the last message is
+            if not self.messages:
+                msg = "Cannot continue running without a valid last message from the assistant."
+                raise ValueError(msg)
+
+            last_message = self.messages[-1]
+            if not (isinstance(last_message, AgentAssistantMessage) or
+                    (hasattr(last_message, "role") and getattr(last_message, "role", None) == "assistant")):
+                msg = "Cannot continue running without a valid last message from the assistant."
+                raise ValueError(msg)
+
+            # If we have an assistant message but no pending function calls,
+            # that means there's nothing to continue
+            msg = "Cannot continue running without pending function calls."
             raise ValueError(msg)
-        async for tool_chunk in self._handle_tool_calls(last_message.tool_calls, includes):
-            yield tool_chunk
-        async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to)):
-            if chunk.type in includes:
-                yield chunk
 
     async def run_until_complete(
         self,
@@ -143,26 +180,121 @@ class Runner:
         resp = self.run(user_input, max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
+    async def _convert_final_message_to_responses_format(self, message: "AssistantMessage") -> None:
+        """Convert a completions format final message to responses format messages."""
+        # The final message from the stream handler might still contain tool_calls
+        # We need to convert it to responses format
+        if hasattr(message, "tool_calls") and message.tool_calls:
+            # Add the assistant message without tool_calls
+            assistant_msg = AgentAssistantMessage(
+                role="assistant",
+                content=message.content,
+            )
+            self.messages.append(assistant_msg)
+
+            # Add function call messages
+            for tool_call in message.tool_calls:
+                function_call_msg = AgentFunctionToolCallMessage(
+                    type="function_call",
+                    function_call_id=tool_call.id,
+                    name=tool_call.function.name,
+                    arguments=tool_call.function.arguments or "",
+                    content="",
+                )
+                self.messages.append(function_call_msg)
+        else:
+            # Regular assistant message without tool calls
+            assistant_msg = AgentAssistantMessage(
+                role="assistant",
+                content=message.content,
+            )
+            self.messages.append(assistant_msg)
+
+    def _find_pending_function_calls(self) -> list:
+        """Find function call messages that don't have corresponding outputs yet."""
+        function_calls = []
+        function_call_ids = set()
+
+        # Collect all function call messages
+        for msg in reversed(self.messages):
+            if isinstance(msg, AgentFunctionToolCallMessage):
+                function_calls.append(msg)
+                function_call_ids.add(msg.function_call_id)
+            elif isinstance(msg, AgentFunctionCallOutput):
+                # Remove the corresponding function call from our list
+                function_call_ids.discard(msg.call_id)
+            elif isinstance(msg, AgentAssistantMessage):
+                # Stop when we hit the assistant message that initiated these calls
+                break
+
+        # Return only function calls that don't have outputs yet
+        return [fc for fc in function_calls if fc.function_call_id in function_call_ids]
+
+    def _convert_function_calls_to_tool_calls(self, function_calls: list[AgentFunctionToolCallMessage]) -> list[ToolCall]:
+        """Convert function call messages to ToolCall objects for compatibility."""
+
+        tool_calls = []
+        for fc in function_calls:
+            tool_call = ToolCall(
+                id=fc.function_call_id,
+                type="function",
+                function=ToolCallFunction(
+                    name=fc.name,
+                    arguments=fc.arguments,
+                ),
+                index=len(tool_calls),
+            )
+            tool_calls.append(tool_call)
+        return tool_calls
+
     def append_message(self, message: RunnerMessage | dict) -> None:
         if isinstance(message, RunnerMessage):
             self.messages.append(message)
         elif isinstance(message, dict):
+            # Handle different message types
+            message_type = message.get("type")
             role = message.get("role")
-            if not role:
-                msg = "Message must have a 'role' field."
-                raise ValueError(msg)
 
-            # Use a mapping to reduce repetitive if-elif statements
-            role_to_message_class = {
-                "user": AgentUserMessage,
-                "assistant": AgentAssistantMessage,
-                "tool": AgentToolCallMessage,
-                "system": AgentSystemMessage,
-            }
+            if message_type == "function_call":
+                # Function call message
+                self.messages.append(AgentFunctionToolCallMessage.model_validate(message))
+            elif message_type == "function_call_output":
+                # Function call output message
+                self.messages.append(AgentFunctionCallOutput.model_validate(message))
+            elif role == "assistant" and "tool_calls" in message:
+                # Legacy assistant message with tool_calls - convert to responses format
+                # Add assistant message without tool_calls
+                assistant_msg = AgentAssistantMessage(
+                    role="assistant",
+                    content=message.get("content", ""),
+                )
+                self.messages.append(assistant_msg)
 
-            message_class = role_to_message_class.get(role)
-            if message_class:
-                self.messages.append(message_class.model_validate(message))
+                # Convert tool_calls to function call messages
+                for tool_call in message.get("tool_calls", []):
+                    function_call_msg = AgentFunctionToolCallMessage(
+                        type="function_call",
+                        function_call_id=tool_call["id"],
+                        name=tool_call["function"]["name"],
+                        arguments=tool_call["function"]["arguments"],
+                        content="",
+                    )
+                    self.messages.append(function_call_msg)
+            elif role:
+                # Regular role-based message
+                role_to_message_class = {
+                    "user": AgentUserMessage,
+                    "assistant": AgentAssistantMessage,
+                    "tool": AgentToolCallMessage,
+                    "system": AgentSystemMessage,
+                }
+
+                message_class = role_to_message_class.get(role)
+                if message_class:
+                    self.messages.append(message_class.model_validate(message))
+                else:
+                    msg = f"Unsupported message role: {role}"
+                    raise ValueError(msg)
             else:
-                msg = f"Unsupported message role: {role}"
+                msg = "Message must have a 'role' or 'type' field."
                 raise ValueError(msg)

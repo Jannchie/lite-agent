@@ -19,14 +19,16 @@ class Agent:
         self.model = model
 
     def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
-        final_messages = [
+        # Convert from responses format to completions format
+        converted_messages = self._convert_responses_to_completions_format(messages)
+
+        return [
             AgentSystemMessage(
                 role="system",
                 content=f"You are {self.name}. {self.instructions}",
-            ),
-            *messages,
+            ).model_dump(),
+            *converted_messages,
         ]
-        return [message.model_dump() if isinstance(message, BaseModel) else message for message in final_messages]
 
     async def stream_async(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         self.message_histories = self.prepare_messages(messages)
@@ -92,3 +94,93 @@ class Agent:
                         name=tool_call.function.name,
                         content=str(e),
                     )
+
+    def _convert_responses_to_completions_format(self, messages: RunnerMessages) -> list[dict]:
+        """Convert messages from responses API format to completions API format."""
+        converted_messages = []
+        i = 0
+
+        while i < len(messages):
+            message = messages[i]
+            message_dict = message.model_dump() if isinstance(message, BaseModel) else message
+
+            message_type = message_dict.get("type")
+            role = message_dict.get("role")
+
+            if role == "assistant":
+                # Look ahead for function_call messages
+                tool_calls = []
+                j = i + 1
+
+                while j < len(messages):
+                    next_message = messages[j]
+                    next_dict = next_message.model_dump() if isinstance(next_message, BaseModel) else next_message
+
+                    if next_dict.get("type") == "function_call":
+                        tool_call = {
+                            "id": next_dict["function_call_id"],
+                            "type": "function",
+                            "function": {
+                                "name": next_dict["name"],
+                                "arguments": next_dict["arguments"],
+                            },
+                            "index": len(tool_calls),
+                        }
+                        tool_calls.append(tool_call)
+                        j += 1
+                    else:
+                        break
+
+                # Create assistant message with tool_calls if any
+                assistant_msg = message_dict.copy()
+                if tool_calls:
+                    assistant_msg["tool_calls"] = tool_calls
+
+                converted_messages.append(assistant_msg)
+                i = j  # Skip the function_call messages we've processed
+
+            elif message_type == "function_call_output":
+                # Convert to tool message
+                converted_messages.append({
+                    "role": "tool",
+                    "tool_call_id": message_dict["call_id"],
+                    "content": message_dict["output"],
+                })
+                i += 1
+
+            elif message_type == "function_call":
+                # This should have been processed with the assistant message
+                # Skip it if we encounter it standalone
+                i += 1
+
+            else:
+                # Regular message (user, system)
+                converted_messages.append(message_dict)
+                i += 1
+
+        return converted_messages
+
+    def _convert_completions_to_responses_format(self, assistant_message_dict: dict, tool_calls: list[ToolCall] | None) -> list:
+        """Convert completions format to responses format messages."""
+        messages = []
+
+        # Add the assistant message without tool_calls
+        assistant_msg = {
+            "role": "assistant",
+            "content": assistant_message_dict.get("content", ""),
+        }
+        messages.append(assistant_msg)
+
+        # Convert tool_calls to function_call messages
+        if tool_calls:
+            for tool_call in tool_calls:
+                function_call_msg = {
+                    "type": "function_call",
+                    "function_call_id": tool_call.id,
+                    "name": tool_call.function.name,
+                    "arguments": tool_call.function.arguments or "",
+                    "content": "",  # Empty content for function calls
+                }
+                messages.append(function_call_msg)
+
+        return messages

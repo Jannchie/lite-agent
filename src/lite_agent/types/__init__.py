@@ -12,6 +12,8 @@ from .chunks import (
 )
 from .messages import (
     AgentAssistantMessage,
+    AgentFunctionCallOutput,
+    AgentFunctionToolCallMessage,
     AgentMessage,
     AgentSystemMessage,
     AgentToolCallMessage,
@@ -30,6 +32,8 @@ __all__ = [
     "AgentAssistantMessage",
     "AgentChunk",
     "AgentChunkType",
+    "AgentFunctionCallOutput",
+    "AgentFunctionToolCallMessage",
     "AgentMessage",
     "AgentSystemMessage",
     "AgentToolCallMessage",

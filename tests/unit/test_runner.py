@@ -6,7 +6,7 @@ import pytest
 from lite_agent.agent import Agent
 from lite_agent.runner import AgentChunk, Runner
 from lite_agent.stream_handlers.litellm import FinalMessageChunk
-from lite_agent.types import AgentUserMessage, AssistantMessage, ToolCall, ToolCallFunction
+from lite_agent.types import AgentUserMessage, AssistantMessage
 
 
 class DummyAgent(Agent):
@@ -163,23 +163,24 @@ async def test_run_continue_stream_with_tool_calls():
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
-    # Create an assistant message with tool calls using AgentAssistantMessage
-    tool_call = ToolCall(
-        id="test_id",
-        function=ToolCallFunction(name="test_tool", arguments="{}"),
-        type="function",
-        index=0,
-    )
-
-    from lite_agent.types import AgentAssistantMessage
+    # In the new format, create an assistant message and a function call message
+    from lite_agent.types import AgentAssistantMessage, AgentFunctionToolCallMessage
 
     assistant_msg = AgentAssistantMessage(
         role="assistant",
         content="Let me call a tool",
-        tool_calls=[tool_call],
+    )
+
+    function_call_msg = AgentFunctionToolCallMessage(
+        type="function_call",
+        function_call_id="test_id",
+        name="test_tool",
+        arguments="{}",
+        content="",
     )
 
     runner.messages.append(assistant_msg)
+    runner.messages.append(function_call_msg)
 
     # Mock the agent.handle_tool_calls method
     from lite_agent.types import ToolCallChunk, ToolCallResultChunk

@@ -3,11 +3,45 @@ from pathlib import Path
 
 import aiofiles
 import litellm
+from aiofiles.threadpool.text import AsyncTextIOWrapper
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
 from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallDeltaChunk, UsageChunk
+
+
+def ensure_record_file(record_to: Path | None) -> Path | None:
+    if not record_to:
+        return None
+    if not record_to.parent.exists():
+        logger.warning('Record directory "%s" does not exist, creating it.', record_to.parent)
+        record_to.parent.mkdir(parents=True, exist_ok=True)
+    return record_to
+
+
+async def process_chunk(
+    processor: StreamChunkProcessor,
+    chunk: ModelResponseStream,
+    record_file: AsyncTextIOWrapper | None = None,
+) -> AsyncGenerator[AgentChunk, None]:
+    if record_file:
+        await record_file.write(chunk.model_dump_json() + "\n")
+        await record_file.flush()
+    yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
+    usage_chunk = await handle_usage_chunk(processor, chunk)
+    if usage_chunk:
+        yield usage_chunk
+        return
+    if not chunk.choices:
+        return
+    choice = chunk.choices[0]
+    delta = choice.delta
+    for result in await handle_content_and_tool_calls(processor, chunk, choice, delta):
+        yield result
+    if choice.finish_reason:
+        current_message = processor.current_message
+        yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)
 
 
 async def handle_usage_chunk(processor: StreamChunkProcessor, chunk: ModelResponseStream) -> UsageChunk | None:
@@ -55,41 +89,18 @@ async def litellm_stream_handler(
     Optimized chunk handler
     """
     processor = StreamChunkProcessor()
-    record_file = None
-    if record_to:
-        # check directory exists
-        if not record_to.parent.exists():
-            logger.warning('Record directory "%s" does not exist, creating it.', record_to.parent)
-            record_to.parent.mkdir(parents=True, exist_ok=True)
-        record_file = await aiofiles.open(record_to, "a", encoding="utf-8")
+    record_file: AsyncTextIOWrapper | None = None
+    record_path = ensure_record_file(record_to)
+    if record_path:
+        record_file = await aiofiles.open(record_path, "a", encoding="utf-8")  # type: ignore[assignment]
     try:
         async for chunk in resp:  # type: ignore
             if not isinstance(chunk, ModelResponseStream):
                 logger.warning("unexpected chunk type: %s", type(chunk))
                 logger.warning("chunk content: %s", chunk)
                 continue
-            if record_file:
-                await record_file.write(chunk.model_dump_json() + "\n")
-                await record_file.flush()  # 异步刷新数据到磁盘
-            yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
-            # Handle usage info
-            usage_chunk = await handle_usage_chunk(processor, chunk)
-            if usage_chunk:
-                yield usage_chunk
-                continue
-
-            # Get choice and delta data
-            if not chunk.choices:
-                continue
-
-            choice = chunk.choices[0]
-            delta = choice.delta
-            for result in await handle_content_and_tool_calls(processor, chunk, choice, delta):
+            async for result in process_chunk(processor, chunk, record_file):
                 yield result
-            # Check if finished
-            if choice.finish_reason:
-                current_message = processor.current_message
-                yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)
     finally:
         if record_file:
             await record_file.close()

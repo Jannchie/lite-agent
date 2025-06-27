@@ -39,7 +39,7 @@ async def main():
         tools=[get_whether, get_temperature],
     )
     runner = Runner(agent)
-    resp = runner.run_stream("What is the weather in New York? And what is the temperature there?")
+    resp = runner.run("What is the weather in New York? And what is the temperature there?")
     async for chunk in resp:
         logger.info(chunk)
     resp = runner.run_continue_stream()

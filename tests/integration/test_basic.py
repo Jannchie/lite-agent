@@ -25,7 +25,7 @@ runner = Runner(agent)
 async def test_basic():
     mock = create_litellm_mock("tests/mocks/basic/1.jsonl")
     with patch("lite_agent.agent.litellm.acompletion", mock):
-        resp = runner.run_stream(
+        resp = runner.run(
             "What is the temperature in New York?",
         )
         async for chunk in resp:

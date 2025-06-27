@@ -37,9 +37,9 @@ async def test_run_until_complete():
 
 
 @pytest.mark.asyncio
-async def test_run_stream():
+async def test_run():
     runner = Runner(agent=DummyAgent())
-    gen = runner.run_stream("hello")
+    gen = runner.run("hello")
 
     # run_stream 返回的是 async generator
     results = []
@@ -93,7 +93,7 @@ async def test_run_stream_with_list_input():
         AgentUserMessage(role="user", content="Second message"),
     ]
 
-    gen = runner.run_stream(messages)
+    gen = runner.run(messages)
     results = []
     async for chunk in gen:
         results.append(chunk)
@@ -109,7 +109,7 @@ async def test_run_stream_with_record_to():
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
-    gen = runner.run_stream("hello", record_to="test_record.jsonl")
+    gen = runner.run("hello", record_to="test_record.jsonl")
     results = []
     async for chunk in gen:
         results.append(chunk)
@@ -123,7 +123,7 @@ async def test_run_stream_with_max_steps():
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
-    gen = runner.run_stream("hello", max_steps=5)
+    gen = runner.run("hello", max_steps=5)
     results = []
     async for chunk in gen:
         results.append(chunk)

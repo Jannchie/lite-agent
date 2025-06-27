@@ -56,7 +56,7 @@ class Runner:
         """Collect all chunks from an async generator into a list."""
         return [chunk async for chunk in stream]
 
-    def run_stream(
+    def run(
         self,
         user_input: RunnerMessages | str,
         max_steps: int = 20,
@@ -70,9 +70,9 @@ class Runner:
         else:
             for message in user_input:
                 self.append_message(message)
-        return self._run_stream(max_steps, includes, self._normalize_record_path(record_to))
+        return self._run(max_steps, includes, self._normalize_record_path(record_to))
 
-    async def _run_stream(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -128,7 +128,7 @@ class Runner:
             raise ValueError(msg)
         async for tool_chunk in self._handle_tool_calls(last_message.tool_calls, includes):
             yield tool_chunk
-        async for chunk in self._run_stream(max_steps, includes, self._normalize_record_path(record_to)):
+        async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to)):
             if chunk.type in includes:
                 yield chunk
 
@@ -140,7 +140,7 @@ class Runner:
         record_to: PathLike | str | None = None,
     ) -> list[AgentChunk]:
         """Run the agent until it completes and return the final message."""
-        resp = self.run_stream(user_input, max_steps, includes, record_to=record_to)
+        resp = self.run(user_input, max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
     def append_message(self, message: RunnerMessage | dict) -> None:

@@ -49,7 +49,7 @@ async def main():
             )
             if user_input.lower() in {"exit", "quit"}:
                 break
-            response = runner.run_stream(user_input)
+            response = runner.run(user_input)
             async for chunk in response:
                 await rich_channel.handle(chunk)
 

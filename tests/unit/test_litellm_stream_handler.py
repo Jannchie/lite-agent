@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import litellm
 import pytest
+from litellm import Usage
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 import lite_agent.stream_handlers.litellm as handler_mod
@@ -10,7 +11,7 @@ from lite_agent.stream_handlers.litellm import (
     handle_usage_chunk,
     litellm_stream_handler,
 )
-from lite_agent.types import ToolCall, ToolCallFunction, Usage, UsageChunk
+from lite_agent.types import ToolCall, ToolCallFunction, UsageChunk
 
 
 class DummyDelta(Delta):

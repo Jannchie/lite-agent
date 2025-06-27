@@ -1,10 +1,14 @@
 from collections.abc import AsyncGenerator, Sequence
 from os import PathLike
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
 from lite_agent.types import AgentAssistantMessage, AgentChunk, AgentChunkType, AgentSystemMessage, AgentToolCallMessage, AgentUserMessage, RunnerMessage, RunnerMessages
+
+if TYPE_CHECKING:
+    from lite_agent.types import ToolCall
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
@@ -22,6 +26,36 @@ class Runner:
         self.agent = agent
         self.messages: list[RunnerMessage] = []
 
+    def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
+        """Normalize includes parameter to default if None."""
+        return includes if includes is not None else DEFAULT_INCLUDES
+
+    def _normalize_record_path(self, record_to: PathLike | str | None) -> Path | None:
+        """Normalize record_to parameter to Path object if provided."""
+        return Path(record_to) if record_to else None
+
+    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType]) -> AsyncGenerator[AgentChunk, None]:
+        """Handle tool calls and yield appropriate chunks."""
+        if not tool_calls:
+            return
+        async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls):
+            if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
+                yield tool_call_chunk
+            if tool_call_chunk.type == "tool_call_result":
+                if tool_call_chunk.type in includes:
+                    yield tool_call_chunk
+                self.messages.append(
+                    AgentToolCallMessage(
+                        role="tool",
+                        tool_call_id=tool_call_chunk.tool_call_id,
+                        content=tool_call_chunk.content,
+                    ),
+                )
+
+    async def _collect_all_chunks(self, stream: AsyncGenerator[AgentChunk, None]) -> list[AgentChunk]:
+        """Collect all chunks from an async generator into a list."""
+        return [chunk async for chunk in stream]
+
     def run_stream(
         self,
         user_input: RunnerMessages | str,
@@ -30,14 +64,13 @@ class Runner:
         record_to: PathLike | str | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
-        if includes is None:
-            includes = DEFAULT_INCLUDES
+        includes = self._normalize_includes(includes)
         if isinstance(user_input, str):
             self.messages.append(AgentUserMessage(role="user", content=user_input))
         else:
             for message in user_input:
                 self.append_message(message)
-        return self._run_stream(max_steps, includes, record_to=Path(record_to) if record_to else None)
+        return self._run_stream(max_steps, includes, self._normalize_record_path(record_to))
 
     async def _run_stream(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
@@ -60,18 +93,8 @@ class Runner:
                         require_confirm_tools = await self.agent.list_require_confirm_tools(message.tool_calls)
                         if require_confirm_tools:
                             return
-                        async for tool_call_chunk in self.agent.handle_tool_calls(message.tool_calls):
-                            if tool_call_chunk.type == "tool_call":
-                                yield tool_call_chunk
-                            if tool_call_chunk.type == "tool_call_result":
-                                yield tool_call_chunk
-                                self.messages.append(
-                                    AgentToolCallMessage(
-                                        role="tool",
-                                        tool_call_id=tool_call_chunk.tool_call_id,
-                                        content=tool_call_chunk.content,
-                                    ),
-                                )
+                        async for tool_chunk in self._handle_tool_calls(message.tool_calls, includes):
+                            yield tool_chunk
             steps += 1
 
     async def run_continue_until_complete(
@@ -81,7 +104,7 @@ class Runner:
         record_to: PathLike | str | None = None,
     ) -> list[AgentChunk]:
         resp = self.run_continue_stream(max_steps, includes, record_to=record_to)
-        return [chunk async for chunk in resp]
+        return await self._collect_all_chunks(resp)
 
     def run_continue_stream(
         self,
@@ -98,25 +121,14 @@ class Runner:
         record_to: PathLike | str | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Continue running the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
-        if includes is None:
-            includes = DEFAULT_INCLUDES
+        includes = self._normalize_includes(includes)
         last_message = self.messages[-1] if self.messages else None
         if not last_message or last_message.role != "assistant":
             msg = "Cannot continue running without a valid last message from the assistant."
             raise ValueError(msg)
-        async for tool_call_chunk in self.agent.handle_tool_calls(last_message.tool_calls):
-            if tool_call_chunk.type == "tool_call":
-                yield tool_call_chunk
-            if tool_call_chunk.type == "tool_call_result":
-                yield tool_call_chunk
-                self.messages.append(
-                    AgentToolCallMessage(
-                        role="tool",
-                        tool_call_id=tool_call_chunk.tool_call_id,
-                        content=tool_call_chunk.content,
-                    ),
-                )
-        async for chunk in self._run_stream(max_steps, includes, record_to=Path(record_to) if record_to else None):
+        async for tool_chunk in self._handle_tool_calls(last_message.tool_calls, includes):
+            yield tool_chunk
+        async for chunk in self._run_stream(max_steps, includes, self._normalize_record_path(record_to)):
             if chunk.type in includes:
                 yield chunk
 
@@ -129,7 +141,7 @@ class Runner:
     ) -> list[AgentChunk]:
         """Run the agent until it completes and return the final message."""
         resp = self.run_stream(user_input, max_steps, includes, record_to=record_to)
-        return [chunk async for chunk in resp]
+        return await self._collect_all_chunks(resp)
 
     def append_message(self, message: RunnerMessage | dict) -> None:
         if isinstance(message, RunnerMessage):
@@ -139,11 +151,18 @@ class Runner:
             if not role:
                 msg = "Message must have a 'role' field."
                 raise ValueError(msg)
-            if role == "user":
-                self.messages.append(AgentUserMessage.model_validate(message))
-            elif role == "assistant":
-                self.messages.append(AgentAssistantMessage.model_validate(message))
-            elif role == "tool":
-                self.messages.append(AgentToolCallMessage.model_validate(message))
-            elif role == "system":
-                self.messages.append(AgentSystemMessage.model_validate(message))
+
+            # Use a mapping to reduce repetitive if-elif statements
+            role_to_message_class = {
+                "user": AgentUserMessage,
+                "assistant": AgentAssistantMessage,
+                "tool": AgentToolCallMessage,
+                "system": AgentSystemMessage,
+            }
+
+            message_class = role_to_message_class.get(role)
+            if message_class:
+                self.messages.append(message_class.model_validate(message))
+            else:
+                msg = f"Unsupported message role: {role}"
+                raise ValueError(msg)

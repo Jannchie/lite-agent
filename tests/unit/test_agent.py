@@ -7,10 +7,10 @@ from lite_agent.types import AgentUserMessage, RunnerMessage, ToolCall, ToolCall
 
 
 @pytest.mark.asyncio
-async def test_prepare_messages():
+async def test_prepare_completion_messages():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     messages: list[RunnerMessage] = [AgentUserMessage(role="user", content="hi")]
-    result = agent.prepare_messages(messages)
+    result = agent.prepare_completion_messages(messages)
     assert result[0]["role"] == "system"
     assert "TestBot" in result[0]["content"]
     assert result[1]["role"] == "user"

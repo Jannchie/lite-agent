@@ -18,10 +18,9 @@ class Agent:
         self.fc = Funcall(tools)
         self.model = model
 
-    def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
+    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
         # Convert from responses format to completions format
         converted_messages = self._convert_responses_to_completions_format(messages)
-
         return [
             AgentSystemMessage(
                 role="system",
@@ -31,7 +30,7 @@ class Agent:
         ]
 
     async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
-        self.message_histories = self.prepare_messages(messages)
+        self.message_histories = self.prepare_completion_messages(messages)
         tools = self.fc.get_tools(target="completion")
         resp = await litellm.acompletion(
             model=self.model,

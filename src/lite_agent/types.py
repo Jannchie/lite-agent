@@ -24,7 +24,7 @@ class AssistantMessage(BaseModel):
     index: int
     role: Literal["assistant"] = "assistant"
     content: str = ""
-    tool_calls: Sequence[ToolCall] | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 class Message(BaseModel):

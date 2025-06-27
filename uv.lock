@@ -455,7 +455,7 @@ wheels = [
 
 [[package]]
 name = "funcall"
-version = "0.7.0"
+version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "litellm" },
@@ -465,9 +465,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-inspect" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2c/94/b5d504b9fdc9f0ec5ea677dd753ebf53c00d9dbd11a1d8e4b7bda1d726bd/funcall-0.7.0.tar.gz", hash = "sha256:a54eac040fd2f310f108471cee3d8a4bd9d1ba0184a3916685d5bdf8bef24d58", size = 179873, upload-time = "2025-06-21T15:29:32.422Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/fb/9a7ae36ad87b8c79255b85c75e7b7d22d4eb71a3c0a1ce54c55f8d645bbc/funcall-0.8.0.tar.gz", hash = "sha256:73646f0ccbed5b875083ea1968f907d8ed5b979a601daa651fae9b291a790bd4", size = 180197, upload-time = "2025-06-27T16:38:04.166Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b5/88/4eabb9b60d13087c15752832738debda1bb0f22287fade4b70fe4d99cde8/funcall-0.7.0-py3-none-any.whl", hash = "sha256:64e83607dc1be38e13db1820aff9632145516050d06e0a2f2dc98a00593065c5", size = 11317, upload-time = "2025-06-21T15:29:31.112Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/94/5aa7b7a0bf27f0b204cd58d7eb5ead18d9f5623c05c97fdf01d722c45974/funcall-0.8.0-py3-none-any.whl", hash = "sha256:491631aeb6760b87a1e40b561cf9b1e60a5df645962b094a50aff5b87145e4d8", size = 11322, upload-time = "2025-06-27T16:38:03.152Z" },
 ]
 
 [[package]]

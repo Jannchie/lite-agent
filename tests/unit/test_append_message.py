@@ -7,7 +7,7 @@ import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AgentAssistantMessage, AgentSystemMessage, AgentToolCallMessage, AgentUserMessage
+from lite_agent.types import AgentAssistantMessage, AgentSystemMessage, AgentUserMessage
 
 
 class DummyAgent(Agent):
@@ -60,19 +60,6 @@ class TestAppendMessage:
         assert self.runner.messages[0].role == "system"
         assert self.runner.messages[0].content == "You are a helpful assistant."
 
-    def test_append_message_with_tool_call_message_object(self):
-        """测试使用 AgentToolCallMessage 对象添加消息"""
-        tool_message = AgentToolCallMessage(role="tool", tool_call_id="call_123", content="Tool result")
-
-        self.runner.append_message(tool_message)
-
-        assert len(self.runner.messages) == 1
-        assert self.runner.messages[0] == tool_message
-        assert isinstance(self.runner.messages[0], AgentToolCallMessage)
-        assert self.runner.messages[0].role == "tool"
-        assert self.runner.messages[0].tool_call_id == "call_123"
-        assert self.runner.messages[0].content == "Tool result"
-
     def test_append_message_with_user_dict(self):
         """测试使用字典格式添加用户消息"""
         user_dict = {"role": "user", "content": "Hello from dict!"}
@@ -105,18 +92,6 @@ class TestAppendMessage:
         assert isinstance(self.runner.messages[0], AgentSystemMessage)
         assert self.runner.messages[0].role == "system"
         assert self.runner.messages[0].content == "System message from dict"
-
-    def test_append_message_with_tool_dict(self):
-        """测试使用字典格式添加工具消息"""
-        tool_dict = {"role": "tool", "tool_call_id": "call_456", "content": "Tool result from dict"}
-
-        self.runner.append_message(tool_dict)
-
-        assert len(self.runner.messages) == 1
-        assert isinstance(self.runner.messages[0], AgentToolCallMessage)
-        assert self.runner.messages[0].role == "tool"
-        assert self.runner.messages[0].tool_call_id == "call_456"
-        assert self.runner.messages[0].content == "Tool result from dict"
 
     def test_append_message_with_dict_missing_role(self):
         """测试字典格式缺少 role 字段时抛出异常"""
@@ -193,6 +168,7 @@ class TestAppendMessage:
 
         # 第二个消息应该是 function call message
         from lite_agent.types import AgentFunctionToolCallMessage
+
         assert isinstance(self.runner.messages[1], AgentFunctionToolCallMessage)
         assert self.runner.messages[1].type == "function_call"
         assert self.runner.messages[1].function_call_id == "call_123"

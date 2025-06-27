@@ -12,7 +12,6 @@ from lite_agent.types import (
     AgentFunctionCallOutput,
     AgentFunctionToolCallMessage,
     AgentSystemMessage,
-    AgentToolCallMessage,
     AgentUserMessage,
     RunnerMessage,
     RunnerMessages,
@@ -159,8 +158,7 @@ class Runner:
                 raise ValueError(msg)
 
             last_message = self.messages[-1]
-            if not (isinstance(last_message, AgentAssistantMessage) or
-                    (hasattr(last_message, "role") and getattr(last_message, "role", None) == "assistant")):
+            if not (isinstance(last_message, AgentAssistantMessage) or (hasattr(last_message, "role") and getattr(last_message, "role", None) == "assistant")):
                 msg = "Cannot continue running without a valid last message from the assistant."
                 raise ValueError(msg)
 
@@ -212,7 +210,7 @@ class Runner:
 
     def _find_pending_function_calls(self) -> list:
         """Find function call messages that don't have corresponding outputs yet."""
-        function_calls = []
+        function_calls: list[AgentFunctionToolCallMessage] = []
         function_call_ids = set()
 
         # Collect all function call messages
@@ -285,7 +283,6 @@ class Runner:
                 role_to_message_class = {
                     "user": AgentUserMessage,
                     "assistant": AgentAssistantMessage,
-                    "tool": AgentToolCallMessage,
                     "system": AgentSystemMessage,
                 }
 

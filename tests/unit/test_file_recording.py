@@ -1,6 +1,7 @@
 """
 测试 litellm_stream_handler 文件记录功能的单元测试
 """
+
 import json
 import tempfile
 from collections.abc import AsyncGenerator
@@ -26,11 +27,13 @@ async def test_litellm_stream_handler_with_record_to_existing_directory():
             object="chat.completion.chunk",
             created=1234567890,
             model="gpt-3.5-turbo",
-            choices=[StreamingChoices(
-                index=0,
-                delta=Delta(content="Hello", role="assistant"),
-                finish_reason=None,
-            )],
+            choices=[
+                StreamingChoices(
+                    index=0,
+                    delta=Delta(content="Hello", role="assistant"),
+                    finish_reason=None,
+                ),
+            ],
         )
 
         # 创建模拟的响应流
@@ -79,11 +82,13 @@ async def test_litellm_stream_handler_with_record_to_nonexistent_directory():
             object="chat.completion.chunk",
             created=1234567890,
             model="gpt-3.5-turbo",
-            choices=[StreamingChoices(
-                index=0,
-                delta=Delta(content="Hello World", role="assistant"),
-                finish_reason="stop",
-            )],
+            choices=[
+                StreamingChoices(
+                    index=0,
+                    delta=Delta(content="Hello World", role="assistant"),
+                    finish_reason="stop",
+                ),
+            ],
         )
 
         # 创建模拟的响应流
@@ -123,11 +128,13 @@ async def test_litellm_stream_handler_without_record_to():
         object="chat.completion.chunk",
         created=1234567890,
         model="gpt-3.5-turbo",
-        choices=[StreamingChoices(
-            index=0,
-            delta=Delta(content="No recording", role="assistant"),
-            finish_reason="stop",
-        )],
+        choices=[
+            StreamingChoices(
+                index=0,
+                delta=Delta(content="No recording", role="assistant"),
+                finish_reason="stop",
+            ),
+        ],
     )
 
     # 创建模拟的响应流
@@ -161,22 +168,26 @@ async def test_litellm_stream_handler_record_multiple_chunks():
                 object="chat.completion.chunk",
                 created=1234567890,
                 model="gpt-3.5-turbo",
-                choices=[StreamingChoices(
-                    index=0,
-                    delta=Delta(content="First ", role="assistant"),
-                    finish_reason=None,
-                )],
+                choices=[
+                    StreamingChoices(
+                        index=0,
+                        delta=Delta(content="First ", role="assistant"),
+                        finish_reason=None,
+                    ),
+                ],
             ),
             ModelResponseStream(
                 id="test-multi-2",
                 object="chat.completion.chunk",
                 created=1234567891,
                 model="gpt-3.5-turbo",
-                choices=[StreamingChoices(
-                    index=0,
-                    delta=Delta(content="chunk"),
-                    finish_reason="stop",
-                )],
+                choices=[
+                    StreamingChoices(
+                        index=0,
+                        delta=Delta(content="chunk"),
+                        finish_reason="stop",
+                    ),
+                ],
             ),
         ]
 
@@ -230,11 +241,13 @@ async def test_litellm_stream_handler_with_deeply_nested_directory():
             object="chat.completion.chunk",
             created=1234567890,
             model="gpt-3.5-turbo",
-            choices=[StreamingChoices(
-                index=0,
-                delta=Delta(content="Deep directory test", role="assistant"),
-                finish_reason="stop",
-            )],
+            choices=[
+                StreamingChoices(
+                    index=0,
+                    delta=Delta(content="Deep directory test", role="assistant"),
+                    finish_reason="stop",
+                ),
+            ],
         )
 
         # 创建模拟的响应流
@@ -271,11 +284,13 @@ async def test_litellm_stream_handler_record_with_string_path():
             object="chat.completion.chunk",
             created=1234567890,
             model="gpt-3.5-turbo",
-            choices=[StreamingChoices(
-                index=0,
-                delta=Delta(content="String path test", role="assistant"),
-                finish_reason="stop",
-            )],
+            choices=[
+                StreamingChoices(
+                    index=0,
+                    delta=Delta(content="String path test", role="assistant"),
+                    finish_reason="stop",
+                ),
+            ],
         )
 
         # 创建模拟的响应流

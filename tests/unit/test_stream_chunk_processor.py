@@ -184,7 +184,7 @@ def test_update_tool_calls_no_tool_calls_attr(processor):
 
 
 @pytest.mark.parametrize(
-    "current_type,new_type,expected_type",
+    ("current_type", "new_type", "expected_type"),
     [
         ("function", "function", "function"),
         ("function", "unexpected", "function"),

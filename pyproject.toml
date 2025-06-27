@@ -71,18 +71,22 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/tests/**/*" = ["S101", "PLC0415", "PERF401", "ANN001"]
+"**/tests/**/*" = [
+    "A002",
+    "S101",
+    "SLF001",
+    "PLC0415",
+    "PERF401",
+    "ANN001",
+    "ARG005",
+]
 
 [tool.uv]
 upgrade = true
 package = true
 
 [dependency-groups]
-dev = [
-    "pytest>=8.3.5",
-    "pytest-cov>=6.1.1",
-    "ruff>=0.11.10",
-]
+dev = ["pytest>=8.3.5", "pytest-cov>=6.1.1", "ruff>=0.11.10"]
 
 [tool.coverage.run]
 omit = ["tests/*"]

@@ -72,6 +72,7 @@ async def test_runner_append_message():
     user_msg = AgentUserMessage(role="user", content="Hello")
     runner.append_message(user_msg)
     assert len(runner.messages) == 1
+    assert isinstance(runner.messages[0], AgentUserMessage)
     assert runner.messages[0].role == "user"
     assert runner.messages[0].content == "Hello"
 
@@ -79,6 +80,7 @@ async def test_runner_append_message():
     user_msg_dict = {"role": "user", "content": "How are you?"}
     runner.append_message(user_msg_dict)
     assert len(runner.messages) == 2
+    assert isinstance(runner.messages[1], AgentUserMessage)
     assert runner.messages[1].content == "How are you?"
 
 

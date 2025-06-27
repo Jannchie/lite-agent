@@ -32,6 +32,7 @@ class TestAppendMessage:
 
         assert len(self.runner.messages) == 1
         assert self.runner.messages[0] == user_message
+        assert isinstance(self.runner.messages[0], AgentUserMessage)
         assert self.runner.messages[0].role == "user"
         assert self.runner.messages[0].content == "Hello, how are you?"
 
@@ -43,6 +44,7 @@ class TestAppendMessage:
 
         assert len(self.runner.messages) == 1
         assert self.runner.messages[0] == assistant_message
+        assert isinstance(self.runner.messages[0], AgentAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
         assert self.runner.messages[0].content == "I'm doing well, thank you!"
 
@@ -54,6 +56,7 @@ class TestAppendMessage:
 
         assert len(self.runner.messages) == 1
         assert self.runner.messages[0] == system_message
+        assert isinstance(self.runner.messages[0], AgentSystemMessage)
         assert self.runner.messages[0].role == "system"
         assert self.runner.messages[0].content == "You are a helpful assistant."
 
@@ -65,6 +68,7 @@ class TestAppendMessage:
 
         assert len(self.runner.messages) == 1
         assert self.runner.messages[0] == tool_message
+        assert isinstance(self.runner.messages[0], AgentToolCallMessage)
         assert self.runner.messages[0].role == "tool"
         assert self.runner.messages[0].tool_call_id == "call_123"
         assert self.runner.messages[0].content == "Tool result"
@@ -136,8 +140,11 @@ class TestAppendMessage:
         self.runner.append_message(system_message)
 
         assert len(self.runner.messages) == 3
+        assert isinstance(self.runner.messages[0], AgentUserMessage)
         assert self.runner.messages[0].role == "user"
+        assert isinstance(self.runner.messages[1], AgentAssistantMessage)
         assert self.runner.messages[1].role == "assistant"
+        assert isinstance(self.runner.messages[2], AgentSystemMessage)
         assert self.runner.messages[2].role == "system"
 
     def test_append_message_preserves_order(self):
@@ -152,8 +159,11 @@ class TestAppendMessage:
             self.runner.append_message(msg)
 
         assert len(self.runner.messages) == 3
+        assert isinstance(self.runner.messages[0], AgentUserMessage)
         assert self.runner.messages[0].content == "First message"
+        assert isinstance(self.runner.messages[1], AgentAssistantMessage)
         assert self.runner.messages[1].content == "Second message"
+        assert isinstance(self.runner.messages[2], AgentUserMessage)
         assert self.runner.messages[2].content == "Third message"
 
     def test_append_message_with_complex_assistant_dict(self):
@@ -196,6 +206,7 @@ class TestAppendMessage:
         self.runner.append_message(user_dict)
 
         assert len(self.runner.messages) == 1
+        assert isinstance(self.runner.messages[0], AgentUserMessage)
         assert self.runner.messages[0].role == "user"
         assert self.runner.messages[0].content == ""
 
@@ -211,6 +222,7 @@ class TestAppendMessage:
         self.runner.append_message(user_dict)
 
         assert len(self.runner.messages) == 1
+        assert isinstance(self.runner.messages[0], AgentUserMessage)
         assert self.runner.messages[0].role == "user"
         assert self.runner.messages[0].content == "Hello"
         # 额外字段应该被忽略（Pydantic 会过滤未定义的字段）

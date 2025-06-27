@@ -30,7 +30,7 @@ class Agent:
             *converted_messages,
         ]
 
-    async def stream_async(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         self.message_histories = self.prepare_messages(messages)
         tools = self.fc.get_tools(target="completion")
         resp = await litellm.acompletion(

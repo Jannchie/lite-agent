@@ -93,7 +93,7 @@ class Runner:
         finish_reason = None
 
         while finish_reason != "stop" and steps < max_steps:
-            resp = await self.agent.stream_async(self.messages, record_to_file=record_to)
+            resp = await self.agent.completion(self.messages, record_to_file=record_to)
             async for chunk in resp:
                 if chunk.type in includes:
                     yield chunk

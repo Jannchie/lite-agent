@@ -141,11 +141,13 @@ class Agent:
 
             elif message_type == "function_call_output":
                 # Convert to tool message
-                converted_messages.append({
-                    "role": "tool",
-                    "tool_call_id": message_dict["call_id"],
-                    "content": message_dict["output"],
-                })
+                converted_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": message_dict["call_id"],
+                        "content": message_dict["output"],
+                    },
+                )
                 i += 1
 
             elif message_type == "function_call":
@@ -159,28 +161,3 @@ class Agent:
                 i += 1
 
         return converted_messages
-
-    def _convert_completions_to_responses_format(self, assistant_message_dict: dict, tool_calls: list[ToolCall] | None) -> list:
-        """Convert completions format to responses format messages."""
-        messages = []
-
-        # Add the assistant message without tool_calls
-        assistant_msg = {
-            "role": "assistant",
-            "content": assistant_message_dict.get("content", ""),
-        }
-        messages.append(assistant_msg)
-
-        # Convert tool_calls to function_call messages
-        if tool_calls:
-            for tool_call in tool_calls:
-                function_call_msg = {
-                    "type": "function_call",
-                    "function_call_id": tool_call.id,
-                    "name": tool_call.function.name,
-                    "arguments": tool_call.function.arguments or "",
-                    "content": "",  # Empty content for function calls
-                }
-                messages.append(function_call_msg)
-
-        return messages

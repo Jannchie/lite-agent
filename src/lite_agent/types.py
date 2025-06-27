@@ -24,7 +24,7 @@ class AssistantMessage(BaseModel):
     index: int
     role: Literal["assistant"] = "assistant"
     content: str = ""
-    tool_calls: Sequence[ToolCall] | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 class Message(BaseModel):
@@ -142,10 +142,21 @@ class ToolCallDeltaChunk(BaseModel):
     arguments_delta: str
 
 
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
+class ResponseRawChunk(BaseModel):
+    """
+    A chunk that contains the raw response from litellm.
+    This is useful for debugging and logging purposes.
+    """
+
+    type: Literal["response_raw"]
+    raw: BaseModel
+
+
+AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | ResponseRawChunk
 
 AgentChunkType = Literal[
     "litellm_raw",
+    "response_raw",
     "usage",
     "final_message",
     "tool_call",

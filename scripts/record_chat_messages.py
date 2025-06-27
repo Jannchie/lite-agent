@@ -21,13 +21,11 @@ logger.setLevel(logging.DEBUG)
 @tool(require_confirmation=True)
 async def get_whether(city: str) -> str:
     """Get the weather for a city."""
-    await asyncio.sleep(1)
     return f"The weather in {city} is sunny with a few clouds."
 
 
 async def get_temperature(city: str) -> str:
     """Get the temperature for a city."""
-    await asyncio.sleep(1)
     return f"The temperature in {city} is 25°C."
 
 
@@ -39,7 +37,7 @@ async def main():
         tools=[get_whether, get_temperature],
     )
     runner = Runner(agent)
-    resp = runner.run_stream("What is the weather in New York? And what is the temperature there?")
+    resp = runner.run("What is the weather in New York? And what is the temperature there?")
     async for chunk in resp:
         logger.info(chunk)
     resp = runner.run_continue_stream()

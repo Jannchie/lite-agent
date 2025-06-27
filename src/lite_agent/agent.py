@@ -1,24 +1,29 @@
 from collections.abc import AsyncGenerator, Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 import litellm
 from funcall import Funcall
-from litellm import CustomStreamWrapper
+from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
+from litellm.responses.streaming_iterator import ResponsesAPIStreamingIterator
+from litellm.types.llms.openai import ResponseInputParam
 from pydantic import BaseModel
 
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
+from lite_agent.stream_handlers.litellm import response_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
 
 
 class Agent:
-    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None) -> None:
+    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None, search: bool = False) -> None:
         self.name = name
         self.instructions = instructions
         self.fc = Funcall(tools)
         self.model = model
+        self.search = search
 
-    def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
+    def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, Any]]:
         final_messages = [
             AgentSystemMessage(
                 role="system",
@@ -26,23 +31,30 @@ class Agent:
             ),
             *messages,
         ]
-        return [message.model_dump() if isinstance(message, BaseModel) else message for message in final_messages]
+        return [message.model_dump() if isinstance(message, BaseModel) else message for message in final_messages]  # type: ignore
 
-    async def stream_async(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         self.message_histories = self.prepare_messages(messages)
-        tools = self.fc.get_tools(target="litellm")
+        tools = self.fc.get_tools(target="openai")
         resp = await litellm.acompletion(
             model=self.model,
             messages=self.message_histories,
-            tools=tools,
-            tool_choice="auto",  # TODO: make this configurable
+            tools=tools if tools else None,
+            tool_choice="auto" if tools else None,
             stream=True,
         )
 
         # Ensure resp is a CustomStreamWrapper
         if isinstance(resp, CustomStreamWrapper):
             return litellm_stream_handler(resp, record_to=record_to_file)
-        msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
+        msg = f"Response is not a CustomStreamWrapper, but a {type(resp).__name__}. Please check the model and input."
+        raise TypeError(msg)
+
+    async def response(self, messages: ResponseInputParam, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+        resp = await litellm.aresponses(model=self.model, input=messages, record_to_file=record_to_file)
+        if isinstance(resp, ResponsesAPIStreamingIterator):
+            return response_stream_handler(resp, record_to=record_to_file)
+        msg = f"Response is not a ResponsesAPIStreamingIterator, but a {type(resp).__name__}. Please check the model and input."
         raise TypeError(msg)
 
     async def list_require_confirm_tools(self, tool_calls: Sequence[ToolCall] | None) -> Sequence[ToolCall]:

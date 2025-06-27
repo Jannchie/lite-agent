@@ -13,7 +13,7 @@ class DummyAgent(Agent):
     def __init__(self) -> None:
         super().__init__(model="dummy-model", name="Dummy Agent", instructions="This is a dummy agent for testing.")
 
-    async def stream_async(self, message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore  # noqa: ARG002
+    async def completion(self, message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore  # noqa: ARG002
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
@@ -27,19 +27,19 @@ async def test_run_until_complete():
     async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[FinalMessageChunk, None]:  # noqa: ARG001
         yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
-    mock_agent.stream_async = AsyncMock(side_effect=async_gen)
+    mock_agent.completion = AsyncMock(side_effect=async_gen)
     runner = Runner(agent=mock_agent)
     result = await runner.run_until_complete("hello")
     assert isinstance(result, list)
     assert len(result) == 1
     assert result[0].type == "final_message"
-    mock_agent.stream_async.assert_called_once()
+    mock_agent.completion.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_run_stream():
+async def test_run():
     runner = Runner(agent=DummyAgent())
-    gen = runner.run_stream("hello")
+    gen = runner.run("hello")
 
     # run_stream 返回的是 async generator
     results = []
@@ -93,7 +93,7 @@ async def test_run_stream_with_list_input():
         AgentUserMessage(role="user", content="Second message"),
     ]
 
-    gen = runner.run_stream(messages)
+    gen = runner.run(messages)
     results = []
     async for chunk in gen:
         results.append(chunk)
@@ -109,7 +109,7 @@ async def test_run_stream_with_record_to():
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
-    gen = runner.run_stream("hello", record_to="test_record.jsonl")
+    gen = runner.run("hello", record_to="test_record.jsonl")
     results = []
     async for chunk in gen:
         results.append(chunk)
@@ -123,7 +123,7 @@ async def test_run_stream_with_max_steps():
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
-    gen = runner.run_stream("hello", max_steps=5)
+    gen = runner.run("hello", max_steps=5)
     results = []
     async for chunk in gen:
         results.append(chunk)

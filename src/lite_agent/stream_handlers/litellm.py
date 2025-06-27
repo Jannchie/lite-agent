@@ -4,11 +4,26 @@ from pathlib import Path
 import aiofiles
 import litellm
 from aiofiles.threadpool.text import AsyncTextIOWrapper
+from litellm.responses.streaming_iterator import ResponsesAPIStreamingIterator
+from litellm.types.llms.openai import (
+    ContentPartAddedEvent,
+    ContentPartDoneEvent,
+    FunctionCallArgumentsDeltaEvent,
+    FunctionCallArgumentsDoneEvent,
+    OutputItemAddedEvent,
+    OutputItemDoneEvent,
+    OutputTextDeltaEvent,
+    OutputTextDoneEvent,
+    ResponseCompletedEvent,
+    ResponseCreatedEvent,
+    ResponseFunctionToolCall,
+    ResponseInProgressEvent,
+)
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
-from lite_agent.processors import StreamChunkProcessor
-from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallDeltaChunk, UsageChunk
+from lite_agent.processors import ResponseChunkProcessor, StreamChunkProcessor
+from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ResponseRawChunk, ToolCallDeltaChunk, UsageChunk
 
 
 def ensure_record_file(record_to: Path | None) -> Path | None:
@@ -104,3 +119,40 @@ async def litellm_stream_handler(
     finally:
         if record_file:
             await record_file.close()
+
+
+async def response_stream_handler(
+    resp: ResponsesAPIStreamingIterator,
+    record_to: Path | None = None,
+) -> AsyncGenerator[AgentChunk, None]:
+    """
+    Stream handler for litellm responses.
+    """
+    if record_to:
+        logger.warning("record_to is not supported for response_stream_handler, ignoring it.")
+    async for chunk in resp:
+        yield ResponseRawChunk(type="response_raw", raw=chunk)
+        if isinstance(
+            chunk,
+            (
+                ContentPartAddedEvent,
+                ContentPartDoneEvent,
+                FunctionCallArgumentsDeltaEvent,
+                FunctionCallArgumentsDoneEvent,
+                OutputItemAddedEvent,
+                OutputItemDoneEvent,
+                OutputTextDeltaEvent,
+                OutputTextDoneEvent,
+                ResponseCreatedEvent,
+                ResponseInProgressEvent,
+            ),
+        ):
+            logger.debug("Processing chunk type: %s", type(chunk).__name__)
+            logger.debug("Processing chunk: %s", chunk)
+        elif isinstance(chunk, ResponseCompletedEvent):
+            output = chunk.response.output
+            has_tool_calls = any(isinstance(item, ResponseFunctionToolCall) for item in output)
+
+        else:
+            logger.warning("Unexpected chunk type: %s", type(chunk))
+            continue

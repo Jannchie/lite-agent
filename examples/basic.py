@@ -19,7 +19,6 @@ logger.setLevel(logging.DEBUG)
 
 async def get_temperature(city: str) -> str:
     """Get the temperature for a city."""
-    await asyncio.sleep(1)
     return f"The temperature in {city} is 25°C."
 
 
@@ -33,7 +32,7 @@ agent = Agent(
 
 async def main():
     runner = Runner(agent)
-    resp = runner.run_stream(
+    resp = runner.run(
         "What is the temperature in New York?",
         includes=["final_message", "usage", "tool_call", "tool_call_result"],
         record_to="tests/mocks/basic/1.jsonl",

@@ -18,7 +18,7 @@ async def test_prepare_messages():
 
 
 @pytest.mark.asyncio
-async def test_stream_async_success():
+async def test_completion_success():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     fake_resp = MagicMock()
@@ -28,7 +28,7 @@ async def test_stream_async_success():
             yield "GENERATOR"
 
         with patch("lite_agent.agent.litellm_stream_handler", new=fake_async_gen), patch("lite_agent.agent.isinstance", new=lambda obj, typ: True):
-            result = await agent.stream_async([AgentUserMessage(role="user", content="hi")])
+            result = await agent.completion([AgentUserMessage(role="user", content="hi")])
             assert hasattr(result, "__aiter__")
             items = []
             async for item in result:
@@ -37,7 +37,7 @@ async def test_stream_async_success():
 
 
 @pytest.mark.asyncio
-async def test_stream_async_typeerror():
+async def test_completion_typeerror():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     not_a_stream = object()
@@ -50,7 +50,7 @@ async def test_stream_async_typeerror():
         patch("lite_agent.agent.CustomStreamWrapper", DummyWrapper),
         pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"),
     ):
-        await agent.stream_async([{"role": "user", "content": "hi"}])
+        await agent.completion([{"role": "user", "content": "hi"}])
 
 
 @pytest.mark.asyncio

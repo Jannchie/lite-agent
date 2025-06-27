@@ -71,7 +71,7 @@ async def test_agent_without_mock_data_fails():
         # This should raise FileNotFoundError since no mock data exists
         error_raised = False
         try:
-            resp = runner.run_stream("What is the weather?")
+            resp = runner.run("What is the weather?")
             async for _ in resp:
                 pass
         except FileNotFoundError:

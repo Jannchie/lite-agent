@@ -1,9 +1,10 @@
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Sequence
 
 import litellm
 from funcall import Funcall
 from litellm import CustomStreamWrapper
 from pydantic import BaseModel
+from rich.logging import Path
 
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
@@ -11,11 +12,12 @@ from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, Too
 
 
 class Agent:
-    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None) -> None:
+    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None, record_to: Path | None = None) -> None:
         self.name = name
         self.instructions = instructions
         self.fc = Funcall(tools)
         self.model = model
+        self.record_to = record_to
 
     def prepare_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
         final_messages = [
@@ -40,11 +42,11 @@ class Agent:
 
         # Ensure resp is a CustomStreamWrapper
         if isinstance(resp, CustomStreamWrapper):
-            return litellm_stream_handler(resp)
+            return litellm_stream_handler(resp, record_to=self.record_to)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
-    async def list_require_confirm_tools(self, tool_calls: list[ToolCall] | None) -> list[ToolCall]:
+    async def list_require_confirm_tools(self, tool_calls: Sequence[ToolCall] | None) -> Sequence[ToolCall]:
         if not tool_calls:
             return []
         results = []
@@ -59,7 +61,7 @@ class Agent:
                 results.append(tool_call)
         return results
 
-    async def handle_tool_calls(self, tool_calls: list[ToolCall] | None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:
+    async def handle_tool_calls(self, tool_calls: Sequence[ToolCall] | None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:
         if not tool_calls:
             return
         if tool_calls:

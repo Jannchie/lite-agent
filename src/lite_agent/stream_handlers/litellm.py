@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import litellm
 from funcall import Funcall
@@ -94,33 +95,43 @@ async def handle_tool_calls(
 
 async def litellm_stream_handler(
     resp: litellm.CustomStreamWrapper,
+    record_to: Path | None = None,
 ) -> AsyncGenerator[AgentChunk, None]:
     """
-    Optimized chunk handler (refactored for simplicity)
+    Optimized chunk handler
     """
     processor = StreamChunkProcessor()
-    async for chunk in resp:  # type: ignore
-        yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
+    record_file = None
+    if record_to:
+        record_file = record_to.open("a", encoding="utf-8")
+    try:
+        async for chunk in resp:  # type: ignore
+            if not isinstance(chunk, ModelResponseStream):
+                logger.warning("unexpected chunk type: %s", type(chunk))
+                logger.warning("chunk content: %s", chunk)
+                continue
+            if record_file:
+                record_file.write(chunk.model_dump_json() + "\n")
+                record_file.flush()  # 确保数据立即写入磁盘
+            yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
+            # Handle usage info
+            usage_chunk = await handle_usage_chunk(processor, chunk)
+            if usage_chunk:
+                yield usage_chunk
+                continue
 
-        if not isinstance(chunk, ModelResponseStream):
-            logger.debug("unexpected chunk type: %s", type(chunk))
-            logger.debug("chunk content: %s", chunk)
-            continue
-        # Handle usage info
-        usage_chunk = await handle_usage_chunk(processor, chunk)
-        if usage_chunk:
-            yield usage_chunk
-            continue
+            # Get choice and delta data
+            if not chunk.choices:
+                continue
 
-        # Get choice and delta data
-        if not chunk.choices:
-            continue
-
-        choice = chunk.choices[0]
-        delta = choice.delta
-        for result in await handle_content_and_tool_calls(processor, chunk, choice, delta):
-            yield result
-        # Check if finished
-        if choice.finish_reason:
-            current_message = processor.current_message
-            yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)
+            choice = chunk.choices[0]
+            delta = choice.delta
+            for result in await handle_content_and_tool_calls(processor, chunk, choice, delta):
+                yield result
+            # Check if finished
+            if choice.finish_reason:
+                current_message = processor.current_message
+                yield FinalMessageChunk(type="final_message", message=current_message, finish_reason=choice.finish_reason)
+    finally:
+        if record_file:
+            record_file.close()

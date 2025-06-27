@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Literal
 
 from litellm import Usage
@@ -23,7 +24,7 @@ class AssistantMessage(BaseModel):
     index: int
     role: Literal["assistant"] = "assistant"
     content: str = ""
-    tool_calls: list[ToolCall] | None = None
+    tool_calls: Sequence[ToolCall] | None = None
 
 
 class Message(BaseModel):
@@ -47,13 +48,13 @@ class UserMessageContentItemImageURL(BaseModel):
 
 class AgentUserMessage(BaseModel):
     role: Literal["user"]
-    content: str | list[UserMessageContentItemText | UserMessageContentItemImageURL]
+    content: str | Sequence[UserMessageContentItemText | UserMessageContentItemImageURL]
 
 
 class AgentAssistantMessage(BaseModel):
     role: Literal["assistant"]
     content: str
-    tool_calls: list[ToolCall] | None = None
+    tool_calls: Sequence[ToolCall] | None = None
 
 
 class AgentSystemMessage(BaseModel):
@@ -69,7 +70,7 @@ class AgentToolCallMessage(BaseModel):
 
 RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentToolCallMessage | AgentSystemMessage
 AgentMessage = RunnerMessage | AgentSystemMessage
-RunnerMessages = list[RunnerMessage | dict[str, Any]]
+RunnerMessages = Sequence[RunnerMessage | dict[str, Any]]
 
 
 class LiteLLMRawChunk(BaseModel):
@@ -141,17 +142,7 @@ class ToolCallDeltaChunk(BaseModel):
     arguments_delta: str
 
 
-class RequireConfirmChunk(BaseModel):
-    """
-    Define the type of require confirm chunk
-    """
-
-    type: Literal["require_confirm"]
-    tool_call_name: str
-    arguments: str | None = None
-
-
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | RequireConfirmChunk
+AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
 
 AgentChunkType = Literal[
     "litellm_raw",
@@ -161,5 +152,4 @@ AgentChunkType = Literal[
     "tool_call_result",
     "content_delta",
     "tool_call_delta",
-    "require_confirm",
 ]

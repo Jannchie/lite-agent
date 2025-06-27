@@ -7,7 +7,7 @@ from lite_agent.loggers import logger
 from lite_agent.types import AgentAssistantMessage, AgentChunk, AgentChunkType, AgentSystemMessage, AgentToolCallMessage, AgentUserMessage, RunnerMessage, RunnerMessages
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
-    "litellm_raw",
+    "completion_raw",
     "usage",
     "final_message",
     "tool_call",

@@ -8,7 +8,7 @@ from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
 from lite_agent.processors import StreamChunkProcessor
-from lite_agent.types import AgentChunk, ContentDeltaChunk, FinalMessageChunk, LiteLLMRawChunk, ToolCallDeltaChunk, UsageChunk
+from lite_agent.types import AgentChunk, CompletionRawChunk, ContentDeltaChunk, FinalMessageChunk, ToolCallDeltaChunk, UsageChunk
 
 
 def ensure_record_file(record_to: Path | None) -> Path | None:
@@ -28,7 +28,7 @@ async def process_chunk(
     if record_file:
         await record_file.write(chunk.model_dump_json() + "\n")
         await record_file.flush()
-    yield LiteLLMRawChunk(type="litellm_raw", raw=chunk)
+    yield CompletionRawChunk(type="completion_raw", raw=chunk)
     usage_chunk = await handle_usage_chunk(processor, chunk)
     if usage_chunk:
         yield usage_chunk

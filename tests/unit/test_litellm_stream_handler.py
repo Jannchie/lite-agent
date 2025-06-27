@@ -117,7 +117,7 @@ async def test_chunk_handler_yields_usage(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_chunk_handler_yields_litellm_raw(monkeypatch):
+async def test_chunk_handler_yields_completion_raw(monkeypatch):
     chunk = MagicMock(spec=ModelResponseStream)
     chunk.usage = None
     chunk.choices = []
@@ -127,7 +127,7 @@ async def test_chunk_handler_yields_litellm_raw(monkeypatch):
     results = []
     async for c in handler_mod.litellm_stream_handler(resp):
         results.append(c)
-    assert any(r.type == "litellm_raw" for r in results)
+    assert any(r.type == "completion_raw" for r in results)
 
 
 @pytest.mark.asyncio

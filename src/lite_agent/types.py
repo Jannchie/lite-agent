@@ -73,12 +73,12 @@ AgentMessage = RunnerMessage | AgentSystemMessage
 RunnerMessages = Sequence[RunnerMessage | dict[str, Any]]
 
 
-class LiteLLMRawChunk(BaseModel):
+class CompletionRawChunk(BaseModel):
     """
     Define the type of chunk
     """
 
-    type: Literal["litellm_raw"]
+    type: Literal["completion_raw"]
     raw: ModelResponseStream
 
 
@@ -142,10 +142,10 @@ class ToolCallDeltaChunk(BaseModel):
     arguments_delta: str
 
 
-AgentChunk = LiteLLMRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
+AgentChunk = CompletionRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk
 
 AgentChunkType = Literal[
-    "litellm_raw",
+    "completion_raw",
     "usage",
     "final_message",
     "tool_call",

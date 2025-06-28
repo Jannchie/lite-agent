@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncGenerator, Sequence
 from os import PathLike
 from pathlib import Path
@@ -50,6 +51,13 @@ class Runner:
         """Handle tool calls and yield appropriate chunks."""
         if not tool_calls:
             return
+
+        # Check for transfer_to_agent calls first
+        for tool_call in tool_calls:
+            if tool_call.function.name == "transfer_to_agent":
+                await self._handle_agent_transfer(tool_call, includes)
+                return  # Stop processing other tool calls after transfer
+
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
                 yield tool_call_chunk
@@ -298,3 +306,101 @@ class Runner:
             else:
                 msg = "Message must have a 'role' or 'type' field."
                 raise ValueError(msg)
+
+    async def _handle_agent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
+        """Handle agent transfer when transfer_to_agent tool is called.
+
+        Args:
+            tool_call: The transfer_to_agent tool call
+            _includes: The types of chunks to include in output (unused)
+        """
+
+        # Parse the arguments to get the target agent name
+        try:
+            arguments = json.loads(tool_call.function.arguments or "{}")
+            target_agent_name = arguments.get("name")
+        except (json.JSONDecodeError, KeyError):
+            logger.error("Failed to parse transfer_to_agent arguments: %s", tool_call.function.arguments)
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output="Failed to parse transfer arguments",
+                ),
+            )
+            return
+
+        if not target_agent_name:
+            logger.error("No target agent name provided in transfer_to_agent call")
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output="No target agent name provided",
+                ),
+            )
+            return
+
+        # Find the target agent in handoffs
+        if not self.agent.handoffs:
+            logger.error("Current agent has no handoffs configured")
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output="Current agent has no handoffs configured",
+                ),
+            )
+            return
+
+        target_agent = None
+        for agent in self.agent.handoffs:
+            if agent.name == target_agent_name:
+                target_agent = agent
+                break
+
+        if not target_agent:
+            logger.error("Target agent '%s' not found in handoffs", target_agent_name)
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output=f"Target agent '{target_agent_name}' not found in handoffs",
+                ),
+            )
+            return
+
+        # Execute the transfer tool call to get the result
+        try:
+            result = await self.agent.fc.call_function_async(
+                tool_call.function.name,
+                tool_call.function.arguments or "",
+            )
+
+            # Add the tool call result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output=str(result),
+                ),
+            )
+
+            # Switch to the target agent
+            logger.info("Transferring conversation from %s to %s", self.agent.name, target_agent_name)
+            self.agent = target_agent
+
+        except Exception as e:
+            logger.exception("Failed to execute transfer_to_agent tool call")
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output=f"Transfer failed: {e!s}",
+                ),
+            )

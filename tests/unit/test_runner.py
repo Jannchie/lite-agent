@@ -187,7 +187,7 @@ async def test_run_continue_stream_with_tool_calls():
     # Mock the agent.handle_tool_calls method
     from lite_agent.types import ToolCallChunk, ToolCallResultChunk
 
-    async def mock_handle_tool_calls(_) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # type: ignore
+    async def mock_handle_tool_calls(tool_calls, context=None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # type: ignore  # noqa: ARG001
         yield ToolCallChunk(type="tool_call", name="test_tool", arguments="{}")
         yield ToolCallResultChunk(type="tool_call_result", tool_call_id="test_id", name="test_tool", content="result")
 

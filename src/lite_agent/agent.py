@@ -13,11 +13,53 @@ from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, Too
 
 
 class Agent:
-    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None) -> None:
+    def __init__(self, *, model: str, name: str, instructions: str, tools: list[Callable] | None = None, handoffs: list["Agent"] | None = None) -> None:
         self.name = name
         self.instructions = instructions
-        self.fc = Funcall(tools)
         self.model = model
+        self.handoffs = handoffs if handoffs else []
+
+        # Initialize Funcall with regular tools
+        self.fc = Funcall(tools)
+
+        # Add transfer functions for handoffs using dynamic tools
+        if handoffs:
+            self._add_transfer_tools(handoffs)
+
+    def _add_transfer_tools(self, handoffs: list["Agent"]) -> None:
+        """Add transfer function for handoff agents using dynamic tools.
+
+        Creates a single 'transfer_to_agent' function that accepts a 'name' parameter
+        to specify which agent to transfer the conversation to.
+
+        Args:
+            handoffs: List of Agent objects that can be transferred to
+        """
+        # Collect all agent names for validation
+        agent_names = [agent.name for agent in handoffs]
+
+        def transfer_handler(name: str) -> str:
+            """Handler for transfer_to_agent function."""
+            if name in agent_names:
+                return f"Transferring to agent: {name}"
+
+            available_agents = ", ".join(agent_names)
+            return f"Agent '{name}' not found. Available agents: {available_agents}"
+
+        # Add single dynamic tool for all transfers
+        self.fc.add_dynamic_tool(
+            name="transfer_to_agent",
+            description="Transfer conversation to another agent.",
+            parameters={
+                "name": {
+                    "type": "string",
+                    "description": "The name of the agent to transfer to",
+                    "enum": agent_names,
+                },
+            },
+            required=["name"],
+            handler=transfer_handler,
+        )
 
     def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
         # Convert from responses format to completions format

@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator, Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 import litellm
 from funcall import Funcall
@@ -61,7 +62,7 @@ class Agent:
                 results.append(tool_call)
         return results
 
-    async def handle_tool_calls(self, tool_calls: Sequence[ToolCall] | None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:
+    async def handle_tool_calls(self, tool_calls: Sequence[ToolCall] | None, context: Any | None = None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # noqa: ANN401
         if not tool_calls:
             return
         if tool_calls:
@@ -78,7 +79,7 @@ class Agent:
                         name=tool_call.function.name,
                         arguments=tool_call.function.arguments or "",
                     )
-                    content = await self.fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "")
+                    content = await self.fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "", context)
                     yield ToolCallResultChunk(
                         type="tool_call_result",
                         tool_call_id=tool_call.id,

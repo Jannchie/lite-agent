@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator, Sequence
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
@@ -46,11 +46,11 @@ class Runner:
         """Normalize record_to parameter to Path object if provided."""
         return Path(record_to) if record_to else None
 
-    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType]) -> AsyncGenerator[AgentChunk, None]:
+    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
         """Handle tool calls and yield appropriate chunks."""
         if not tool_calls:
             return
-        async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls):
+        async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
                 yield tool_call_chunk
             if tool_call_chunk.type == "tool_call_result":
@@ -74,6 +74,7 @@ class Runner:
         user_input: RunnerMessages | str,
         max_steps: int = 20,
         includes: Sequence[AgentChunkType] | None = None,
+        context: "Any | None" = None,  # noqa: ANN401
         record_to: PathLike | str | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
@@ -83,9 +84,9 @@ class Runner:
         else:
             for message in user_input:
                 self.append_message(message)
-        return self._run(max_steps, includes, self._normalize_record_path(record_to))
+        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -111,7 +112,7 @@ class Runner:
                             require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
                             if require_confirm_tools:
                                 return
-                            async for tool_chunk in self._handle_tool_calls(tool_calls, includes):
+                            async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
                                 yield tool_chunk
             steps += 1
 
@@ -129,14 +130,16 @@ class Runner:
         max_steps: int = 20,
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
+        context: "Any | None" = None,  # noqa: ANN401
     ) -> AsyncGenerator[AgentChunk, None]:
-        return self._run_continue_stream(max_steps, includes, record_to=record_to)
+        return self._run_continue_stream(max_steps, includes, record_to=record_to, context=context)
 
     async def _run_continue_stream(
         self,
         max_steps: int = 20,
         includes: Sequence[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
+        context: "Any | None" = None,  # noqa: ANN401
     ) -> AsyncGenerator[AgentChunk, None]:
         """Continue running the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
@@ -146,7 +149,7 @@ class Runner:
         if pending_function_calls:
             # Convert to ToolCall format for existing handler
             tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
-            async for tool_chunk in self._handle_tool_calls(tool_calls, includes):
+            async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
                 yield tool_chunk
             async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to)):
                 if chunk.type in includes:

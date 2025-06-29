@@ -53,10 +53,23 @@ class Runner:
             return
 
         # Check for transfer_to_agent calls first
-        for tool_call in tool_calls:
-            if tool_call.function.name == "transfer_to_agent":
-                await self._handle_agent_transfer(tool_call, includes)
-                return  # Stop processing other tool calls after transfer
+        transfer_calls = [tc for tc in tool_calls if tc.function.name == "transfer_to_agent"]
+        if transfer_calls:
+            # Handle all transfer calls but only execute the first one
+            for i, tool_call in enumerate(transfer_calls):
+                if i == 0:
+                    # Execute the first transfer
+                    await self._handle_agent_transfer(tool_call, includes)
+                else:
+                    # Add response for additional transfer calls without executing them
+                    self.messages.append(
+                        AgentFunctionCallOutput(
+                            type="function_call_output",
+                            call_id=tool_call.id,
+                            output="Transfer already executed by previous call",
+                        ),
+                    )
+            return  # Stop processing other tool calls after transfer
 
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
@@ -123,7 +136,9 @@ class Runner:
                             async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
                                 yield tool_chunk
             steps += 1
-
+        if finish_reason == "stop" and self.agent.parent:
+            # If the agent has a parent, continue running the parent agent
+            logger.debug("Continuing with parent agent")
     async def run_continue_until_complete(
         self,
         max_steps: int = 20,

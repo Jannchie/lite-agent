@@ -22,33 +22,45 @@ logging.basicConfig(
 logger.setLevel(logging.DEBUG)
 
 
+def get_temperature(city: str) -> str:
+    """Get the temperature of a city."""
+    # In a real application, this would call an API or database.
+    return f"The temperature in {city} is 25°C."
+
+
+def get_weather(city: str) -> str:
+    """Get the weather of a city."""
+    # In a real application, this would call an API or database.
+    return f"The weather in {city} is sunny."
+
+
 async def main():
     """Demonstrate agent handoffs functionality."""
-    child = Agent(
-        model="gpt-4.1",
-        name="ChildAgent",
-        instructions="You are a helpful assistant.",
-    )
-
-    # Create another child agent
-    child2 = Agent(
-        model="gpt-4.1",
-        name="ChildAgent2",
-        instructions="You are a specialized assistant for advanced tasks.",
-    )
-
     parent = Agent(
         model="gpt-4.1",
         name="ParentAgent",
-        instructions="You will transfer conversations to ChildAgent.",
-        handoffs=[child],
+        instructions="You are a helpful agent. You can transfer conversations to other agents for specific tasks. You cannot transfer to multiple agents at once. You should transfer step by step.",
     )
 
-    # Demonstrate adding handoff after initialization
-    parent.add_handoff(child2)
+    whether_agent = Agent(
+        model="gpt-4.1",
+        name="WhetherAgent",
+        instructions="You are a helpful agent to check weather",
+        tools=[get_weather],
+    )
+
+    temper_agent = Agent(
+        model="gpt-4.1",
+        name="TemperatureAgent",
+        instructions="You are a helpful agent to check temperature",
+        tools=[get_temperature],
+    )
+
+    parent.add_handoff(whether_agent)
+    parent.add_handoff(temper_agent)
 
     runner = Runner(parent)
-    resp = runner.run("Hello, I need help with my order.", includes=["final_message", "tool_call", "tool_call_result"])
+    resp = runner.run("Hello, I need to check the whether and temperature of Tokyo.", includes=["final_message", "tool_call", "tool_call_result"])
     async for message in resp:
         logger.info(message)
     logger.info(runner.agent.name)

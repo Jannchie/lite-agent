@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Literal
+from typing import Literal, NotRequired, TypedDict
 
 from pydantic import BaseModel
 from rich import Any
@@ -7,19 +7,32 @@ from rich import Any
 from .tool_calls import ToolCall
 
 
-class AssistantMessage(BaseModel):
-    id: str
-    index: int
-    role: Literal["assistant"] = "assistant"
-    content: str = ""
-    tool_calls: list[ToolCall] | None = None
+# Response API format input types
+class ResponseInputText(BaseModel):
+    text: str
+    type: Literal["input_text"]
 
 
-class Message(BaseModel):
-    role: str
-    content: str
+class ResponseInputImage(BaseModel):
+    detail: Literal["low", "high", "auto"] = "auto"
+    type: Literal["input_image"]
+    file_id: str | None = None
+    image_url: str | None = None
 
 
+class ResponseInputTextParam(TypedDict):
+    text: str
+    type: Literal["input_text"]
+
+
+class ResponseInputImageParam(TypedDict):
+    detail: NotRequired[Literal["low", "high", "auto"]]
+    type: Literal["input_image"]
+    file_id: str | None
+    image_url: str | None
+
+
+# Compatibility types for old completion API format
 class UserMessageContentItemText(BaseModel):
     type: Literal["text"]
     text: str
@@ -34,9 +47,23 @@ class UserMessageContentItemImageURL(BaseModel):
     image_url: UserMessageContentItemImageURLImageURL
 
 
+# Legacy types - keeping for compatibility
+class AssistantMessage(BaseModel):
+    id: str
+    index: int
+    role: Literal["assistant"] = "assistant"
+    content: str = ""
+    tool_calls: list[ToolCall] | None = None
+
+
+class Message(BaseModel):
+    role: str
+    content: str
+
+
 class AgentUserMessage(BaseModel):
     role: Literal["user"]
-    content: str | Sequence[UserMessageContentItemText | UserMessageContentItemImageURL]
+    content: str | Sequence[ResponseInputText | ResponseInputImage | UserMessageContentItemText | UserMessageContentItemImageURL]
 
 
 class AgentAssistantMessage(BaseModel):

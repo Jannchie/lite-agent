@@ -54,7 +54,7 @@ async def main():
     temper_agent = Agent(
         model="gpt-4.1",
         name="TemperatureAgent",
-        instructions="You are a helpful agent to check temperature. You have parent agent. You do not interact directly with the user. Everything you output is intended for your parent agent to read. When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.",
+        instructions="You are a helpful agent to check temperature.",
         tools=[get_temperature],
         message_transfer=consolidate_history_transfer,
     )

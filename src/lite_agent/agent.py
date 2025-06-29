@@ -347,10 +347,7 @@ class Agent:
                 elif item_type == "input_image":
                     # Convert ResponseInputImage to completion API format
                     if item.get("file_id"):
-                        msg = (
-                            "File ID input is not supported for Completion API. "
-                            "Please use image_url instead of file_id for image input."
-                        )
+                        msg = "File ID input is not supported for Completion API. Please use image_url instead of file_id for image input."
                         raise ValueError(msg)
 
                     if not item.get("image_url"):
@@ -362,7 +359,7 @@ class Agent:
                     detail = item.get("detail", "auto")
                     if detail:  # Include detail if provided
                         image_data["detail"] = detail
-                    
+
                     converted_content.append(
                         {
                             "type": "image_url",

@@ -90,10 +90,7 @@ class StreamChunkProcessor:
 
     def handle_usage_info(self, chunk: ModelResponseStream) -> litellm.Usage | None:
         """Handle usage info, return whether this chunk should be skipped"""
-        usage = getattr(chunk, "usage", None)
-        if usage:
-            logger.debug("Model usage: %s", usage)
-        return usage
+        return getattr(chunk, "usage", None)
 
     @property
     def is_initialized(self) -> bool:

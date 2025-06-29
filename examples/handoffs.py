@@ -10,6 +10,7 @@ import logging
 
 from rich.logging import RichHandler
 
+from lite_agent import consolidate_history_transfer
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
 from lite_agent.runner import Runner
@@ -39,26 +40,29 @@ async def main():
     parent = Agent(
         model="gpt-4.1",
         name="ParentAgent",
-        instructions="You are a helpful agent. You can transfer conversations to other agents for specific tasks. You cannot transfer to multiple agents at once. You should transfer step by step.",
+        instructions="You are a helpful agent.",
     )
 
     whether_agent = Agent(
         model="gpt-4.1",
         name="WhetherAgent",
-        instructions="You are a helpful agent to check weather",
+        instructions="You are a helpful agent to check weather.",
         tools=[get_weather],
+        message_transfer=consolidate_history_transfer,
     )
 
     temper_agent = Agent(
         model="gpt-4.1",
         name="TemperatureAgent",
-        instructions="You are a helpful agent to check temperature",
+        instructions="You are a helpful agent to check temperature. You have parent agent. You do not interact directly with the user. Everything you output is intended for your parent agent to read. When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.",
         tools=[get_temperature],
+        message_transfer=consolidate_history_transfer,
     )
 
     parent.add_handoff(whether_agent)
     parent.add_handoff(temper_agent)
 
+    print(temper_agent.fc.function_registry)
     runner = Runner(parent)
     resp = runner.run("Hello, I need to check the whether and temperature of Tokyo.", includes=["final_message", "tool_call", "tool_call_result"])
     async for message in resp:

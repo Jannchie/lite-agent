@@ -1,12 +1,13 @@
 """Unit tests for agent handoff functionality in the runner."""
 
 import json
+from typing import Any, cast
 
 import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import ToolCall, ToolCallFunction
+from lite_agent.types import AgentFunctionCallOutput, ToolCall, ToolCallFunction
 
 
 class TestAgentHandoffs:
@@ -43,7 +44,10 @@ class TestAgentHandoffs:
         assert "parameters" in transfer_tool
 
         # Check enum contains handoff agent names
-        enum_values = transfer_tool["parameters"]["properties"]["name"]["enum"]
+        transfer_tool_params = cast("dict[str, Any]", transfer_tool["parameters"])
+        properties = cast("dict[str, Any]", transfer_tool_params["properties"])
+        name_prop = cast("dict[str, Any]", properties["name"])
+        enum_values = cast("list[str]", name_prop["enum"])
         assert "SalesAgent" in enum_values
         assert "SupportAgent" in enum_values
 
@@ -68,15 +72,17 @@ class TestAgentHandoffs:
             "transfer_to_agent",
             '{"name": "SalesAgent"}',
         )
-        assert "Transferring to agent: SalesAgent" in result
+        result_str = cast("str", result)
+        assert "Transferring to agent: SalesAgent" in result_str
 
         # Test invalid transfer
         result = await main_agent.fc.call_function_async(
             "transfer_to_agent",
             '{"name": "InvalidAgent"}',
         )
-        assert "not found" in result
-        assert "SalesAgent" in result
+        result_str = cast("str", result)
+        assert "not found" in result_str
+        assert "SalesAgent" in result_str
 
     @pytest.mark.asyncio
     async def test_runner_agent_transfer(self):
@@ -120,6 +126,7 @@ class TestAgentHandoffs:
         # Verify function call output was added
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
+        assert isinstance(output_msg, AgentFunctionCallOutput)
         assert output_msg.type == "function_call_output"
         assert output_msg.call_id == "test_transfer_001"
         assert "SalesAgent" in output_msg.output
@@ -162,6 +169,7 @@ class TestAgentHandoffs:
         # Error result should be added to messages
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
+        assert isinstance(output_msg, AgentFunctionCallOutput)
         assert output_msg.type == "function_call_output"
         assert "not found" in output_msg.output
 
@@ -205,7 +213,7 @@ class TestAgentHandoffs:
         assert runner.agent.name == "SalesAgent"
 
         # Verify transfer result added to messages
-        transfer_outputs = [msg for msg in runner.messages if hasattr(msg, "type") and msg.type == "function_call_output"]
+        transfer_outputs = [msg for msg in runner.messages if isinstance(msg, AgentFunctionCallOutput)]
         assert len(transfer_outputs) == 1
         assert "SalesAgent" in transfer_outputs[0].output
 
@@ -241,5 +249,209 @@ class TestAgentHandoffs:
         # Error result should be added to messages
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
+        assert isinstance(output_msg, AgentFunctionCallOutput)
         assert output_msg.type == "function_call_output"
         assert "no handoffs configured" in output_msg.output
+
+    @pytest.mark.asyncio
+    async def test_handle_parent_transfer_success(self):
+        """Test successful transfer to parent agent."""
+        # Create parent and child agents
+        parent_agent = Agent(
+            model="gpt-4",
+            name="ParentAgent",
+            instructions="Parent agent",
+        )
+
+        child_agent = Agent(
+            model="gpt-4",
+            name="ChildAgent",
+            instructions="Child agent",
+        )
+
+        # Set parent manually
+        child_agent.parent = parent_agent
+
+        runner = Runner(agent=child_agent)
+
+        # Create a transfer_to_parent tool call
+        transfer_call = ToolCall(
+            type="function",
+            id="call_123",
+            function=ToolCallFunction(
+                name="transfer_to_parent",
+                arguments="{}",
+            ),
+            index=0,
+        )
+
+        # Should transfer successfully
+        await runner._handle_parent_transfer(transfer_call, [])
+
+        # Agent should have switched to parent
+        assert runner.agent.name == "ParentAgent"
+        assert runner.agent == parent_agent
+
+        # Function call output should be added to messages
+        assert len(runner.messages) == 1
+        output_msg = runner.messages[0]
+        assert isinstance(output_msg, AgentFunctionCallOutput)
+        assert output_msg.type == "function_call_output"
+        assert output_msg.call_id == "call_123"
+
+    @pytest.mark.asyncio
+    async def test_handle_parent_transfer_no_parent(self):
+        """Test transfer to parent when agent has no parent."""
+        agent = Agent(
+            model="gpt-4",
+            name="MainAgent",
+            instructions="Main agent without parent",
+        )
+
+        runner = Runner(agent=agent)
+
+        # Create a transfer_to_parent tool call
+        transfer_call = ToolCall(
+            type="function",
+            id="call_456",
+            function=ToolCallFunction(
+                name="transfer_to_parent",
+                arguments="{}",
+            ),
+            index=0,
+        )
+
+        # Should handle gracefully
+        await runner._handle_parent_transfer(transfer_call, [])
+
+        # Agent should remain unchanged
+        assert runner.agent.name == "MainAgent"
+
+        # Error result should be added to messages
+        assert len(runner.messages) == 1
+        output_msg = runner.messages[0]
+        assert isinstance(output_msg, AgentFunctionCallOutput)
+        assert output_msg.type == "function_call_output"
+        assert output_msg.call_id == "call_456"
+        assert "no parent to transfer back to" in output_msg.output
+
+    @pytest.mark.asyncio
+    async def test_handle_tool_calls_with_parent_transfer(self):
+        """Test _handle_tool_calls with transfer_to_parent tool call."""
+        # Create parent and child agents
+        parent_agent = Agent(
+            model="gpt-4",
+            name="ParentAgent",
+            instructions="Parent agent",
+        )
+
+        child_agent = Agent(
+            model="gpt-4",
+            name="ChildAgent",
+            instructions="Child agent",
+        )
+
+        # Set parent manually
+        child_agent.parent = parent_agent
+
+        runner = Runner(agent=child_agent)
+
+        # Create a transfer_to_parent tool call
+        transfer_call = ToolCall(
+            type="function",
+            id="call_789",
+            function=ToolCallFunction(
+                name="transfer_to_parent",
+                arguments="{}",
+            ),
+            index=0,
+        )
+
+        # Call _handle_tool_calls
+        chunks = []
+        async for chunk in runner._handle_tool_calls([transfer_call], ["tool_call_result"]):
+            chunks.append(chunk)
+
+        # Should return immediately after transfer (no chunks yielded)
+        assert len(chunks) == 0
+
+        # Agent should have switched to parent
+        assert runner.agent.name == "ParentAgent"
+        assert runner.agent == parent_agent
+
+        # Function call output should be added to messages
+        assert len(runner.messages) == 1
+        output_msg = runner.messages[0]
+        assert isinstance(output_msg, AgentFunctionCallOutput)
+        assert output_msg.type == "function_call_output"
+        assert output_msg.call_id == "call_789"
+
+    @pytest.mark.asyncio
+    async def test_handle_tool_calls_with_multiple_parent_transfers(self):
+        """Test _handle_tool_calls with multiple transfer_to_parent calls."""
+        # Create parent and child agents
+        parent_agent = Agent(
+            model="gpt-4",
+            name="ParentAgent",
+            instructions="Parent agent",
+        )
+
+        child_agent = Agent(
+            model="gpt-4",
+            name="ChildAgent",
+            instructions="Child agent",
+        )
+
+        # Set parent manually
+        child_agent.parent = parent_agent
+
+        runner = Runner(agent=child_agent)
+
+        # Create multiple transfer_to_parent tool calls
+        transfer_call_1 = ToolCall(
+            type="function",
+            id="call_111",
+            function=ToolCallFunction(
+                name="transfer_to_parent",
+                arguments="{}",
+            ),
+            index=0,
+        )
+
+        transfer_call_2 = ToolCall(
+            type="function",
+            id="call_222",
+            function=ToolCallFunction(
+                name="transfer_to_parent",
+                arguments="{}",
+            ),
+            index=1,
+        )
+
+        # Call _handle_tool_calls
+        chunks = []
+        async for chunk in runner._handle_tool_calls([transfer_call_1, transfer_call_2], ["tool_call_result"]):
+            chunks.append(chunk)
+
+        # Should return immediately after transfer (no chunks yielded)
+        assert len(chunks) == 0
+
+        # Agent should have switched to parent
+        assert runner.agent.name == "ParentAgent"
+        assert runner.agent == parent_agent
+
+        # Should have 2 function call outputs
+        assert len(runner.messages) == 2
+
+        # First call should execute
+        output_msg_1 = runner.messages[0]
+        assert isinstance(output_msg_1, AgentFunctionCallOutput)
+        assert output_msg_1.type == "function_call_output"
+        assert output_msg_1.call_id == "call_111"
+
+        # Second call should be skipped
+        output_msg_2 = runner.messages[1]
+        assert isinstance(output_msg_2, AgentFunctionCallOutput)
+        assert output_msg_2.type == "function_call_output"
+        assert output_msg_2.call_id == "call_222"
+        assert "Transfer already executed" in output_msg_2.output

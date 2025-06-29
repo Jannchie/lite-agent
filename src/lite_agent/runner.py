@@ -47,7 +47,7 @@ class Runner:
         """Normalize record_to parameter to Path object if provided."""
         return Path(record_to) if record_to else None
 
-    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
+    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901, PLR0912
         """Handle tool calls and yield appropriate chunks."""
         if not tool_calls:
             return
@@ -70,7 +70,23 @@ class Runner:
                         ),
                     )
             return  # Stop processing other tool calls after transfer
-
+        return_parent_calls = [tc for tc in tool_calls if tc.function.name == "transfer_to_parent"]
+        if return_parent_calls:
+            # Handle multiple transfer_to_parent calls (only execute the first one)
+            for i, tool_call in enumerate(return_parent_calls):
+                if i == 0:
+                    # Execute the first transfer
+                    await self._handle_parent_transfer(tool_call, includes)
+                else:
+                    # Add response for additional transfer calls without executing them
+                    self.messages.append(
+                        AgentFunctionCallOutput(
+                            type="function_call_output",
+                            call_id=tool_call.id,
+                            output="Transfer already executed by previous call",
+                        ),
+                    )
+            return  # Stop processing other tool calls after transfer
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
                 yield tool_call_chunk
@@ -136,9 +152,7 @@ class Runner:
                             async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
                                 yield tool_chunk
             steps += 1
-        if finish_reason == "stop" and self.agent.parent:
-            # If the agent has a parent, continue running the parent agent
-            logger.debug("Continuing with parent agent")
+
     async def run_continue_until_complete(
         self,
         max_steps: int = 20,
@@ -417,5 +431,57 @@ class Runner:
                     type="function_call_output",
                     call_id=tool_call.id,
                     output=f"Transfer failed: {e!s}",
+                ),
+            )
+
+    async def _handle_parent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
+        """Handle parent transfer when transfer_to_parent tool is called.
+
+        Args:
+            tool_call: The transfer_to_parent tool call
+            _includes: The types of chunks to include in output (unused)
+        """
+
+        # Check if current agent has a parent
+        if not self.agent.parent:
+            logger.error("Current agent has no parent to transfer back to.")
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output="Current agent has no parent to transfer back to",
+                ),
+            )
+            return
+
+        # Execute the transfer tool call to get the result
+        try:
+            result = await self.agent.fc.call_function_async(
+                tool_call.function.name,
+                tool_call.function.arguments or "",
+            )
+
+            # Add the tool call result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output=str(result),
+                ),
+            )
+
+            # Switch to the parent agent
+            logger.info("Transferring conversation from %s back to parent %s", self.agent.name, self.agent.parent.name)
+            self.agent = self.agent.parent
+
+        except Exception as e:
+            logger.exception("Failed to execute transfer_to_parent tool call")
+            # Add error result to messages
+            self.messages.append(
+                AgentFunctionCallOutput(
+                    type="function_call_output",
+                    call_id=tool_call.id,
+                    output=f"Transfer to parent failed: {e!s}",
                 ),
             )

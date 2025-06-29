@@ -26,7 +26,7 @@ async def test_litellm_stream_handler_with_record_to_existing_directory():
             id="test-123",
             object="chat.completion.chunk",
             created=1234567890,
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             choices=[
                 StreamingChoices(
                     index=0,
@@ -81,7 +81,7 @@ async def test_litellm_stream_handler_with_record_to_nonexistent_directory():
             id="test-456",
             object="chat.completion.chunk",
             created=1234567890,
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             choices=[
                 StreamingChoices(
                     index=0,
@@ -127,7 +127,7 @@ async def test_litellm_stream_handler_without_record_to():
         id="test-789",
         object="chat.completion.chunk",
         created=1234567890,
-        model="gpt-3.5-turbo",
+        model="gpt-4.1-mini",
         choices=[
             StreamingChoices(
                 index=0,
@@ -167,7 +167,7 @@ async def test_litellm_stream_handler_record_multiple_chunks():
                 id="test-multi-1",
                 object="chat.completion.chunk",
                 created=1234567890,
-                model="gpt-3.5-turbo",
+                model="gpt-4.1-mini",
                 choices=[
                     StreamingChoices(
                         index=0,
@@ -180,7 +180,7 @@ async def test_litellm_stream_handler_record_multiple_chunks():
                 id="test-multi-2",
                 object="chat.completion.chunk",
                 created=1234567891,
-                model="gpt-3.5-turbo",
+                model="gpt-4.1-mini",
                 choices=[
                     StreamingChoices(
                         index=0,
@@ -240,7 +240,7 @@ async def test_litellm_stream_handler_with_deeply_nested_directory():
             id="test-deep",
             object="chat.completion.chunk",
             created=1234567890,
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             choices=[
                 StreamingChoices(
                     index=0,
@@ -283,7 +283,7 @@ async def test_litellm_stream_handler_record_with_string_path():
             id="test-string-path",
             object="chat.completion.chunk",
             created=1234567890,
-            model="gpt-3.5-turbo",
+            model="gpt-4.1-mini",
             choices=[
                 StreamingChoices(
                     index=0,

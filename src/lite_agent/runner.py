@@ -14,10 +14,11 @@ from lite_agent.types import (
     AgentFunctionToolCallMessage,
     AgentSystemMessage,
     AgentUserMessage,
+    FlexibleRunnerMessage,
     RunnerMessage,
-    RunnerMessages,
     ToolCall,
     ToolCallFunction,
+    UserInput,
 )
 
 if TYPE_CHECKING:
@@ -108,7 +109,7 @@ class Runner:
 
     def run(
         self,
-        user_input: RunnerMessages | str,
+        user_input: UserInput,
         max_steps: int = 20,
         includes: Sequence[AgentChunkType] | None = None,
         context: "Any | None" = None,  # noqa: ANN401
@@ -118,9 +119,14 @@ class Runner:
         includes = self._normalize_includes(includes)
         if isinstance(user_input, str):
             self.messages.append(AgentUserMessage(role="user", content=user_input))
-        else:
+        elif isinstance(user_input, (list, tuple)):
+            # Handle sequence of messages
             for message in user_input:
                 self.append_message(message)
+        else:
+            # Handle single message (BaseModel, TypedDict, or dict)
+            # Type assertion needed due to the complex union type
+            self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
     async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
@@ -209,7 +215,7 @@ class Runner:
 
     async def run_until_complete(
         self,
-        user_input: RunnerMessages | str,
+        user_input: UserInput,
         max_steps: int = 20,
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
@@ -285,7 +291,7 @@ class Runner:
             tool_calls.append(tool_call)
         return tool_calls
 
-    def append_message(self, message: RunnerMessage | dict) -> None:
+    def append_message(self, message: FlexibleRunnerMessage) -> None:
         if isinstance(message, RunnerMessage):
             self.messages.append(message)
         elif isinstance(message, dict):

@@ -18,13 +18,21 @@ class Agent:
         self.instructions = instructions
         self.model = model
         self.handoffs = handoffs if handoffs else []
-
+        self.parent: Agent | None = None
         # Initialize Funcall with regular tools
         self.fc = Funcall(tools)
 
-        # Add transfer functions for handoffs using dynamic tools
+        # Set parent for handoff agents
         if handoffs:
+            for handoff_agent in handoffs:
+                handoff_agent.parent = self
+                # Add transfer_to_parent tool to the handoff agent since it now has a parent
+                handoff_agent.add_transfer_to_parent_tool()
             self._add_transfer_tools(handoffs)
+
+        # Add transfer_to_parent tool if this agent has a parent (for cases where parent is set externally)
+        if self.parent is not None:
+            self.add_transfer_to_parent_tool()
 
     def _add_transfer_tools(self, handoffs: list["Agent"]) -> None:
         """Add transfer function for handoff agents using dynamic tools.
@@ -60,6 +68,62 @@ class Agent:
             required=["name"],
             handler=transfer_handler,
         )
+
+    def add_transfer_to_parent_tool(self) -> None:
+        """Add transfer_to_parent function for agents that have a parent.
+
+        This tool allows the agent to transfer back to its parent when:
+        - The current task is completed
+        - The agent cannot solve the current problem
+        - Escalation to a higher level is needed
+        """
+
+        def transfer_to_parent_handler() -> str:
+            """Handler for transfer_to_parent function."""
+            if self.parent:
+                return f"Transferring back to parent agent: {self.parent.name}"
+            return "No parent agent found"
+
+        # Add dynamic tool for parent transfer
+        self.fc.add_dynamic_tool(
+            name="transfer_to_parent",
+            description="Transfer conversation back to parent agent when current task is completed or cannot be solved by current agent",
+            parameters={},
+            required=[],
+            handler=transfer_to_parent_handler,
+        )
+
+    def add_handoff(self, agent: "Agent") -> None:
+        """Add a handoff agent after initialization.
+
+        This method allows adding handoff agents dynamically after the agent
+        has been constructed. It properly sets up parent-child relationships
+        and updates the transfer tools.
+
+        Args:
+            agent: The agent to add as a handoff target
+        """
+        # Add to handoffs list if not already present
+        if agent not in self.handoffs:
+            self.handoffs.append(agent)
+
+            # Set parent relationship
+            agent.parent = self
+
+            # Add transfer_to_parent tool to the handoff agent
+            agent.add_transfer_to_parent_tool()
+
+            # Remove existing transfer tool if it exists and recreate with all agents
+            try:
+                # Try to remove the existing transfer tool
+                if hasattr(self.fc, "remove_dynamic_tool"):
+                    self.fc.remove_dynamic_tool("transfer_to_agent")
+            except Exception as e:
+                # If removal fails, log and continue anyway
+                logger.debug(f"Failed to remove existing transfer tool: {e}")
+
+            # Regenerate transfer tools to include the new agent
+            self._add_transfer_tools(self.handoffs)
 
     def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
         # Convert from responses format to completions format

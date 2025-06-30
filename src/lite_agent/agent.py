@@ -26,7 +26,7 @@ Everything you output is intended for your parent agent to read.
 When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.
 </ExtraGuide>"""
 
-wait_for_user_INSTRUCTIONS = """<ExtraGuide>
+WAIT_FOR_USER_INSTRUCTIONS = """<ExtraGuide>
 When you have completed your assigned task or need more information from the user, you must call the `wait_for_user` function.
 </ExtraGuide>"""
 
@@ -185,7 +185,7 @@ class Agent:
 
         # Add wait_for_user instructions if completion condition is "call"
         if self.completion_condition == "call":
-            instructions = wait_for_user_INSTRUCTIONS + "\n\n" + instructions
+            instructions = WAIT_FOR_USER_INSTRUCTIONS + "\n\n" + instructions
 
         return [
             AgentSystemMessage(

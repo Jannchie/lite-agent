@@ -24,7 +24,10 @@ async def test_stream_async_success():
     fake_resp = MagicMock()
     with patch("lite_agent.agent.litellm.acompletion", new=AsyncMock(return_value=fake_resp)), patch("lite_agent.agent.CustomStreamWrapper", new=lambda x: True):
         # Patch Agent模块作用域下的litellm_stream_handler
-        async def fake_async_gen(*_args, **_kwargs):  # type: ignore
+        from collections.abc import AsyncGenerator
+        from typing import Any
+
+        async def fake_async_gen(*_args, **_kwargs) -> AsyncGenerator[Any, None]:  # type: ignore
             yield "GENERATOR"
 
         with patch("lite_agent.agent.litellm_stream_handler", new=fake_async_gen), patch("lite_agent.agent.isinstance", new=lambda obj, typ: True):

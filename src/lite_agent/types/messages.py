@@ -1,8 +1,7 @@
 from collections.abc import Sequence
-from typing import Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from pydantic import BaseModel
-from rich import Any
 
 from .tool_calls import ToolCall
 

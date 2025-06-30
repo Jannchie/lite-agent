@@ -62,11 +62,15 @@ async def main():
     parent.add_handoff(whether_agent)
     parent.add_handoff(temper_agent)
 
-    print(temper_agent.fc.function_registry)
     runner = Runner(parent)
-    resp = runner.run("Hello, I need to check the whether and temperature of Tokyo.", includes=["final_message", "tool_call", "tool_call_result"])
+    resp = runner.run(
+        "Hello, I need to check the whether and temperature of Tokyo.",
+        includes=["final_message", "tool_call", "tool_call_result"],
+        record_to="tests/mocks/handoffs/1.jsonl",
+    )
     async for message in resp:
         logger.info(message)
+    print(f"{runner.get_messages_dict()}")
     logger.info(runner.agent.name)
 
 

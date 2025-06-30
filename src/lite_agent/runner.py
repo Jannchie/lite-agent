@@ -15,6 +15,7 @@ from lite_agent.types import (
     AgentSystemMessage,
     AgentUserMessage,
     FlexibleRunnerMessage,
+    MessageDict,
     RunnerMessage,
     ToolCall,
     ToolCallFunction,
@@ -208,10 +209,9 @@ class Runner:
                 msg = "Cannot continue running without a valid last message from the assistant."
                 raise ValueError(msg)
 
-            # If we have an assistant message but no pending function calls,
-            # that means there's nothing to continue
-            msg = "Cannot continue running without pending function calls."
-            raise ValueError(msg)
+            resp = self._run(max_steps=max_steps, includes=includes, record_to=self._normalize_record_path(record_to), context=context)
+            async for chunk in resp:
+                yield chunk
 
     async def run_until_complete(
         self,
@@ -290,6 +290,133 @@ class Runner:
             )
             tool_calls.append(tool_call)
         return tool_calls
+
+    def set_chat_history(self, messages: Sequence[FlexibleRunnerMessage], root_agent: Agent | None = None) -> None:
+        """Set the entire chat history and track the current agent based on function calls.
+
+        This method analyzes the message history to determine which agent should be active
+        based on transfer_to_agent and transfer_to_parent function calls.
+
+        Args:
+            messages: List of messages to set as the chat history
+            root_agent: The root agent to use if no transfers are found. If None, uses self.agent
+        """
+        # Clear current messages
+        self.messages.clear()
+
+        # Set initial agent
+        current_agent = root_agent if root_agent is not None else self.agent
+
+        # Add each message and track agent transfers
+        for message in messages:
+            self.append_message(message)
+            current_agent = self._track_agent_transfer_in_message(message, current_agent)
+
+        # Set the current agent based on the tracked transfers
+        self.agent = current_agent
+        logger.info(f"Chat history set with {len(self.messages)} messages. Current agent: {self.agent.name}")
+
+    def get_messages_dict(self) -> list[dict[str, Any]]:
+        """Get the messages in JSONL format."""
+        return [msg.model_dump(mode="json") for msg in self.messages]
+
+    def _track_agent_transfer_in_message(self, message: FlexibleRunnerMessage, current_agent: Agent) -> Agent:
+        """Track agent transfers in a single message.
+
+        Args:
+            message: The message to analyze for transfers
+            current_agent: The currently active agent
+
+        Returns:
+            The agent that should be active after processing this message
+        """
+        if isinstance(message, dict):
+            return self._track_transfer_from_dict_message(message, current_agent)
+
+        if isinstance(message, AgentFunctionToolCallMessage):
+            return self._track_transfer_from_function_call_message(message, current_agent)
+
+        return current_agent
+
+    def _track_transfer_from_dict_message(self, message: dict[str, Any] | MessageDict, current_agent: Agent) -> Agent:
+        """Track transfers from dictionary-format messages."""
+        message_type = message.get("type")
+        if message_type != "function_call":
+            return current_agent
+
+        function_name = message.get("name", "")
+        if function_name == "transfer_to_agent":
+            return self._handle_transfer_to_agent_tracking(message.get("arguments", ""), current_agent)
+
+        if function_name == "transfer_to_parent":
+            return self._handle_transfer_to_parent_tracking(current_agent)
+
+        return current_agent
+
+    def _track_transfer_from_function_call_message(self, message: AgentFunctionToolCallMessage, current_agent: Agent) -> Agent:
+        """Track transfers from AgentFunctionToolCallMessage objects."""
+        if message.name == "transfer_to_agent":
+            return self._handle_transfer_to_agent_tracking(message.arguments, current_agent)
+
+        if message.name == "transfer_to_parent":
+            return self._handle_transfer_to_parent_tracking(current_agent)
+
+        return current_agent
+
+    def _handle_transfer_to_agent_tracking(self, arguments: str | dict, current_agent: Agent) -> Agent:
+        """Handle transfer_to_agent function call tracking."""
+        try:
+            args_dict = json.loads(arguments) if isinstance(arguments, str) else arguments
+
+            target_agent_name = args_dict.get("name")
+            if target_agent_name:
+                target_agent = self._find_agent_by_name(current_agent, target_agent_name)
+                if target_agent:
+                    logger.debug(f"History tracking: Transferring from {current_agent.name} to {target_agent_name}")
+                    return target_agent
+
+                logger.warning(f"Target agent '{target_agent_name}' not found in handoffs during history setup")
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"Failed to parse transfer_to_agent arguments during history setup: {e}")
+
+        return current_agent
+
+    def _handle_transfer_to_parent_tracking(self, current_agent: Agent) -> Agent:
+        """Handle transfer_to_parent function call tracking."""
+        if current_agent.parent:
+            logger.debug(f"History tracking: Transferring from {current_agent.name} back to parent {current_agent.parent.name}")
+            return current_agent.parent
+
+        logger.warning(f"Agent {current_agent.name} has no parent to transfer back to during history setup")
+        return current_agent
+
+    def _find_agent_by_name(self, root_agent: Agent, target_name: str) -> Agent | None:
+        """Find an agent by name in the handoffs tree starting from root_agent.
+
+        Args:
+            root_agent: The root agent to start searching from
+            target_name: The name of the agent to find
+
+        Returns:
+            The agent if found, None otherwise
+        """
+        # Check direct handoffs from current agent
+        if root_agent.handoffs:
+            for agent in root_agent.handoffs:
+                if agent.name == target_name:
+                    return agent
+
+        # If not found in direct handoffs, check if we need to look in parent's handoffs
+        # This handles cases where agents can transfer to siblings
+        current = root_agent
+        while current.parent is not None:
+            current = current.parent
+            if current.handoffs:
+                for agent in current.handoffs:
+                    if agent.name == target_name:
+                        return agent
+
+        return None
 
     def append_message(self, message: FlexibleRunnerMessage) -> None:
         if isinstance(message, RunnerMessage):

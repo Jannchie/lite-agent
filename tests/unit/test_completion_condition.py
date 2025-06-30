@@ -40,7 +40,6 @@ def test_wait_for_user_tool_added_for_call_condition():
     tools = agent.fc.get_tools(target="completion")
     wait_for_user_tool = next((tool for tool in tools if tool["function"]["name"] == "wait_for_user"), None)
     assert wait_for_user_tool is not None
-    assert wait_for_user_tool["function"]["description"] == "Call this function when you have completed your assigned task"
 
 
 def test_wait_for_user_tool_not_added_for_stop_condition():

@@ -2,7 +2,7 @@
 简单使用示例：Rich 聊天记录渲染
 """
 
-from lite_agent import print_chat_summary, render_chat_history
+from lite_agent import print_chat_history, print_chat_summary
 from lite_agent.types import AgentAssistantMessage, AgentUserMessage
 
 # 创建一些示例消息
@@ -29,15 +29,15 @@ messages = [
 print("📊 聊天摘要:")
 print_chat_summary(messages)
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("💬 详细聊天记录:")
-print("="*60)
+print("=" * 60)
 
 # 渲染完整聊天记录
-render_chat_history(messages)
+print_chat_history(messages)
 
 print("\n🎛️ 其他渲染选项:")
-render_chat_history(
+print_chat_history(
     messages,
     show_timestamps=False,
     show_indices=False,

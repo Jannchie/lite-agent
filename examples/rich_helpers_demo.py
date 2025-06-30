@@ -7,7 +7,7 @@
 import asyncio
 
 from lite_agent.agent import Agent
-from lite_agent.rich_helpers import print_chat_summary, render_chat_history
+from lite_agent.rich_helpers import print_chat_history, print_chat_summary
 from lite_agent.runner import Runner
 
 
@@ -50,38 +50,46 @@ async def create_sample_chat_history() -> Runner:
     runner.append_message({"role": "user", "content": "What's the weather like in Tokyo?"})
 
     # 添加函数调用消息
-    runner.append_message({
-        "type": "function_call",
-        "function_call_id": "call_123",
-        "name": "get_weather",
-        "arguments": '{"city": "Tokyo"}',
-        "content": "",
-    })
+    runner.append_message(
+        {
+            "type": "function_call",
+            "function_call_id": "call_123",
+            "name": "get_weather",
+            "arguments": '{"city": "Tokyo"}',
+            "content": "",
+        },
+    )
 
     # 添加函数调用输出
-    runner.append_message({
-        "type": "function_call_output",
-        "call_id": "call_123",
-        "output": "The weather in Tokyo is sunny with 25°C",
-    })
+    runner.append_message(
+        {
+            "type": "function_call_output",
+            "call_id": "call_123",
+            "output": "The weather in Tokyo is sunny with 25°C",
+        },
+    )
 
     runner.append_message({"role": "assistant", "content": "The weather in Tokyo is sunny with a temperature of 25°C. Is there anything else you'd like to know?"})
     runner.append_message({"role": "user", "content": "Can you calculate 25 * 4 + 10?"})
 
     # 添加另一个函数调用
-    runner.append_message({
-        "type": "function_call",
-        "function_call_id": "call_456",
-        "name": "calculate",
-        "arguments": '{"expression": "25 * 4 + 10"}',
-        "content": "",
-    })
+    runner.append_message(
+        {
+            "type": "function_call",
+            "function_call_id": "call_456",
+            "name": "calculate",
+            "arguments": '{"expression": "25 * 4 + 10"}',
+            "content": "",
+        },
+    )
 
-    runner.append_message({
-        "type": "function_call_output",
-        "call_id": "call_456",
-        "output": "25 * 4 + 10 = 110",
-    })
+    runner.append_message(
+        {
+            "type": "function_call_output",
+            "call_id": "call_456",
+            "output": "25 * 4 + 10 = 110",
+        },
+    )
 
     runner.append_message({"role": "assistant", "content": "The calculation 25 * 4 + 10 equals 110."})
 
@@ -102,25 +110,19 @@ async def main():
 
     # 2. 渲染完整的聊天历史
     print("💬 Full Chat History:")
-    render_chat_history(runner.messages)
+    print_chat_history(runner.messages)
 
     # 3. 展示不同的渲染选项
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🎛️  Different Rendering Options:")
-    print("="*60)
+    print("=" * 60)
 
     # 不显示时间戳和索引
     print("\n📝 Without timestamps and indices:")
-    render_chat_history(
+    print_chat_history(
         runner.messages,
         show_timestamps=False,
         show_indices=False,
-    )
-
-    # 限制内容长度
-    print("\n✂️  With content length limit (50 chars):")
-    render_chat_history(
-        runner.messages,
     )
 
 

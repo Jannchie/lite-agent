@@ -24,7 +24,7 @@ from lite_agent.types import (
 )
 
 
-def render_chat_history(
+def print_chat_history(
     messages: RunnerMessages,
     *,
     console: Console | None = None,
@@ -128,7 +128,7 @@ def _render_user_message(
         padding=(0, 1),
         width=bubble_width,
     )
-    
+
     # 用户消息靠右
     console.print(panel, justify="right")
 
@@ -164,7 +164,7 @@ def _render_assistant_message(
         padding=(0, 1),
         width=bubble_width,
     )
-    
+
     # 助手消息靠左
     console.print(panel)
 
@@ -188,14 +188,17 @@ def _render_system_message(
     title = " ".join(title_parts)
 
     # 系统消息居中显示，使用较小的宽度
-    console.print(Panel(
-        content,
-        title=title,
-        title_align="center",
-        border_style="yellow",
-        padding=(0, 1),
-        width=min(len(content) + 10, chat_width),
-    ), justify="center")
+    console.print(
+        Panel(
+            content,
+            title=title,
+            title_align="center",
+            border_style="yellow",
+            padding=(0, 1),
+            width=min(len(content) + 10, chat_width),
+        ),
+        justify="center",
+    )
 
 
 def _render_function_call_message(
@@ -233,14 +236,16 @@ def _render_function_call_message(
             table.add_row("Arguments:", message.arguments)
 
     # 函数调用消息靠左
-    console.print(Panel(
-        table,
-        title=title,
-        title_align="left",
-        border_style="magenta",
-        padding=(0, 1),
-        width=min(chat_width, 100),
-    ))
+    console.print(
+        Panel(
+            table,
+            title=title,
+            title_align="left",
+            border_style="magenta",
+            padding=(0, 1),
+            width=min(chat_width, 100),
+        ),
+    )
 
 
 def _render_function_output_message(
@@ -270,17 +275,19 @@ def _render_function_output_message(
     table.add_row("Output:", output_content)
 
     # 函数输出消息靠左
-    console.print(Panel(
-        table,
-        title=title,
-        title_align="left",
-        border_style="cyan",
-        padding=(0, 1),
-        width=min(chat_width, 100),
-    ))
+    console.print(
+        Panel(
+            table,
+            title=title,
+            title_align="left",
+            border_style="cyan",
+            padding=(0, 1),
+            width=min(chat_width, 100),
+        ),
+    )
 
 
-def _render_role_based_dict_message(
+def _render_role_based_dict_message(  # noqa: PLR0913
     *,
     message: dict[str, object],
     role: str,
@@ -303,7 +310,7 @@ def _render_role_based_dict_message(
             title_parts.append(f"#{index}")
         if timestamp:
             title_parts.append(f"[dim]{timestamp}[/dim]")
-        
+
         panel = Panel(
             content,
             title=" ".join(title_parts),
@@ -323,7 +330,7 @@ def _render_role_based_dict_message(
             title_parts.append(f"#{index}")
         if timestamp:
             title_parts.append(f"[dim]{timestamp}[/dim]")
-        
+
         panel = Panel(
             content,
             title=" ".join(title_parts),
@@ -341,16 +348,19 @@ def _render_role_based_dict_message(
             title_parts.append(f"#{index}")
         if timestamp:
             title_parts.append(f"[dim]{timestamp}[/dim]")
-        
+
         # 系统消息居中
-        console.print(Panel(
-            content,
-            title=" ".join(title_parts),
-            title_align="center",
-            border_style=border_style,
-            padding=(0, 1),
-            width=min(len(content) + 10, chat_width),
-        ), justify="center")
+        console.print(
+            Panel(
+                content,
+                title=" ".join(title_parts),
+                title_align="center",
+                border_style=border_style,
+                padding=(0, 1),
+                width=min(len(content) + 10, chat_width),
+            ),
+            justify="center",
+        )
 
 
 def _render_dict_message(
@@ -417,14 +427,17 @@ def _render_unknown_message(
     except Exception:
         content = str(message)
 
-    console.print(Panel(
-        content,
-        title=title,
-        title_align="center",
-        border_style="red",
-        padding=(0, 1),
-        width=min(len(content) + 10, chat_width),
-    ), justify="center")
+    console.print(
+        Panel(
+            content,
+            title=title,
+            title_align="center",
+            border_style="red",
+            padding=(0, 1),
+            width=min(len(content) + 10, chat_width),
+        ),
+        justify="center",
+    )
 
 
 def create_chat_summary_table(messages: RunnerMessages) -> Table:

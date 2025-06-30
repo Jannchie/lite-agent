@@ -22,7 +22,7 @@ def test_render_chat_history_basic_messages():
         AgentUserMessage(role="user", content="Hello!"),
         AgentAssistantMessage(role="assistant", content="Hi there!"),
     ]
-    
+
     console = Console(force_terminal=False)
     render_chat_history(messages, console=console)
     # 如果没有异常，测试通过
@@ -46,7 +46,7 @@ def test_render_chat_history_dict_messages():
             "output": "Function result",
         },
     ]
-    
+
     console = Console(force_terminal=False)
     render_chat_history(messages, console=console)
     # 如果没有异常，测试通过
@@ -58,9 +58,9 @@ def test_render_chat_history_with_options():
         AgentUserMessage(role="user", content="This is a very long message that will be displayed in full without truncation"),
         AgentAssistantMessage(role="assistant", content="Short response"),
     ]
-    
+
     console = Console(force_terminal=False)
-    
+
     # 测试不同选项 - 移除了 max_content_length 参数，因为现在永远显示完整内容
     render_chat_history(
         messages,
@@ -91,7 +91,7 @@ def test_create_chat_summary_table():
             "output": "result",
         },
     ]
-    
+
     table = create_chat_summary_table(messages)
     assert table.title == "Chat Summary"
     # 表格应该被成功创建，没有异常
@@ -107,23 +107,23 @@ def test_create_chat_summary_table_empty():
 if __name__ == "__main__":
     # 运行简单的手动测试
     print("Running manual tests...")
-    
+
     test_render_chat_history_empty()
     print("✓ Empty messages test passed")
-    
+
     test_render_chat_history_basic_messages()
     print("✓ Basic messages test passed")
-    
+
     test_render_chat_history_dict_messages()
     print("✓ Dict messages test passed")
-    
+
     test_render_chat_history_with_options()
     print("✓ Options test passed")
-    
+
     test_create_chat_summary_table()
     print("✓ Summary table test passed")
-    
+
     test_create_chat_summary_table_empty()
     print("✓ Empty summary table test passed")
-    
+
     print("\nAll tests passed! 🎉")

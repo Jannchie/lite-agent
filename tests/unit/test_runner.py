@@ -23,7 +23,6 @@ class DummyAgent(Agent):
 @pytest.mark.asyncio
 async def test_run_until_complete():
     mock_agent = Mock()
-
     async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[FinalMessageChunk, None]:  # noqa: ARG001
         yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 

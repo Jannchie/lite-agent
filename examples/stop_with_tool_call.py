@@ -3,6 +3,7 @@ import logging
 
 from rich.logging import RichHandler
 
+from lite_agent import render_chat_history
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
 
@@ -23,7 +24,7 @@ async def get_temperature(city: str) -> str:
 
 
 agent = Agent(
-    model="gpt-4.1-nano",
+    model="gpt-4.1",
     name="Weather Assistant",
     instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses.",
     tools=[get_temperature],
@@ -39,7 +40,9 @@ async def main():
     )
     async for chunk in resp:
         logger.info(chunk)
-    print(runner.messages)
+    render_chat_history(
+        runner.messages,
+    )
 
 
 if __name__ == "__main__":

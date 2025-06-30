@@ -26,8 +26,8 @@ Everything you output is intended for your parent agent to read.
 When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.
 </ExtraGuide>"""
 
-TASK_DONE_INSTRUCTIONS = """<ExtraGuide>
-When you have completed your assigned task or need more information from the user, you must call the `task_done` function.
+wait_for_user_INSTRUCTIONS = """<ExtraGuide>
+When you have completed your assigned task or need more information from the user, you must call the `wait_for_user` function.
 </ExtraGuide>"""
 
 
@@ -53,9 +53,9 @@ class Agent:
         # Initialize Funcall with regular tools
         self.fc = Funcall(tools)
 
-        # Add task_done tool if completion condition is "call"
+        # Add wait_for_user tool if completion condition is "call"
         if completion_condition == "call":
-            self._add_task_done_tool()
+            self._add_wait_for_user_tool()
 
         # Set parent for handoff agents
         if handoffs:
@@ -183,9 +183,9 @@ class Agent:
         if self.parent:
             instructions = HANDOFFS_TARGET_INSTRUCTIONS + "\n\n" + instructions
 
-        # Add task_done instructions if completion condition is "call"
+        # Add wait_for_user instructions if completion condition is "call"
         if self.completion_condition == "call":
-            instructions = TASK_DONE_INSTRUCTIONS + "\n\n" + instructions
+            instructions = wait_for_user_INSTRUCTIONS + "\n\n" + instructions
 
         return [
             AgentSystemMessage(
@@ -289,11 +289,11 @@ class Agent:
 
                     if next_dict.get("type") == "function_call":
                         tool_call = {
-                            "id": next_dict["function_call_id"],
+                            "id": next_dict["function_call_id"],  # type: ignore
                             "type": "function",
                             "function": {
-                                "name": next_dict["name"],
-                                "arguments": next_dict["arguments"],
+                                "name": next_dict["name"],  # type: ignore
+                                "arguments": next_dict["arguments"],  # type: ignore
                             },
                             "index": len(tool_calls),
                         }
@@ -305,7 +305,7 @@ class Agent:
                 # Create assistant message with tool_calls if any
                 assistant_msg = message_dict.copy()
                 if tool_calls:
-                    assistant_msg["tool_calls"] = tool_calls
+                    assistant_msg["tool_calls"] = tool_calls  # type: ignore
 
                 converted_messages.append(assistant_msg)
                 i = j  # Skip the function_call messages we've processed
@@ -315,8 +315,8 @@ class Agent:
                 converted_messages.append(
                     {
                         "role": "tool",
-                        "tool_call_id": message_dict["call_id"],
-                        "content": message_dict["output"],
+                        "tool_call_id": message_dict["call_id"],  # type: ignore
+                        "content": message_dict["output"],  # type: ignore
                     },
                 )
                 i += 1
@@ -333,7 +333,7 @@ class Agent:
                 # Handle new Response API format for user messages
                 content = message_dict.get("content")
                 if role == "user" and isinstance(content, list):
-                    converted_msg["content"] = self._convert_user_content_to_completions_format(content)
+                    converted_msg["content"] = self._convert_user_content_to_completions_format(content)  # type: ignore
 
                 converted_messages.append(converted_msg)
                 i += 1
@@ -399,21 +399,21 @@ class Agent:
         """
         self.message_transfer = message_transfer
 
-    def _add_task_done_tool(self) -> None:
-        """Add task_done tool for agents with completion_condition='call'.
+    def _add_wait_for_user_tool(self) -> None:
+        """Add wait_for_user tool for agents with completion_condition='call'.
 
         This tool allows the agent to signal when it has completed its task.
         """
 
-        def task_done_handler(summary: str = "") -> str:
-            """Handler for task_done function."""
-            return f"Task completed. Summary: {summary}" if summary else "Task completed."
+        def wait_for_user_handler() -> str:
+            """Handler for wait_for_user function."""
+            return "Waiting for user input."
 
         # Add dynamic tool for task completion
         self.fc.add_dynamic_tool(
-            name="task_done",
-            description="Call this function when you have completed your assigned task",
+            name="wait_for_user",
+            description="Call this function when you have completed your assigned task or need more information from the user.",
             parameters={},
             required=[],
-            handler=task_done_handler,
+            handler=wait_for_user_handler,
         )

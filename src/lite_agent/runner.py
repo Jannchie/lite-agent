@@ -132,7 +132,7 @@ class Runner:
             self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -142,12 +142,10 @@ class Runner:
         completion_condition = getattr(self.agent, "completion_condition", "stop")
 
         def is_finish() -> bool:
-            if completion_condition == "stop":
-                return finish_reason == "stop"
-            # 获取 pending function calls
-            function_calls = self._find_pending_function_calls()
-            # 检查是否包含名为 task_done 的 function call
-            return any(getattr(fc, "name", None) == "task_done" for fc in function_calls)
+            if completion_condition == "call":
+                function_calls = self._find_pending_function_calls()
+                return any(getattr(fc, "name", None) == "wait_for_user" for fc in function_calls)
+            return finish_reason == "stop"
 
         while not is_finish() and steps < max_steps:
             resp = await self.agent.completion(self.messages, record_to_file=record_to)
@@ -242,12 +240,13 @@ class Runner:
         # The final message from the stream handler might still contain tool_calls
         # We need to convert it to responses format
         if hasattr(message, "tool_calls") and message.tool_calls:
-            # Add the assistant message without tool_calls
-            assistant_msg = AgentAssistantMessage(
-                role="assistant",
-                content=message.content,
-            )
-            self.messages.append(assistant_msg)
+            if message.content:
+                # Add the assistant message without tool_calls
+                assistant_msg = AgentAssistantMessage(
+                    role="assistant",
+                    content=message.content,
+                )
+                self.messages.append(assistant_msg)
 
             # Add function call messages
             for tool_call in message.tool_calls:

@@ -4,14 +4,14 @@
 
 from rich.console import Console
 
-from lite_agent.rich_helpers import create_chat_summary_table, render_chat_history
+from lite_agent.rich_helpers import create_chat_summary_table, print_chat_history
 from lite_agent.types import AgentAssistantMessage, AgentSystemMessage, AgentUserMessage
 
 
 def test_render_chat_history_empty():
     """测试空消息列表的渲染。"""
     console = Console(force_terminal=False)
-    render_chat_history([], console=console)
+    print_chat_history([], console=console)
     # 如果没有异常，测试通过
 
 
@@ -24,7 +24,7 @@ def test_render_chat_history_basic_messages():
     ]
 
     console = Console(force_terminal=False)
-    render_chat_history(messages, console=console)
+    print_chat_history(messages, console=console)
     # 如果没有异常，测试通过
 
 
@@ -48,7 +48,7 @@ def test_render_chat_history_dict_messages():
     ]
 
     console = Console(force_terminal=False)
-    render_chat_history(messages, console=console)
+    print_chat_history(messages, console=console)
     # 如果没有异常，测试通过
 
 
@@ -62,7 +62,7 @@ def test_render_chat_history_with_options():
     console = Console(force_terminal=False)
 
     # 测试不同选项 - 移除了 max_content_length 参数，因为现在永远显示完整内容
-    render_chat_history(
+    print_chat_history(
         messages,
         console=console,
         show_timestamps=False,

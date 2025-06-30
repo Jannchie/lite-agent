@@ -9,7 +9,7 @@ from lite_agent.runner import Runner
 def test_set_chat_history_performance():
     """Test performance with large chat history."""
     print("Running performance test for set_chat_history...")
-    
+
     # Create agents
     parent = Agent(
         model="gpt-4.1",
@@ -37,9 +37,9 @@ def test_set_chat_history_performance():
     # Create a large chat history with many transfers
     large_chat_history = []
     num_cycles = 100  # 100 cycles of transfers
-    
+
     print(f"Creating chat history with {num_cycles} transfer cycles...")
-    
+
     for i in range(num_cycles):
         cycle_messages = [
             {"role": "user", "content": f"Request {i}"},
@@ -116,11 +116,11 @@ def test_set_chat_history_performance():
     # Verify correctness
     assert len(runner.messages) == total_messages
     assert runner.agent.name == "ParentAgent"  # Should end at parent after all transfers
-    
+
     # Performance expectations (these are reasonable thresholds)
     assert processing_time < 5.0, f"Processing took too long: {processing_time:.4f}s"
     assert messages_per_second > 100, f"Too slow: {messages_per_second:.2f} messages/second"
-    
+
     print("✅ Performance test passed!")
 
 

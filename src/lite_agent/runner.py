@@ -72,6 +72,7 @@ class Runner:
                         ),
                     )
             return  # Stop processing other tool calls after transfer
+
         return_parent_calls = [tc for tc in tool_calls if tc.function.name == "transfer_to_parent"]
         if return_parent_calls:
             # Handle multiple transfer_to_parent calls (only execute the first one)
@@ -89,6 +90,7 @@ class Runner:
                         ),
                     )
             return  # Stop processing other tool calls after transfer
+
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
                 yield tool_call_chunk
@@ -136,7 +138,18 @@ class Runner:
         steps = 0
         finish_reason = None
 
-        while finish_reason != "stop" and steps < max_steps:
+        # Determine completion condition based on agent configuration
+        completion_condition = getattr(self.agent, "completion_condition", "stop")
+
+        def is_finish() -> bool:
+            if completion_condition == "stop":
+                return finish_reason == "stop"
+            # 获取 pending function calls
+            function_calls = self._find_pending_function_calls()
+            # 检查是否包含名为 task_done 的 function call
+            return any(getattr(fc, "name", None) == "task_done" for fc in function_calls)
+
+        while not is_finish() and steps < max_steps:
             resp = await self.agent.completion(self.messages, record_to_file=record_to)
             async for chunk in resp:
                 if chunk.type in includes:

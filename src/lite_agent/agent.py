@@ -26,6 +26,10 @@ Everything you output is intended for your parent agent to read.
 When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.
 </ExtraGuide>"""
 
+TASK_DONE_INSTRUCTIONS = """<ExtraGuide>
+When you have completed your assigned task or need more information from the user, you must call the `task_done` function.
+</ExtraGuide>"""
+
 
 class Agent:
     def __init__(  # noqa: PLR0913
@@ -37,15 +41,21 @@ class Agent:
         tools: list[Callable] | None = None,
         handoffs: list["Agent"] | None = None,
         message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
+        completion_condition: str = "stop",
     ) -> None:
         self.name = name
         self.instructions = instructions
         self.model = model
+        self.completion_condition = completion_condition
         self.handoffs = handoffs if handoffs else []
         self._parent: Agent | None = None
         self.message_transfer = message_transfer
         # Initialize Funcall with regular tools
         self.fc = Funcall(tools)
+
+        # Add task_done tool if completion condition is "call"
+        if completion_condition == "call":
+            self._add_task_done_tool()
 
         # Set parent for handoff agents
         if handoffs:
@@ -172,6 +182,10 @@ class Agent:
         # Add target instructions if this agent can be handed off to (has a parent)
         if self.parent:
             instructions = HANDOFFS_TARGET_INSTRUCTIONS + "\n\n" + instructions
+
+        # Add task_done instructions if completion condition is "call"
+        if self.completion_condition == "call":
+            instructions = TASK_DONE_INSTRUCTIONS + "\n\n" + instructions
 
         return [
             AgentSystemMessage(
@@ -384,3 +398,22 @@ class Agent:
                              called before making API calls to allow preprocessing of messages.
         """
         self.message_transfer = message_transfer
+
+    def _add_task_done_tool(self) -> None:
+        """Add task_done tool for agents with completion_condition='call'.
+
+        This tool allows the agent to signal when it has completed its task.
+        """
+
+        def task_done_handler(summary: str = "") -> str:
+            """Handler for task_done function."""
+            return f"Task completed. Summary: {summary}" if summary else "Task completed."
+
+        # Add dynamic tool for task completion
+        self.fc.add_dynamic_tool(
+            name="task_done",
+            description="Call this function when you have completed your assigned task",
+            parameters={},
+            required=[],
+            handler=task_done_handler,
+        )

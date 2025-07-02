@@ -50,7 +50,7 @@ def create_litellm_mock(jsonl_file: str | Path):
         from unittest.mock import patch
 
         mock = create_litellm_mock('recordings/conversation.jsonl')
-        with patch('lite_agent.agent.litellm.acompletion', mock):
+        with patch('lite_agent.client.litellm.acompletion', mock):
             # Your test code here
             pass
         ```

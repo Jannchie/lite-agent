@@ -84,7 +84,7 @@ async def test_mock_litellm_with_patch():
         mock = create_litellm_mock(response_file)
 
         # Test with patch (this would be used in actual tests of your agent)
-        with patch("lite_agent.agent.litellm.acompletion", mock):
+        with patch("lite_agent.client.litellm.acompletion", mock):
             # Simulate what your agent would do
             stream = await mock(model="gpt-4", messages=[{"role": "user", "content": "Test"}])
             async for response in stream:

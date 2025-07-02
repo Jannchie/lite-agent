@@ -22,7 +22,7 @@ async def test_stream_async_success():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     fake_resp = MagicMock()
-    with patch("lite_agent.agent.litellm.acompletion", new=AsyncMock(return_value=fake_resp)), patch("lite_agent.agent.CustomStreamWrapper", new=lambda x: True):
+    with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=fake_resp)), patch("lite_agent.agent.CustomStreamWrapper", new=lambda x: True):
         # Patch Agent模块作用域下的litellm_stream_handler
         from collections.abc import AsyncGenerator
         from typing import Any
@@ -49,7 +49,7 @@ async def test_stream_async_typeerror():
         pass
 
     with (
-        patch("lite_agent.agent.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)),
+        patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)),
         patch("lite_agent.agent.CustomStreamWrapper", DummyWrapper),
         pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"),
     ):

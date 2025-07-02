@@ -24,7 +24,7 @@ runner = Runner(agent)
 @pytest.mark.asyncio
 async def test_basic():
     mock = create_litellm_mock("tests/mocks/basic/1.jsonl")
-    with patch("lite_agent.agent.litellm.acompletion", mock):
+    with patch("lite_agent.client.litellm.acompletion", mock):
         resp = runner.run(
             "What is the temperature in New York?",
         )

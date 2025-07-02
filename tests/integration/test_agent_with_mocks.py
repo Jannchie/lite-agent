@@ -41,12 +41,12 @@ async def test_agent_with_mock_data():
     """Test the agent using real mock data generated from basic.py."""
     mock1 = create_litellm_mock("tests/mocks/confirm_and_continue/1.jsonl")
     mock2 = create_litellm_mock("tests/mocks/confirm_and_continue/2.jsonl")
-    with patch("lite_agent.agent.litellm.acompletion", mock1):
+    with patch("lite_agent.client.litellm.acompletion", mock1):
         await runner.run_until_complete(
             "What is the weather in New York? And what is the temperature there?",
             includes=["final_message", "usage", "tool_call", "tool_call_result"],
         )
-    with patch("lite_agent.agent.litellm.acompletion", mock2):
+    with patch("lite_agent.client.litellm.acompletion", mock2):
         await runner.run_continue_until_complete(
             includes=["final_message", "usage", "tool_call", "tool_call_result"],
         )
@@ -58,7 +58,7 @@ async def test_agent_without_mock_data_fails():
     # Use a non-existent directory
     mock = create_litellm_mock("tests/mocks/nonexistent/file.jsonl")
 
-    with patch("lite_agent.agent.litellm.acompletion", mock):
+    with patch("lite_agent.client.litellm.acompletion", mock):
         agent = Agent(
             model="gpt-4.1-nano",
             name="Weather Assistant",

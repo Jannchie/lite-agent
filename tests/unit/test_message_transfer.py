@@ -94,7 +94,7 @@ async def test_message_transfer_called_in_completion():
         return
         yield  # pragma: no cover
 
-    with patch("lite_agent.agent.litellm.acompletion") as mock_completion, patch("lite_agent.agent.litellm_stream_handler", new=mock_stream_handler):
+    with patch("lite_agent.client.litellm.acompletion") as mock_completion, patch("lite_agent.agent.litellm_stream_handler", new=mock_stream_handler):
         mock_completion.return_value = mock_resp
 
         # Call completion
@@ -136,7 +136,7 @@ async def test_completion_without_message_transfer():
         return
         yield  # pragma: no cover
 
-    with patch("lite_agent.agent.litellm.acompletion") as mock_completion, patch("lite_agent.agent.litellm_stream_handler", new=mock_stream_handler):
+    with patch("lite_agent.client.litellm.acompletion") as mock_completion, patch("lite_agent.agent.litellm_stream_handler", new=mock_stream_handler):
         mock_completion.return_value = mock_resp
 
         # Call completion

@@ -1,8 +1,25 @@
+from collections.abc import AsyncGenerator
+from typing import Literal
+
 import litellm
+from aiofiles.threadpool.text import AsyncTextIOWrapper
 from litellm.types.utils import ChatCompletionDeltaToolCall, ModelResponseStream, StreamingChoices
 
 from lite_agent.loggers import logger
-from lite_agent.types import AssistantMessage, ToolCall, ToolCallFunction
+from lite_agent.types import (
+    AgentAssistantMessage,
+    AgentChunk,
+    AssistantMessage,
+    CompletionRawChunk,
+    ContentDeltaChunk,
+    FinalMessageChunk,
+    ToolCall,
+    ToolCallChunk,
+    ToolCallDeltaChunk,
+    ToolCallFunction,
+    UsageChunk,
+)
+from lite_agent.types.chunks import AssistantMessageChunk
 
 
 class StreamChunkProcessor:
@@ -10,6 +27,100 @@ class StreamChunkProcessor:
 
     def __init__(self) -> None:
         self._current_message: AssistantMessage | None = None
+        self.processing_chunk: Literal["content", "tool_calls"] | None = None
+        self.processing_function: str | None = None
+        self.last_processed_chunk: ModelResponseStream | None = None
+        self.yielded_content = False
+        self.yielded_function = set()
+
+    async def process_chunk(  # noqa: C901, PLR0912
+        self,
+        chunk: ModelResponseStream,
+        record_file: AsyncTextIOWrapper | None = None,
+    ) -> AsyncGenerator[AgentChunk, None]:
+        if record_file:
+            await record_file.write(chunk.model_dump_json() + "\n")
+            await record_file.flush()
+        yield CompletionRawChunk(raw=chunk)
+        usage_chunk = self.handle_usage_chunk(chunk)
+        if usage_chunk:
+            yield usage_chunk
+            return
+        if not chunk.choices:
+            return
+
+        choice = chunk.choices[0]
+        delta = choice.delta
+        if delta.content and self.processing_chunk != "content":
+            self.processing_chunk = "content"
+        elif delta.tool_calls:
+            if not self.yielded_content:
+                self.yielded_content = True
+                yield AssistantMessageChunk(
+                    message=AgentAssistantMessage(
+                        role=self.current_message.role,
+                        content=self.current_message.content,
+                    ),
+                )
+            self.processing_chunk = "tool_calls"
+            first_tool_call = delta.tool_calls[0]
+            tool_name = first_tool_call.function.name if first_tool_call.function else ""
+            if tool_name:
+                self.processing_function = tool_name
+        delta = choice.delta
+        if (
+            self._current_message
+            and self._current_message.tool_calls
+            and self.processing_function != self._current_message.tool_calls[-1].function.name
+            and self._current_message.tool_calls[-1].function.name not in self.yielded_function
+        ):
+            yield ToolCallChunk(
+                name=self._current_message.tool_calls[-1].function.name,
+                arguments=self._current_message.tool_calls[-1].function.arguments or "",
+            )
+            self.yielded_function.add(self._current_message.tool_calls[-1].function.name)
+        if not self.is_initialized:
+            self.initialize_message(chunk, choice)
+        if delta.content and self._current_message:
+            self._current_message.content += delta.content
+            yield ContentDeltaChunk(delta=delta.content)
+        if delta.tool_calls is not None:
+            self.update_tool_calls(delta.tool_calls)
+            if delta.tool_calls and self.current_message.tool_calls:
+                for tool_call in delta.tool_calls:
+                    yield ToolCallDeltaChunk(
+                        tool_call_id=self.current_message.tool_calls[-1].id,
+                        name=self.current_message.tool_calls[-1].function.name,
+                        arguments_delta=tool_call.function.arguments or "",
+                    )
+        if choice.finish_reason:
+            if self._current_message and self._current_message.tool_calls:
+                ...
+                # yield ToolCallChunk(
+                #     name=self._current_message.tool_calls[-1].function.name,
+                #     arguments=self._current_message.tool_calls[-1].function.arguments or "",
+            current_message = self.current_message
+            if self.current_message.tool_calls:
+                yield ToolCallChunk(
+                    name=self.current_message.tool_calls[-1].function.name,
+                    arguments=self.current_message.tool_calls[-1].function.arguments or "",
+                )
+            if not self.yielded_content:
+                self.yielded_content = True
+                yield AssistantMessageChunk(
+                    message=AgentAssistantMessage(
+                        role=self.current_message.role,
+                        content=self.current_message.content,
+                    ),
+                )
+            yield FinalMessageChunk(message=current_message, finish_reason=choice.finish_reason)
+        self.last_processed_chunk = chunk
+
+    def handle_usage_chunk(self, chunk: ModelResponseStream) -> UsageChunk | None:
+        usage = getattr(chunk, "usage", None)
+        if usage:
+            return UsageChunk(type="usage", usage=usage)
+        return None
 
     def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:
         """Initialize the message object"""
@@ -87,10 +198,6 @@ class StreamChunkProcessor:
                     existing_call.function.arguments += call.function.arguments
             else:
                 logger.warning("Cannot update tool call: current_message or tool_calls is None, or invalid index.")
-
-    def handle_usage_info(self, chunk: ModelResponseStream) -> litellm.Usage | None:
-        """Handle usage info, return whether this chunk should be skipped"""
-        return getattr(chunk, "usage", None)
 
     @property
     def is_initialized(self) -> bool:

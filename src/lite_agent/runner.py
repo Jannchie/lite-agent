@@ -29,8 +29,8 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
     "usage",
     "final_message",
-    "tool_call",
-    "tool_call_result",
+    "function_call",
+    "function_call_output",
     "content_delta",
     "tool_call_delta",
 )
@@ -92,9 +92,9 @@ class Runner:
             return  # Stop processing other tool calls after transfer
 
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
-            if tool_call_chunk.type == "tool_call" and tool_call_chunk.type in includes:
+            if tool_call_chunk.type == "function_call" and tool_call_chunk.type in includes:
                 yield tool_call_chunk
-            if tool_call_chunk.type == "tool_call_result":
+            if tool_call_chunk.type == "function_call_output":
                 if tool_call_chunk.type in includes:
                     yield tool_call_chunk
                 # Create function call output in responses format

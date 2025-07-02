@@ -238,13 +238,13 @@ class Agent:
             for tool_call in tool_calls:
                 try:
                     yield ToolCallChunk(
-                        type="tool_call",
+                        type="function_call",
                         name=tool_call.function.name,
                         arguments=tool_call.function.arguments or "",
                     )
                     content = await self.fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "", context)
                     yield ToolCallResultChunk(
-                        type="tool_call_result",
+                        type="function_call_output",
                         tool_call_id=tool_call.id,
                         name=tool_call.function.name,
                         content=str(content),
@@ -252,7 +252,7 @@ class Agent:
                 except Exception as e:  # noqa: PERF203
                     logger.exception("Tool call %s failed", tool_call.id)
                     yield ToolCallResultChunk(
-                        type="tool_call_result",
+                        type="function_call_output",
                         tool_call_id=tool_call.id,
                         name=tool_call.function.name,
                         content=str(e),

@@ -65,7 +65,7 @@ async def main():
     runner = Runner(parent)
     resp = runner.run(
         "Hello, I need to check the whether and temperature of Tokyo.",
-        includes=["final_message", "tool_call", "tool_call_result"],
+        includes=["final_message", "function_call", "function_call_output"],
         record_to="tests/mocks/handoffs/1.jsonl",
     )
     async for message in resp:

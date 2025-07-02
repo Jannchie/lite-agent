@@ -47,7 +47,7 @@ async def main():
     runner = Runner(agent)
     resp = runner.run(
         "What is the temperature in current city?",
-        includes=["final_message", "usage", "tool_call", "tool_call_result"],
+        includes=["final_message", "usage", "function_call", "function_call_output"],
         record_to="tests/mocks/context/1.jsonl",
         context=weather_context,
     )

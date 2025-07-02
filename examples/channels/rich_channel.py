@@ -8,8 +8,8 @@ class RichChannel:
         self.console = Console()
         self.map = {
             "final_message": self.handle_final_message,
-            "tool_call": self.handle_tool_call,
-            "tool_call_result": self.handle_tool_call_result,
+            "function_call": self.handle_tool_call,
+            "function_call_output": self.handle_tool_call_result,
             "tool_call_delta": self.handle_tool_call_delta,
             "content_delta": self.handle_content_delta,
             "usage": self.handle_usage,

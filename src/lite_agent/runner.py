@@ -156,7 +156,7 @@ class Runner:
                 if chunk.type == "final_message":
                     message = chunk.message
                     # Convert to responses format and add to messages
-                    await self._convert_final_message_to_responses_format(message)
+                    self.messages.extend(self._convert_final_message_to_responses_format(message))
                     finish_reason = chunk.finish_reason
                     if finish_reason == "tool_calls":
                         # Find pending function calls in responses format
@@ -235,10 +235,11 @@ class Runner:
         resp = self.run(user_input, max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
-    async def _convert_final_message_to_responses_format(self, message: "AssistantMessage") -> None:
+    def _convert_final_message_to_responses_format(self, message: "AssistantMessage") -> list[RunnerMessage]:
         """Convert a completions format final message to responses format messages."""
         # The final message from the stream handler might still contain tool_calls
         # We need to convert it to responses format
+        messages = []
         if hasattr(message, "tool_calls") and message.tool_calls:
             if message.content:
                 # Add the assistant message without tool_calls
@@ -246,7 +247,7 @@ class Runner:
                     role="assistant",
                     content=message.content,
                 )
-                self.messages.append(assistant_msg)
+                messages.append(assistant_msg)
 
             # Add function call messages
             for tool_call in message.tool_calls:
@@ -257,14 +258,15 @@ class Runner:
                     arguments=tool_call.function.arguments or "",
                     content="",
                 )
-                self.messages.append(function_call_msg)
+                messages.append(function_call_msg)
         else:
             # Regular assistant message without tool calls
             assistant_msg = AgentAssistantMessage(
                 role="assistant",
                 content=message.content,
             )
-            self.messages.append(assistant_msg)
+            messages.append(assistant_msg)
+        return messages
 
     def _find_pending_function_calls(self) -> list:
         """Find function call messages that don't have corresponding outputs yet."""

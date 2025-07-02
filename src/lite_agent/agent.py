@@ -1,3 +1,4 @@
+import abc
 from collections.abc import AsyncGenerator, Callable, Sequence
 from pathlib import Path
 from typing import Any, Optional
@@ -5,37 +6,62 @@ from typing import Any, Optional
 import litellm
 from funcall import Funcall
 from litellm import CustomStreamWrapper
+from openai.types.chat import ChatCompletionToolParam
 from pydantic import BaseModel
 
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
 
-HANDOFFS_SOURCE_INSTRUCTIONS = """<ExtraGuide>
+HANDOFFS_SOURCE_INSTRUCTIONS = """<HandoffsGuide>
 You are a parent agent that can assign tasks to sub-agents.
 
 You can transfer conversations to other agents for specific tasks.
 If you need to assign tasks to multiple agents, you should break down the tasks and assign them one by one.
 You need to wait for one sub-agent to finish before assigning the task to the next sub-agent.
-</ExtraGuide>"""
+</HandoffsGuide>"""
 
-HANDOFFS_TARGET_INSTRUCTIONS = """<ExtraGuide>
+HANDOFFS_TARGET_INSTRUCTIONS = """<TransferToParentGuide>
 You are a sub-agent that is assigned to a specific task by your parent agent.
 
 Everything you output is intended for your parent agent to read.
 When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.
-</ExtraGuide>"""
+</TransferToParentGuide>"""
 
-WAIT_FOR_USER_INSTRUCTIONS = """<ExtraGuide>
+WAIT_FOR_USER_INSTRUCTIONS = """<WaitForUserGuide>
 When you have completed your assigned task or need more information from the user, you must call the `wait_for_user` function.
-</ExtraGuide>"""
+</WaitForUserGuide>"""
+
+
+class BaseLLMClient(abc.ABC):
+    """Base class for LLM clients."""
+
+    def __init__(self, *, model: str, api_key: str | None = None, api_base: str | None = None) -> None:
+        self.model = model
+        self.api_key = api_key
+        self.api_base = api_base
+
+    @abc.abstractmethod
+    async def completion(self, messages: list[Any], tools: list[ChatCompletionToolParam] | None = None, tool_choice: str = "auto") -> Any:  # noqa: ANN401
+        """Perform a completion request to the LLM."""
+
+
+class LitellmClient(BaseLLMClient):
+    async def completion(self, messages: list[Any], tools: list[ChatCompletionToolParam] | None = None, tool_choice: str = "auto") -> Any:  # noqa: ANN401
+        """Perform a completion request to the Litellm API."""
+        return await litellm.acompletion(
+            model=self.model,
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
 
 
 class Agent:
     def __init__(  # noqa: PLR0913
         self,
         *,
-        model: str,
+        model: str | BaseLLMClient,
         name: str,
         instructions: str,
         tools: list[Callable] | None = None,
@@ -45,7 +71,12 @@ class Agent:
     ) -> None:
         self.name = name
         self.instructions = instructions
-        self.model = model
+        if isinstance(model, BaseLLMClient):
+            # If model is a BaseLLMClient instance, use it directly
+            self.client = model
+        else:
+            # Otherwise, create a LitellmClient instance
+            self.client = LitellmClient(model=model)
         self.completion_condition = completion_condition
         self.handoffs = handoffs if handoffs else []
         self._parent: Agent | None = None
@@ -204,12 +235,10 @@ class Agent:
 
         self.message_histories = self.prepare_completion_messages(processed_messages)
         tools = self.fc.get_tools(target="completion")
-        resp = await litellm.acompletion(
-            model=self.model,
+        resp = await self.client.completion(
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
-            stream=True,
         )
 
         # Ensure resp is a CustomStreamWrapper

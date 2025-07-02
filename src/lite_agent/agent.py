@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import litellm
 from funcall import Funcall
+from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
 from openai.types.chat import ChatCompletionToolParam
 from pydantic import BaseModel
@@ -13,24 +14,12 @@ from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
 
-HANDOFFS_SOURCE_INSTRUCTIONS = """<HandoffsGuide>
-You are a parent agent that can assign tasks to sub-agents.
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
 
-You can transfer conversations to other agents for specific tasks.
-If you need to assign tasks to multiple agents, you should break down the tasks and assign them one by one.
-You need to wait for one sub-agent to finish before assigning the task to the next sub-agent.
-</HandoffsGuide>"""
-
-HANDOFFS_TARGET_INSTRUCTIONS = """<TransferToParentGuide>
-You are a sub-agent that is assigned to a specific task by your parent agent.
-
-Everything you output is intended for your parent agent to read.
-When you finish your task, you should call `transfer_to_parent` to transfer back to parent agent.
-</TransferToParentGuide>"""
-
-WAIT_FOR_USER_INSTRUCTIONS = """<WaitForUserGuide>
-When you have completed your assigned task or need more information from the user, you must call the `wait_for_user` function.
-</WaitForUserGuide>"""
+HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("handoffs_source_instructions.xml.j2")
+HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("handoffs_target_instructions.xml.j2")
+WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("wait_for_user_instructions.xml.j2")
 
 
 class BaseLLMClient(abc.ABC):
@@ -208,15 +197,15 @@ class Agent:
 
         # Add source instructions if this agent can handoff to others
         if self.handoffs:
-            instructions = HANDOFFS_SOURCE_INSTRUCTIONS + "\n\n" + instructions
+            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
 
         # Add target instructions if this agent can be handed off to (has a parent)
         if self.parent:
-            instructions = HANDOFFS_TARGET_INSTRUCTIONS + "\n\n" + instructions
+            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
 
         # Add wait_for_user instructions if completion condition is "call"
         if self.completion_condition == "call":
-            instructions = WAIT_FOR_USER_INSTRUCTIONS + "\n\n" + instructions
+            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
 
         return [
             AgentSystemMessage(

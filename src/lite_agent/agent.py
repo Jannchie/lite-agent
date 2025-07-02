@@ -1,15 +1,13 @@
-import abc
 from collections.abc import AsyncGenerator, Callable, Sequence
 from pathlib import Path
 from typing import Any, Optional
 
-import litellm
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
-from openai.types.chat import ChatCompletionToolParam
 from pydantic import BaseModel
 
+from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
@@ -20,30 +18,6 @@ jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=
 HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("handoffs_source_instructions.xml.j2")
 HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("handoffs_target_instructions.xml.j2")
 WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("wait_for_user_instructions.xml.j2")
-
-
-class BaseLLMClient(abc.ABC):
-    """Base class for LLM clients."""
-
-    def __init__(self, *, model: str, api_key: str | None = None, api_base: str | None = None) -> None:
-        self.model = model
-        self.api_key = api_key
-        self.api_base = api_base
-
-    @abc.abstractmethod
-    async def completion(self, messages: list[Any], tools: list[ChatCompletionToolParam] | None = None, tool_choice: str = "auto") -> Any:  # noqa: ANN401
-        """Perform a completion request to the LLM."""
-
-
-class LitellmClient(BaseLLMClient):
-    async def completion(self, messages: list[Any], tools: list[ChatCompletionToolParam] | None = None, tool_choice: str = "auto") -> Any:  # noqa: ANN401
-        """Perform a completion request to the Litellm API."""
-        return await litellm.acompletion(
-            model=self.model,
-            messages=messages,
-            tools=tools,
-            tool_choice=tool_choice,
-        )
 
 
 class Agent:
@@ -65,7 +39,7 @@ class Agent:
             self.client = model
         else:
             # Otherwise, create a LitellmClient instance
-            self.client = LitellmClient(model=model)
+            self.client = LiteLLMClient(model=model)
         self.completion_condition = completion_condition
         self.handoffs = handoffs if handoffs else []
         self._parent: Agent | None = None

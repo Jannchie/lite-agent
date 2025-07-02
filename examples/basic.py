@@ -42,5 +42,6 @@ async def main():
         logger.info(chunk)
     print(runner.messages)
 
+
 if __name__ == "__main__":
     asyncio.run(main())

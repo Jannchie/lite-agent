@@ -206,7 +206,7 @@ class TestAgentHandoffs:
 
         # Process tool calls
         chunks = []
-        async for chunk in runner._handle_tool_calls(tool_calls, ["tool_call_result"]):
+        async for chunk in runner._handle_tool_calls(tool_calls, ["function_call_output"]):
             chunks.append(chunk)
 
         # Verify agent was transferred
@@ -369,7 +369,7 @@ class TestAgentHandoffs:
 
         # Call _handle_tool_calls
         chunks = []
-        async for chunk in runner._handle_tool_calls([transfer_call], ["tool_call_result"]):
+        async for chunk in runner._handle_tool_calls([transfer_call], ["function_call_output"]):
             chunks.append(chunk)
 
         # Should return immediately after transfer (no chunks yielded)
@@ -430,7 +430,7 @@ class TestAgentHandoffs:
 
         # Call _handle_tool_calls
         chunks = []
-        async for chunk in runner._handle_tool_calls([transfer_call_1, transfer_call_2], ["tool_call_result"]):
+        async for chunk in runner._handle_tool_calls([transfer_call_1, transfer_call_2], ["function_call_output"]):
             chunks.append(chunk)
 
         # Should return immediately after transfer (no chunks yielded)

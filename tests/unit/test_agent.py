@@ -148,9 +148,9 @@ async def test_handle_tool_calls_function_not_found():
         # Current behavior: still yields items even for non-existent tools
         # because the continue only applies to the first loop, not the second
         assert len(items) == 2  # ToolCallChunk + ToolCallResultChunk with error
-        assert items[0].type == "tool_call"
+        assert items[0].type == "function_call"
         assert items[0].name == "nonexistent_tool"
-        assert items[1].type == "tool_call_result"
+        assert items[1].type == "function_call_output"
         # The call will fail during execution, not during the registry check
         mock_logger.warning.assert_called_once_with("Tool function %s not found in registry", "nonexistent_tool")
 
@@ -179,9 +179,9 @@ async def test_handle_tool_calls_exception():
 
         # Should yield 2 items: ToolCallChunk and ToolCallResultChunk with error
         assert len(items) == 2
-        assert items[0].type == "tool_call"
+        assert items[0].type == "function_call"
         assert items[0].name == "failing_tool"
-        assert items[1].type == "tool_call_result"
+        assert items[1].type == "function_call_output"
         assert items[1].tool_call_id == "test_id"
         assert "Tool execution failed" in items[1].content
 
@@ -210,8 +210,8 @@ async def test_handle_tool_calls_success():
 
     # Should yield 2 items: ToolCallChunk and ToolCallResultChunk with success
     assert len(items) == 2
-    assert items[0].type == "tool_call"
+    assert items[0].type == "function_call"
     assert items[0].name == "working_tool"
-    assert items[1].type == "tool_call_result"
+    assert items[1].type == "function_call_output"
     assert items[1].tool_call_id == "test_id"
     assert items[1].content == "tool_result"

@@ -210,18 +210,6 @@ def test_update_tool_calls_no_current_message(processor):
     processor.update_tool_calls(tool_calls)
 
 
-def test_handle_usage_info(processor):
-    chunk = DummyChunk(usage={"prompt_tokens": 10})
-    usage = processor.handle_usage_info(chunk)
-    assert usage == {"prompt_tokens": 10}
-
-
-def test_handle_usage_info_none(processor):
-    chunk = DummyChunk()
-    usage = processor.handle_usage_info(chunk)
-    assert usage is None
-
-
 def test_finalize_message(processor):
     chunk = DummyChunk()
     choice = DummyChoice()

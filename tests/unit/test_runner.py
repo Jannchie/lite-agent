@@ -5,8 +5,7 @@ import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import AgentChunk, Runner
-from lite_agent.stream_handlers.litellm import FinalMessageChunk
-from lite_agent.types import AgentUserMessage, AssistantMessage
+from lite_agent.types import AgentUserMessage, AssistantMessage, FinalMessageChunk
 
 
 class DummyAgent(Agent):
@@ -23,6 +22,7 @@ class DummyAgent(Agent):
 @pytest.mark.asyncio
 async def test_run_until_complete():
     mock_agent = Mock()
+
     async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[FinalMessageChunk, None]:  # noqa: ARG001
         yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
@@ -187,8 +187,8 @@ async def test_run_continue_stream_with_tool_calls():
     from lite_agent.types import ToolCallChunk, ToolCallResultChunk
 
     async def mock_handle_tool_calls(tool_calls, context=None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # type: ignore  # noqa: ARG001
-        yield ToolCallChunk(type="tool_call", name="test_tool", arguments="{}")
-        yield ToolCallResultChunk(type="tool_call_result", tool_call_id="test_id", name="test_tool", content="result")
+        yield ToolCallChunk(type="function_call", name="test_tool", arguments="{}")
+        yield ToolCallResultChunk(type="function_call_output", tool_call_id="test_id", name="test_tool", content="result")
 
     with patch.object(agent, "handle_tool_calls", side_effect=mock_handle_tool_calls):
         results = []

@@ -1,3 +1,44 @@
+## v0.3.0
+
+[v0.2.0...v0.3.0](https://github.com/Jannchie/lite-agent/compare/v0.2.0...v0.3.0)
+
+### :rocket: Breaking Changes
+
+- **rich-helpers**: rename render_chat_history to print_chat_history and update imports - By [Jannchie](mailto:jannchie@gmail.com) in [3db6721](https://github.com/Jannchie/lite-agent/commit/3db6721)
+
+### :sparkles: Features
+
+- **agent**: use jinja2 templates for instruction messages - By [Jannchie](mailto:jannchie@gmail.com) in [f5ccbd5](https://github.com/Jannchie/lite-agent/commit/f5ccbd5)
+- **agent**: add completion_condition and task_done tool support - By [Jannchie](mailto:jannchie@gmail.com) in [28126b1](https://github.com/Jannchie/lite-agent/commit/28126b1)
+- **response-api**: add response api format for text and image input - By [Jannchie](mailto:jannchie@gmail.com) in [4b44f91](https://github.com/Jannchie/lite-agent/commit/4b44f91)
+- **rich-helpers**: add rich chat history renderer and chat summary utils - By [Jannchie](mailto:jannchie@gmail.com) in [5a570ce](https://github.com/Jannchie/lite-agent/commit/5a570ce)
+- **runner**: add set_chat_history to support full chat history replay and agent tracking - By [Jannchie](mailto:jannchie@gmail.com) in [fd2ecdc](https://github.com/Jannchie/lite-agent/commit/fd2ecdc)
+- **types**: enhance runner type system for flexible user_input - By [Jannchie](mailto:jannchie@gmail.com) in [3a2e9c5](https://github.com/Jannchie/lite-agent/commit/3a2e9c5)
+
+### :adhesive_bandage: Fixes
+
+- **examples**: check content key before modifying messages - By [Jannchie](mailto:jannchie@gmail.com) in [94b85a6](https://github.com/Jannchie/lite-agent/commit/94b85a6)
+
+### :art: Refactors
+
+- **agent**: abstract llm client and refactor model usage - By [Jannchie](mailto:jannchie@gmail.com) in [09c52c8](https://github.com/Jannchie/lite-agent/commit/09c52c8)
+- **client**: move llm client classes to separate module - By [Jannchie](mailto:jannchie@gmail.com) in [a70d163](https://github.com/Jannchie/lite-agent/commit/a70d163)
+- **rich-helpers-test**: rename render_chat_history to print_chat_history - By [Jannchie](mailto:jannchie@gmail.com) in [bf1ca8f](https://github.com/Jannchie/lite-agent/commit/bf1ca8f)
+
+### :lipstick: Styles
+
+- **agent**: inline error message formatting - By [Jannchie](mailto:jannchie@gmail.com) in [1453cc5](https://github.com/Jannchie/lite-agent/commit/1453cc5)
+- **tests**: add type ignore hints to assertions - By [Jannchie](mailto:jannchie@gmail.com) in [8d2a19d](https://github.com/Jannchie/lite-agent/commit/8d2a19d)
+
+### :memo: Documentation
+
+- **set-chat-history**: remove set_chat_history feature documentation - By [Jannchie](mailto:jannchie@gmail.com) in [2413351](https://github.com/Jannchie/lite-agent/commit/2413351)
+
+### :wrench: Chores
+
+- **examples**: rename test_consolidate_history to consolidate_history - By [Jannchie](mailto:jannchie@gmail.com) in [0f5b39a](https://github.com/Jannchie/lite-agent/commit/0f5b39a)
+- **tests**: remove legacy chat bubble and alignment tests - By [Jannchie](mailto:jannchie@gmail.com) in [46b23bc](https://github.com/Jannchie/lite-agent/commit/46b23bc)
+
 ## v0.2.0
 
 [v0.1.0...v0.2.0](https://github.com/Jannchie/lite-agent/compare/v0.1.0...v0.2.0)

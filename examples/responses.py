@@ -51,7 +51,7 @@ messages: ResponseInputParam = [
 resp = litellm.responses(model="gpt-4.1-nano", input=messages, tools=fc.get_tools(), tool_choice="auto", stream=True, store=False)
 
 
-def handle_message(messages: list[dict[str, Any]], event: ResponsesAPIStreamingResponse):
+def handle_message(messages: list[dict[str, Any]], event: ResponsesAPIStreamingResponse):  # noqa: C901, PLR0912
     if event.type == ResponsesAPIStreamEvents.RESPONSE_CREATED:  # noqa: SIM114
         pass
     elif event.type == ResponsesAPIStreamEvents.RESPONSE_IN_PROGRESS:

@@ -49,7 +49,7 @@ async def main():
                 ],
             },
         ],
-        includes=["final_message", "usage"],
+        includes=["assistant_message", "usage"],
     )
     async for chunk in resp:
         logger.info(chunk)

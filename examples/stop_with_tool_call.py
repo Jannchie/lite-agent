@@ -36,7 +36,7 @@ async def main():
     runner = Runner(agent)
     resp = runner.run(
         "What is the temperature and whether in New York?",
-        includes=["final_message", "usage", "function_call", "function_call_output"],
+        includes=["assistant_message", "usage", "function_call", "function_call_output"],
     )
     async for chunk in resp:
         logger.info(chunk)

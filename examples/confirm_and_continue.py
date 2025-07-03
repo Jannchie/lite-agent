@@ -43,13 +43,13 @@ async def main():
     runner = Runner(agent)
     resp = runner.run(
         "What is the weather in New York? And what is the temperature there?",
-        includes=["final_message", "usage", "function_call", "function_call_output"],
+        includes=["usage", "assistant_message", "function_call", "function_call_output"],
         record_to="tests/mocks/confirm_and_continue/1.jsonl",
     )
     async for chunk in resp:
         logger.info(chunk)
     resp = runner.run_continue_stream(
-        includes=["final_message", "usage", "function_call", "function_call_output"],
+        includes=["usage", "assistant_message", "function_call", "function_call_output"],
         record_to="tests/mocks/confirm_and_continue/2.jsonl",
     )
     async for chunk in resp:

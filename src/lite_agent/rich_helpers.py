@@ -381,7 +381,6 @@ def _render_dict_message(
             function_call_id=str(message.get("function_call_id", "")),
             name=str(message.get("name", "unknown")),
             arguments=str(message.get("arguments", "")),
-            content=str(message.get("content", "")),
         )
         _render_function_call_message(temp_message, index, console, timestamp, chat_width)
     elif message_type == "function_call_output":

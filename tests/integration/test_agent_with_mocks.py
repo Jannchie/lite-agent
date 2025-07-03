@@ -44,11 +44,11 @@ async def test_agent_with_mock_data():
     with patch("lite_agent.client.litellm.acompletion", mock1):
         await runner.run_until_complete(
             "What is the weather in New York? And what is the temperature there?",
-            includes=["final_message", "usage", "function_call", "function_call_output"],
+            includes=["assistant_message", "usage", "function_call", "function_call_output"],
         )
     with patch("lite_agent.client.litellm.acompletion", mock2):
         await runner.run_continue_until_complete(
-            includes=["final_message", "usage", "function_call", "function_call_output"],
+            includes=["assistant_message", "usage", "function_call", "function_call_output"],
         )
 
 

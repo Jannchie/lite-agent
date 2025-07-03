@@ -95,7 +95,7 @@ async def main():
 
     # Continue the conversation from where we left off
     print("\n--- Continuing conversation ---")
-    resp = runner.run([], max_steps=5, includes=["final_message", "function_call", "function_call_output"])
+    resp = runner.run([], max_steps=5, includes=["assistant_message", "function_call", "function_call_output"])
     async for message in resp:
         logger.info(message)
 

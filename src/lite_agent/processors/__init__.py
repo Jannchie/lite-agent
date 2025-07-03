@@ -1,3 +1,3 @@
-from lite_agent.processors.stream_chunk_processor import StreamChunkProcessor
+from lite_agent.processors.completion_event_processor import CompletionEventProcessor
 
-__all__ = ["StreamChunkProcessor"]
+__all__ = ["CompletionEventProcessor"]

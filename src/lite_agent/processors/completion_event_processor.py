@@ -22,8 +22,8 @@ from lite_agent.types import (
 )
 
 
-class StreamChunkProcessor:
-    """Processor for handling streaming responses"""
+class CompletionEventProcessor:
+    """Processor for handling completion event"""
 
     def __init__(self) -> None:
         self._current_message: AssistantMessage | None = None

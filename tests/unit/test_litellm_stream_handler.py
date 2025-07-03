@@ -53,7 +53,7 @@ async def test_chunk_handler_yields_usage():
     import lite_agent.stream_handlers.litellm as litellm_stream_handler
 
     chunk = MagicMock(spec=ModelResponseStream)
-    chunk.usage = {"prompt_tokens": 10}
+    chunk.usage = {"prompt_tokens": 10, "completion_tokens": 10}
     choice = MagicMock(spec=StreamingChoices)
     chunk.choices = [choice]
     resp = MagicMock(spec=litellm.CustomStreamWrapper)
@@ -61,7 +61,6 @@ async def test_chunk_handler_yields_usage():
     results = []
     async for c in litellm_stream_handler.litellm_stream_handler(resp):
         results.append(c)
-        print(c)
 
 
 @pytest.mark.asyncio

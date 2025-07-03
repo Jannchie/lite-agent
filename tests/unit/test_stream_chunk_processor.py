@@ -1,6 +1,6 @@
 import pytest
 
-from lite_agent.processors.stream_chunk_processor import StreamChunkProcessor
+from lite_agent.processors.completion_event_processor import CompletionEventProcessor
 from lite_agent.types import AssistantMessage, ToolCall, ToolCallFunction
 
 
@@ -45,7 +45,7 @@ class DummyDeltaToolCall:
 
 @pytest.fixture
 def processor():
-    return StreamChunkProcessor()
+    return CompletionEventProcessor()
 
 
 def test_initialize_message_sets_current_message(processor):

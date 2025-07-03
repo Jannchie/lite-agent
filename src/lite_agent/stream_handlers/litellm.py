@@ -7,7 +7,7 @@ import litellm
 from litellm.types.utils import ModelResponseStream
 
 from lite_agent.loggers import logger
-from lite_agent.processors import StreamChunkProcessor
+from lite_agent.processors import CompletionEventProcessor
 from lite_agent.types import AgentChunk
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ async def litellm_stream_handler(
     """
     Optimized chunk handler
     """
-    processor = StreamChunkProcessor()
+    processor = CompletionEventProcessor()
     record_file: AsyncTextIOWrapper | None = None
     record_path = ensure_record_file(record_to)
     if record_path:

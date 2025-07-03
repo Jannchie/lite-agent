@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from lite_agent.agent import Agent
-from lite_agent.processors.stream_chunk_processor import AssistantMessageEvent
+from lite_agent.processors.completion_event_processor import AssistantMessageEvent
 from lite_agent.runner import AgentChunk, Runner
 from lite_agent.types import AgentAssistantMessage, AgentUserMessage
 

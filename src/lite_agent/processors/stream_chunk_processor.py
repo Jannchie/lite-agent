@@ -10,15 +10,16 @@ from lite_agent.types import (
     AgentAssistantMessage,
     AgentChunk,
     AssistantMessage,
+    AssistantMessageEvent,
     CompletionRawEvent,
     ContentDeltaEvent,
     FunctionCallDeltaEvent,
     FunctionCallEvent,
     ToolCall,
     ToolCallFunction,
+    Usage,
     UsageEvent,
 )
-from lite_agent.types.events import AssistantMessageEvent
 
 
 class StreamChunkProcessor:
@@ -113,7 +114,7 @@ class StreamChunkProcessor:
     def handle_usage_chunk(self, chunk: ModelResponseStream) -> UsageEvent | None:
         usage = getattr(chunk, "usage", None)
         if usage:
-            return UsageEvent(type="usage", usage=usage)
+            return UsageEvent(usage=Usage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"]))
         return None
 
     def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:

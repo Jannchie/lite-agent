@@ -8,6 +8,7 @@ from .events import (
     FunctionCallDeltaEvent,
     FunctionCallEvent,
     FunctionCallOutputEvent,
+    Usage,
     UsageEvent,
 )
 from .messages import (
@@ -66,6 +67,7 @@ __all__ = [
     "SystemMessageDict",
     "ToolCall",
     "ToolCallFunction",
+    "Usage",
     "UsageEvent",
     "UserInput",
     "UserMessageContentItemImageURL",

@@ -28,7 +28,7 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "function_call",
     "function_call_output",
     "content_delta",
-    "tool_call_delta",
+    "function_call_delta",
     "assistant_message",
 )
 
@@ -129,7 +129,7 @@ class Runner:
             self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -154,7 +154,7 @@ class Runner:
                 if chunk.type == "function_call":
                     self.messages.append(
                         AgentFunctionToolCallMessage(
-                            function_call_id=chunk.id,
+                            function_call_id=chunk.call_id,
                             name=chunk.name,
                             arguments=chunk.arguments or "",
                         ),

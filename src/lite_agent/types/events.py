@@ -1,13 +1,16 @@
 from typing import Literal
 
-from litellm import Usage
 from litellm.types.utils import ModelResponseStream
 from pydantic import BaseModel
 
 from .messages import AgentAssistantMessage
 
 
-class CompletionRawChunk(BaseModel):
+class Usage(BaseModel):
+    input_tokens: int
+    output_tokens: int
+
+class CompletionRawEvent(BaseModel):
     """
     Define the type of chunk
     """
@@ -16,7 +19,7 @@ class CompletionRawChunk(BaseModel):
     raw: ModelResponseStream
 
 
-class UsageChunk(BaseModel):
+class UsageEvent(BaseModel):
     """
     Define the type of usage info chunk
     """
@@ -25,7 +28,7 @@ class UsageChunk(BaseModel):
     usage: Usage
 
 
-class AssistantMessageChunk(BaseModel):
+class AssistantMessageEvent(BaseModel):
     """
     Define the type of assistant message chunk
     """
@@ -34,18 +37,18 @@ class AssistantMessageChunk(BaseModel):
     message: AgentAssistantMessage
 
 
-class ToolCallChunk(BaseModel):
+class FunctionCallEvent(BaseModel):
     """
     Define the type of tool call chunk
     """
 
     type: Literal["function_call"] = "function_call"
-    id: str
+    call_id: str
     name: str
     arguments: str
 
 
-class ToolCallResultChunk(BaseModel):
+class FunctionCallOutputEvent(BaseModel):
     """
     Define the type of tool call result chunk
     """
@@ -56,7 +59,7 @@ class ToolCallResultChunk(BaseModel):
     content: str
 
 
-class ContentDeltaChunk(BaseModel):
+class ContentDeltaEvent(BaseModel):
     """
     Define the type of message chunk
     """
@@ -65,18 +68,18 @@ class ContentDeltaChunk(BaseModel):
     delta: str
 
 
-class ToolCallDeltaChunk(BaseModel):
+class FunctionCallDeltaEvent(BaseModel):
     """
     Define the type of tool call delta chunk
     """
 
-    type: Literal["tool_call_delta"] = "tool_call_delta"
+    type: Literal["function_call_delta"] = "function_call_delta"
     tool_call_id: str
     name: str
     arguments_delta: str
 
 
-AgentChunk = CompletionRawChunk | UsageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | AssistantMessageChunk
+AgentChunk = CompletionRawEvent | UsageEvent | FunctionCallEvent | FunctionCallOutputEvent | ContentDeltaEvent | FunctionCallDeltaEvent | AssistantMessageEvent
 
 AgentChunkType = Literal[
     "completion_raw",
@@ -84,6 +87,6 @@ AgentChunkType = Literal[
     "function_call",
     "function_call_output",
     "content_delta",
-    "tool_call_delta",
+    "function_call_delta",
     "assistant_message",
 ]

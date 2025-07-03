@@ -1,6 +1,6 @@
 from rich.console import Console
 
-from lite_agent.types import AgentChunk, ContentDeltaChunk
+from lite_agent.types import AgentChunk, ContentDeltaEvent
 
 
 class RichChannel:
@@ -9,7 +9,7 @@ class RichChannel:
         self.map = {
             "function_call": self.handle_tool_call,
             "function_call_output": self.handle_tool_call_result,
-            "tool_call_delta": self.handle_tool_call_delta,
+            "function_call_delta": self.handle_function_call_delta,
             "content_delta": self.handle_content_delta,
             "usage": self.handle_usage,
         }
@@ -36,8 +36,8 @@ class RichChannel:
         content = getattr(chunk, "content", "")
         self.console.print(f"🛠️  [green]{name}[/green] → [yellow]{content}[/yellow]")
 
-    async def handle_tool_call_delta(self, chunk: AgentChunk): ...
-    async def handle_content_delta(self, chunk: ContentDeltaChunk):
+    async def handle_function_call_delta(self, chunk: AgentChunk): ...
+    async def handle_content_delta(self, chunk: ContentDeltaEvent):
         if self._new_turn:
             self.console.print("🤖 ", end="")
             self._new_turn = False

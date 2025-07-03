@@ -10,15 +10,15 @@ from lite_agent.types import (
     AgentAssistantMessage,
     AgentChunk,
     AssistantMessage,
-    CompletionRawChunk,
-    ContentDeltaChunk,
+    CompletionRawEvent,
+    ContentDeltaEvent,
+    FunctionCallDeltaEvent,
+    FunctionCallEvent,
     ToolCall,
-    ToolCallChunk,
-    ToolCallDeltaChunk,
     ToolCallFunction,
-    UsageChunk,
+    UsageEvent,
 )
-from lite_agent.types.chunks import AssistantMessageChunk
+from lite_agent.types.events import AssistantMessageEvent
 
 
 class StreamChunkProcessor:
@@ -40,7 +40,7 @@ class StreamChunkProcessor:
         if record_file:
             await record_file.write(chunk.model_dump_json() + "\n")
             await record_file.flush()
-        yield CompletionRawChunk(raw=chunk)
+        yield CompletionRawEvent(raw=chunk)
         usage_chunk = self.handle_usage_chunk(chunk)
         if usage_chunk:
             yield usage_chunk
@@ -53,7 +53,7 @@ class StreamChunkProcessor:
         if delta.tool_calls:
             if not self.yielded_content:
                 self.yielded_content = True
-                yield AssistantMessageChunk(
+                yield AssistantMessageEvent(
                     message=AgentAssistantMessage(
                         role=self.current_message.role,
                         content=self.current_message.content,
@@ -71,8 +71,8 @@ class StreamChunkProcessor:
             and self._current_message.tool_calls[-1].function.name not in self.yielded_function
         ):
             tool_call = self._current_message.tool_calls[-1]
-            yield ToolCallChunk(
-                id=tool_call.id,
+            yield FunctionCallEvent(
+                call_id=tool_call.id,
                 name=tool_call.function.name,
                 arguments=tool_call.function.arguments or "",
             )
@@ -81,13 +81,13 @@ class StreamChunkProcessor:
             self.initialize_message(chunk, choice)
         if delta.content and self._current_message:
             self._current_message.content += delta.content
-            yield ContentDeltaChunk(delta=delta.content)
+            yield ContentDeltaEvent(delta=delta.content)
         if delta.tool_calls is not None:
             self.update_tool_calls(delta.tool_calls)
             if delta.tool_calls and self.current_message.tool_calls:
                 tool_call = delta.tool_calls[0]
                 message_tool_call = self.current_message.tool_calls[-1]
-                yield ToolCallDeltaChunk(
+                yield FunctionCallDeltaEvent(
                     tool_call_id=message_tool_call.id,
                     name=message_tool_call.function.name,
                     arguments_delta=tool_call.function.arguments or "",
@@ -95,14 +95,14 @@ class StreamChunkProcessor:
         if choice.finish_reason:
             if self.current_message.tool_calls:
                 tool_call = self.current_message.tool_calls[-1]
-                yield ToolCallChunk(
-                    id=tool_call.id,
+                yield FunctionCallEvent(
+                    call_id=tool_call.id,
                     name=tool_call.function.name,
                     arguments=tool_call.function.arguments or "",
                 )
             if not self.yielded_content:
                 self.yielded_content = True
-                yield AssistantMessageChunk(
+                yield AssistantMessageEvent(
                     message=AgentAssistantMessage(
                         role=self.current_message.role,
                         content=self.current_message.content,
@@ -110,10 +110,10 @@ class StreamChunkProcessor:
                 )
         self.last_processed_chunk = chunk
 
-    def handle_usage_chunk(self, chunk: ModelResponseStream) -> UsageChunk | None:
+    def handle_usage_chunk(self, chunk: ModelResponseStream) -> UsageEvent | None:
         usage = getattr(chunk, "usage", None)
         if usage:
-            return UsageChunk(type="usage", usage=usage)
+            return UsageEvent(type="usage", usage=usage)
         return None
 
     def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:

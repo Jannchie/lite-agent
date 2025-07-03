@@ -147,7 +147,7 @@ async def test_handle_tool_calls_function_not_found():
 
         # Current behavior: still yields items even for non-existent tools
         # because the continue only applies to the first loop, not the second
-        assert len(items) == 2  # ToolCallChunk + ToolCallResultChunk with error
+        assert len(items) == 2  # FunctionCallEvent + FunctionCallOutputEvent with error
         assert items[0].type == "function_call"
         assert items[0].name == "nonexistent_tool"
         assert items[1].type == "function_call_output"
@@ -177,7 +177,7 @@ async def test_handle_tool_calls_exception():
         async for item in agent.handle_tool_calls([tool_call]):
             items.append(item)
 
-        # Should yield 2 items: ToolCallChunk and ToolCallResultChunk with error
+        # Should yield 2 items: FunctionCallEvent and FunctionCallOutputEvent with error
         assert len(items) == 2
         assert items[0].type == "function_call"
         assert items[0].name == "failing_tool"
@@ -208,7 +208,7 @@ async def test_handle_tool_calls_success():
     async for item in agent.handle_tool_calls([tool_call]):
         items.append(item)
 
-    # Should yield 2 items: ToolCallChunk and ToolCallResultChunk with success
+    # Should yield 2 items: FunctionCallEvent and FunctionCallOutputEvent with success
     assert len(items) == 2
     assert items[0].type == "function_call"
     assert items[0].name == "working_tool"

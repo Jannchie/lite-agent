@@ -84,7 +84,7 @@ class UserMessageContentItemImageURL(BaseModel):
 class AssistantMessage(BaseModel):
     role: Literal["assistant"] = "assistant"
     id: str
-    index: int
+    index: int | None = None
     content: str = ""
     tool_calls: list[ToolCall] | None = None
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_stream_handler
-from lite_agent.types import AgentChunk, AgentSystemMessage, RunnerMessages, ToolCall, ToolCallChunk, ToolCallResultChunk
+from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
@@ -225,7 +225,7 @@ class Agent:
                 results.append(tool_call)
         return results
 
-    async def handle_tool_calls(self, tool_calls: Sequence[ToolCall] | None, context: Any | None = None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # noqa: ANN401
+    async def handle_tool_calls(self, tool_calls: Sequence[ToolCall] | None, context: Any | None = None) -> AsyncGenerator[FunctionCallEvent | FunctionCallOutputEvent, None]:  # noqa: ANN401
         if not tool_calls:
             return
         if tool_calls:
@@ -237,20 +237,20 @@ class Agent:
 
             for tool_call in tool_calls:
                 try:
-                    yield ToolCallChunk(
-                        id=tool_call.id,
+                    yield FunctionCallEvent(
+                        call_id=tool_call.id,
                         name=tool_call.function.name,
                         arguments=tool_call.function.arguments or "",
                     )
                     content = await self.fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "", context)
-                    yield ToolCallResultChunk(
+                    yield FunctionCallOutputEvent(
                         tool_call_id=tool_call.id,
                         name=tool_call.function.name,
                         content=str(content),
                     )
                 except Exception as e:  # noqa: PERF203
                     logger.exception("Tool call %s failed", tool_call.id)
-                    yield ToolCallResultChunk(
+                    yield FunctionCallOutputEvent(
                         tool_call_id=tool_call.id,
                         name=tool_call.function.name,
                         content=str(e),

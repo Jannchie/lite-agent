@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from lite_agent.agent import Agent
-from lite_agent.processors.stream_chunk_processor import AssistantMessageChunk
+from lite_agent.processors.stream_chunk_processor import AssistantMessageEvent
 from lite_agent.runner import AgentChunk, Runner
 from lite_agent.types import AgentAssistantMessage, AgentUserMessage
 
@@ -15,7 +15,7 @@ class DummyAgent(Agent):
 
     async def completion(self, message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore  # noqa: ARG002
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
-            yield AssistantMessageChunk(message=AgentAssistantMessage(content="done"))
+            yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
         return async_gen()
 
@@ -25,7 +25,7 @@ async def test_run_until_complete():
     mock_agent = Mock()
 
     async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ARG001
-        yield AssistantMessageChunk(message=AgentAssistantMessage(content="done"))
+        yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
     mock_agent.completion = AsyncMock(side_effect=async_gen)
     runner = Runner(agent=mock_agent)
@@ -178,11 +178,11 @@ async def test_run_continue_stream_with_tool_calls():
     runner.messages.append(function_call_msg)
 
     # Mock the agent.handle_tool_calls method
-    from lite_agent.types import ToolCallChunk, ToolCallResultChunk
+    from lite_agent.types import FunctionCallEvent, FunctionCallOutputEvent
 
-    async def mock_handle_tool_calls(tool_calls, context=None) -> AsyncGenerator[ToolCallChunk | ToolCallResultChunk, None]:  # type: ignore  # noqa: ARG001
-        yield ToolCallChunk(name="test_tool", arguments="{}", id="test_id")
-        yield ToolCallResultChunk(tool_call_id="test_id", name="test_tool", content="result")
+    async def mock_handle_tool_calls(tool_calls, context=None) -> AsyncGenerator[FunctionCallEvent | FunctionCallOutputEvent, None]:  # type: ignore  # noqa: ARG001
+        yield FunctionCallEvent(name="test_tool", arguments="{}", call_id="test_id")
+        yield FunctionCallOutputEvent(tool_call_id="test_id", name="test_tool", content="result")
 
     with patch.object(agent, "handle_tool_calls", side_effect=mock_handle_tool_calls):
         results = []

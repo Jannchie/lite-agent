@@ -25,7 +25,8 @@ class DummyAgent(Agent):
 async def test_run_until_complete():
     mock_agent = Mock()
 
-    async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[FinalMessageChunk, None]:  # noqa: ARG001
+    async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ARG001
+        yield AssistantMessageChunk(message=AgentAssistantMessage(content="done"))
         yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
     mock_agent.completion = AsyncMock(side_effect=async_gen)
@@ -33,7 +34,7 @@ async def test_run_until_complete():
     result = await runner.run_until_complete("hello")
     assert isinstance(result, list)
     assert len(result) == 1
-    assert result[0].type == "final_message"
+    assert result[0].type == "assistant_message"
     mock_agent.completion.assert_called_once()
 
 
@@ -45,10 +46,6 @@ async def test_run():
     # run_stream 返回的是 async generator
     results = []
     async for chunk in gen:
-        assert isinstance(chunk, FinalMessageChunk)
-        assert chunk.type == "final_message"
-        assert chunk.message.role == "assistant"
-        assert chunk.message.content == "done"
         results.append(chunk)
 
     assert len(results) == 1

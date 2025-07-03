@@ -46,7 +46,7 @@ class Runner:
         """Normalize record_to parameter to Path object if provided."""
         return Path(record_to) if record_to else None
 
-    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901, PLR0912
+    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901
         """Handle tool calls and yield appropriate chunks."""
         if not tool_calls:
             return
@@ -89,8 +89,8 @@ class Runner:
             return  # Stop processing other tool calls after transfer
 
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
-            if tool_call_chunk.type == "function_call" and tool_call_chunk.type in includes:
-                yield tool_call_chunk
+            # if tool_call_chunk.type == "function_call" and tool_call_chunk.type in includes:
+            #     yield tool_call_chunk
             if tool_call_chunk.type == "function_call_output":
                 if tool_call_chunk.type in includes:
                     yield tool_call_chunk
@@ -129,7 +129,7 @@ class Runner:
             self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -172,6 +172,14 @@ class Runner:
             else:
                 finish_reason = "stop"
             steps += 1
+
+    async def has_require_confirm_tools(self):
+        pending_function_calls = self._find_pending_function_calls()
+        if not pending_function_calls:
+            return False
+        tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+        require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
+        return bool(require_confirm_tools)
 
     async def run_continue_until_complete(
         self,

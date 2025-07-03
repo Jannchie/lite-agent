@@ -22,7 +22,6 @@ async def get_temperature(city: str) -> str:
     return f"The temperature in {city} is 25°C."
 
 
-
 async def main():
     agent = Agent(
         model="gpt-4.1",
@@ -52,10 +51,24 @@ async def main():
             response = runner.run(user_input)
             async for chunk in response:
                 await rich_channel.handle(chunk)
-
+            if await runner.has_require_confirm_tools():
+                user_input = await session.prompt_async(
+                    "❓ Confirm tool calls? (y/n) ",
+                    default="y",
+                    complete_while_typing=True,
+                    validator=not_empty_validator,
+                    validate_while_typing=False,
+                )
+                if user_input.lower() in {"y", "yes"}:
+                    response = runner.run_continue_stream()
+                    async for chunk in response:
+                        await rich_channel.handle(chunk)
+                else:
+                    response = runner.run_continue_stream()
+            rich_channel.new_turn()
         except (EOFError, KeyboardInterrupt):
             break
-        print(runner.messages)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

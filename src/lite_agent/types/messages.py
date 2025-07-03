@@ -54,13 +54,13 @@ MessageDict = UserMessageDict | AssistantMessageDict | SystemMessageDict | Funct
 
 # Response API format input types
 class ResponseInputText(BaseModel):
+    type: Literal["input_text"] = "input_text"
     text: str
-    type: Literal["input_text"]
 
 
 class ResponseInputImage(BaseModel):
     detail: Literal["low", "high", "auto"] = "auto"
-    type: Literal["input_image"]
+    type: Literal["input_image"] = "input_image"
     file_id: str | None = None
     image_url: str | None = None
 
@@ -82,9 +82,9 @@ class UserMessageContentItemImageURL(BaseModel):
 
 # Legacy types - keeping for compatibility
 class AssistantMessage(BaseModel):
+    role: Literal["assistant"] = "assistant"
     id: str
     index: int
-    role: Literal["assistant"] = "assistant"
     content: str = ""
     tool_calls: list[ToolCall] | None = None
 
@@ -95,32 +95,31 @@ class Message(BaseModel):
 
 
 class AgentUserMessage(BaseModel):
-    role: Literal["user"]
+    role: Literal["user"] = "user"
     content: str | Sequence[ResponseInputText | ResponseInputImage | UserMessageContentItemText | UserMessageContentItemImageURL]
 
 
 class AgentAssistantMessage(BaseModel):
-    role: Literal["assistant"]
+    role: Literal["assistant"] = "assistant"
     content: str
 
 
 class AgentSystemMessage(BaseModel):
-    role: Literal["system"]
+    role: Literal["system"] = "system"
     content: str
 
 
 class AgentFunctionToolCallMessage(BaseModel):
+    type: Literal["function_call"] = "function_call"
     arguments: str
-    type: Literal["function_call"]
     function_call_id: str
     name: str
-    content: str
 
 
 class AgentFunctionCallOutput(BaseModel):
+    type: Literal["function_call_output"] = "function_call_output"
     call_id: str
     output: str
-    type: Literal["function_call_output"]
 
 
 RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentSystemMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput

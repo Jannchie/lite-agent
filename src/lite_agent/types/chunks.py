@@ -50,6 +50,7 @@ class ToolCallChunk(BaseModel):
     """
 
     type: Literal["function_call"] = "function_call"
+    id: str
     name: str
     arguments: str
 

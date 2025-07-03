@@ -2,7 +2,7 @@ import json
 from collections.abc import AsyncGenerator, Sequence
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
@@ -22,17 +22,14 @@ from lite_agent.types import (
     UserInput,
 )
 
-if TYPE_CHECKING:
-    from lite_agent.types import AssistantMessage
-
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
     "usage",
-    "final_message",
     "function_call",
     "function_call_output",
     "content_delta",
     "tool_call_delta",
+    "assistant_message",
 )
 
 
@@ -152,23 +149,28 @@ class Runner:
             async for chunk in resp:
                 if chunk.type in includes:
                     yield chunk
-
-                if chunk.type == "final_message":
-                    message = chunk.message
-                    # Convert to responses format and add to messages
-                    self.messages.extend(self._convert_final_message_to_responses_format(message))
-                    finish_reason = chunk.finish_reason
-                    if finish_reason == "tool_calls":
-                        # Find pending function calls in responses format
-                        pending_function_calls = self._find_pending_function_calls()
-                        if pending_function_calls:
-                            # Convert to ToolCall format for existing handler
-                            tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
-                            require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
-                            if require_confirm_tools:
-                                return
-                            async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
-                                yield tool_chunk
+                if chunk.type == "assistant_message":
+                    self.messages.append(chunk.message)
+                if chunk.type == "function_call":
+                    self.messages.append(
+                        AgentFunctionToolCallMessage(
+                            function_call_id=chunk.id,
+                            name=chunk.name,
+                            arguments=chunk.arguments or "",
+                        ),
+                    )
+            pending_function_calls = self._find_pending_function_calls()
+            if pending_function_calls:
+                # Convert to ToolCall format for existing handler
+                tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+                require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
+                if require_confirm_tools:
+                    return
+                async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
+                    yield tool_chunk
+                finish_reason = "tool_calls"
+            else:
+                finish_reason = "stop"
             steps += 1
 
     async def run_continue_until_complete(
@@ -235,40 +237,7 @@ class Runner:
         resp = self.run(user_input, max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
-    def _convert_final_message_to_responses_format(self, message: "AssistantMessage") -> list[RunnerMessage]:
-        """Convert a completions format final message to responses format messages."""
-        # The final message from the stream handler might still contain tool_calls
-        # We need to convert it to responses format
-        messages = []
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            if message.content:
-                # Add the assistant message without tool_calls
-                assistant_msg = AgentAssistantMessage(
-                    role="assistant",
-                    content=message.content,
-                )
-                messages.append(assistant_msg)
-
-            # Add function call messages
-            for tool_call in message.tool_calls:
-                function_call_msg = AgentFunctionToolCallMessage(
-                    type="function_call",
-                    function_call_id=tool_call.id,
-                    name=tool_call.function.name,
-                    arguments=tool_call.function.arguments or "",
-                    content="",
-                )
-                messages.append(function_call_msg)
-        else:
-            # Regular assistant message without tool calls
-            assistant_msg = AgentAssistantMessage(
-                role="assistant",
-                content=message.content,
-            )
-            messages.append(assistant_msg)
-        return messages
-
-    def _find_pending_function_calls(self) -> list:
+    def _find_pending_function_calls(self) -> list[AgentFunctionToolCallMessage]:
         """Find function call messages that don't have corresponding outputs yet."""
         function_calls: list[AgentFunctionToolCallMessage] = []
         function_call_ids = set()
@@ -462,7 +431,6 @@ class Runner:
                         function_call_id=tool_call["id"],
                         name=tool_call["function"]["name"],
                         arguments=tool_call["function"]["arguments"],
-                        content="",
                     )
                     self.messages.append(function_call_msg)
             elif role:

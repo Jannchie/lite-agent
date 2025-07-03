@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from rich import print  # noqa: A004
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
@@ -35,7 +36,7 @@ async def main():
     runner = Runner(agent)
     resp = runner.run(
         "What is the temperature in New York?",
-        includes=["final_message", "usage", "function_call", "function_call_output"],
+        includes=["usage", "assistant_message", "function_call", "function_call_output"],
         record_to="tests/mocks/basic/1.jsonl",
     )
     async for chunk in resp:

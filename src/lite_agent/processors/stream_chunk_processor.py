@@ -51,9 +51,7 @@ class StreamChunkProcessor:
 
         choice = chunk.choices[0]
         delta = choice.delta
-        if delta.content and self.processing_chunk != "content":
-            self.processing_chunk = "content"
-        elif delta.tool_calls:
+        if delta.tool_calls:
             if not self.yielded_content:
                 self.yielded_content = True
                 yield AssistantMessageChunk(
@@ -62,7 +60,6 @@ class StreamChunkProcessor:
                         content=self.current_message.content,
                     ),
                 )
-            self.processing_chunk = "tool_calls"
             first_tool_call = delta.tool_calls[0]
             tool_name = first_tool_call.function.name if first_tool_call.function else ""
             if tool_name:
@@ -74,11 +71,13 @@ class StreamChunkProcessor:
             and self.processing_function != self._current_message.tool_calls[-1].function.name
             and self._current_message.tool_calls[-1].function.name not in self.yielded_function
         ):
+            tool_call = self._current_message.tool_calls[-1]
             yield ToolCallChunk(
-                name=self._current_message.tool_calls[-1].function.name,
-                arguments=self._current_message.tool_calls[-1].function.arguments or "",
+                id=tool_call.id,
+                name=tool_call.function.name,
+                arguments=tool_call.function.arguments or "",
             )
-            self.yielded_function.add(self._current_message.tool_calls[-1].function.name)
+            self.yielded_function.add(tool_call.function.name)
         if not self.is_initialized:
             self.initialize_message(chunk, choice)
         if delta.content and self._current_message:
@@ -87,23 +86,21 @@ class StreamChunkProcessor:
         if delta.tool_calls is not None:
             self.update_tool_calls(delta.tool_calls)
             if delta.tool_calls and self.current_message.tool_calls:
-                for tool_call in delta.tool_calls:
-                    yield ToolCallDeltaChunk(
-                        tool_call_id=self.current_message.tool_calls[-1].id,
-                        name=self.current_message.tool_calls[-1].function.name,
-                        arguments_delta=tool_call.function.arguments or "",
-                    )
+                tool_call = delta.tool_calls[0]
+                message_tool_call = self.current_message.tool_calls[-1]
+                yield ToolCallDeltaChunk(
+                    tool_call_id=message_tool_call.id,
+                    name=message_tool_call.function.name,
+                    arguments_delta=tool_call.function.arguments or "",
+                )
         if choice.finish_reason:
-            if self._current_message and self._current_message.tool_calls:
-                ...
-                # yield ToolCallChunk(
-                #     name=self._current_message.tool_calls[-1].function.name,
-                #     arguments=self._current_message.tool_calls[-1].function.arguments or "",
             current_message = self.current_message
             if self.current_message.tool_calls:
+                tool_call = self.current_message.tool_calls[-1]
                 yield ToolCallChunk(
-                    name=self.current_message.tool_calls[-1].function.name,
-                    arguments=self.current_message.tool_calls[-1].function.arguments or "",
+                    id=tool_call.id,
+                    name=tool_call.function.name,
+                    arguments=tool_call.function.arguments or "",
                 )
             if not self.yielded_content:
                 self.yielded_content = True

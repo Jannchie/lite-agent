@@ -6,7 +6,7 @@ import pytest
 from lite_agent.agent import Agent
 from lite_agent.processors.stream_chunk_processor import AssistantMessageChunk
 from lite_agent.runner import AgentChunk, Runner
-from lite_agent.types import AgentAssistantMessage, AgentUserMessage, AssistantMessage, FinalMessageChunk
+from lite_agent.types import AgentAssistantMessage, AgentUserMessage
 
 
 class DummyAgent(Agent):
@@ -16,7 +16,6 @@ class DummyAgent(Agent):
     async def completion(self, message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore  # noqa: ARG002
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield AssistantMessageChunk(message=AgentAssistantMessage(content="done"))
-            yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
         return async_gen()
 
@@ -27,7 +26,6 @@ async def test_run_until_complete():
 
     async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ARG001
         yield AssistantMessageChunk(message=AgentAssistantMessage(content="done"))
-        yield FinalMessageChunk(type="final_message", message=AssistantMessage(role="assistant", content="done", id="123", index=0), finish_reason="stop")
 
     mock_agent.completion = AsyncMock(side_effect=async_gen)
     runner = Runner(agent=mock_agent)

@@ -12,7 +12,6 @@ from lite_agent.types import (
     AssistantMessage,
     CompletionRawChunk,
     ContentDeltaChunk,
-    FinalMessageChunk,
     ToolCall,
     ToolCallChunk,
     ToolCallDeltaChunk,
@@ -94,7 +93,6 @@ class StreamChunkProcessor:
                     arguments_delta=tool_call.function.arguments or "",
                 )
         if choice.finish_reason:
-            current_message = self.current_message
             if self.current_message.tool_calls:
                 tool_call = self.current_message.tool_calls[-1]
                 yield ToolCallChunk(
@@ -110,7 +108,6 @@ class StreamChunkProcessor:
                         content=self.current_message.content,
                     ),
                 )
-            yield FinalMessageChunk(message=current_message, finish_reason=choice.finish_reason)
         self.last_processed_chunk = chunk
 
     def handle_usage_chunk(self, chunk: ModelResponseStream) -> UsageChunk | None:

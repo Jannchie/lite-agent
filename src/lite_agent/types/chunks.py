@@ -4,7 +4,7 @@ from litellm import Usage
 from litellm.types.utils import ModelResponseStream
 from pydantic import BaseModel
 
-from .messages import AgentAssistantMessage, AssistantMessage
+from .messages import AgentAssistantMessage
 
 
 class CompletionRawChunk(BaseModel):
@@ -23,16 +23,6 @@ class UsageChunk(BaseModel):
 
     type: Literal["usage"] = "usage"
     usage: Usage
-
-
-class FinalMessageChunk(BaseModel):
-    """
-    Define the type of final message chunk
-    """
-
-    type: Literal["final_message"] = "final_message"
-    message: AssistantMessage
-    finish_reason: str | None = None  # Literal["stop", "tool_calls"]
 
 
 class AssistantMessageChunk(BaseModel):
@@ -86,12 +76,11 @@ class ToolCallDeltaChunk(BaseModel):
     arguments_delta: str
 
 
-AgentChunk = CompletionRawChunk | UsageChunk | FinalMessageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | AssistantMessageChunk
+AgentChunk = CompletionRawChunk | UsageChunk | ToolCallChunk | ToolCallResultChunk | ContentDeltaChunk | ToolCallDeltaChunk | AssistantMessageChunk
 
 AgentChunkType = Literal[
     "completion_raw",
     "usage",
-    "final_message",
     "function_call",
     "function_call_output",
     "content_delta",

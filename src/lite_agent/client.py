@@ -1,8 +1,11 @@
 import abc
-from typing import Any
+from typing import Any, Literal
 
 import litellm
+from litellm.responses.streaming_iterator import ResponsesAPIStreamingIterator
 from openai.types.chat import ChatCompletionToolParam
+from openai.types.responses import FunctionToolParam
+from openai.types.responses.response_input_param import ResponseInputParam
 
 
 class BaseLLMClient(abc.ABC):
@@ -18,6 +21,15 @@ class BaseLLMClient(abc.ABC):
     async def completion(self, messages: list[Any], tools: list[ChatCompletionToolParam] | None = None, tool_choice: str = "auto") -> Any:  # noqa: ANN401
         """Perform a completion request to the LLM."""
 
+    @abc.abstractmethod
+    async def responses(
+        self,
+        messages: ResponseInputParam,
+        tools: list[FunctionToolParam] | None = None,
+        tool_choice: Literal["none", "auto", "required"] = "auto",
+    ) -> ResponsesAPIStreamingIterator:
+        """Perform a response request to the LLM."""
+
 
 class LiteLLMClient(BaseLLMClient):
     async def completion(self, messages: list[Any], tools: list[ChatCompletionToolParam] | None = None, tool_choice: str = "auto") -> Any:  # noqa: ANN401
@@ -32,3 +44,22 @@ class LiteLLMClient(BaseLLMClient):
             api_base=self.api_base,
             stream=True,
         )
+
+    async def responses(
+        self,
+        messages: ResponseInputParam,
+        tools: list[FunctionToolParam] | None = None,
+        tool_choice: Literal["none", "auto", "required"] = "auto",
+    ) -> ResponsesAPIStreamingIterator:
+        """Perform a response request to the Litellm API."""
+        return await litellm.aresponses(
+            model=self.model,
+            input=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            api_version=self.api_version,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            stream=True,
+            store=False,
+        )  # type: ignore

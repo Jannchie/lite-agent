@@ -1,6 +1,5 @@
 from typing import Any
 
-import litellm
 from funcall import Funcall
 from litellm.types.llms.openai import (
     ContentPartAddedEvent,
@@ -16,6 +15,7 @@ from litellm.types.llms.openai import (
 from openai.types.responses.response_input_param import ResponseInputParam
 from rich import print  # noqa: A004
 
+from lite_agent.client import LiteLLMClient
 from lite_agent.types import AgentAssistantMessage, AssistantMessageEvent, ContentDeltaEvent, FunctionCallEvent, UsageEvent
 from lite_agent.types.events import Usage
 
@@ -53,8 +53,6 @@ messages: ResponseInputParam = [
     #     "type": "function_call_output",
     # },
 ]
-
-resp = litellm.responses(model="gpt-4.1-nano", input=messages, tools=fc.get_tools(), tool_choice="auto", stream=True, store=False)
 
 
 def handle_message(messages: list[dict[str, Any]], event: ResponsesAPIStreamingResponse):  # noqa: C901, PLR0912
@@ -110,10 +108,19 @@ def handle_message(messages: list[dict[str, Any]], event: ResponsesAPIStreamingR
     return None
 
 
-new_messages: list[dict[str, str]] = []
-for event in resp:  # type: ignore
-    # print(event)
-    e = handle_message(new_messages, event)
-    if e:
-        print(e)
-print(new_messages)
+async def main():
+    client = LiteLLMClient(model="gpt-4.1-nano")
+    resp = await client.responses(messages=messages, tools=fc.get_tools(), tool_choice="auto")
+    new_messages: list[dict[str, str]] = []
+    async for event in resp:  # type: ignore
+        # print(event)
+        e = handle_message(new_messages, event)
+        if e:
+            print(e)
+    print(new_messages)
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    asyncio.run(main())

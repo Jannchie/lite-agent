@@ -6,6 +6,7 @@
 
 import asyncio
 
+from lite_agent import print_messages
 from lite_agent.agent import Agent
 from lite_agent.rich_helpers import print_chat_history, print_chat_summary
 from lite_agent.runner import Runner
@@ -123,6 +124,11 @@ async def main():
         runner.messages,
         show_timestamps=False,
         show_indices=False,
+    )
+
+    # print demo
+    print_messages(
+        runner.messages,
     )
 
 

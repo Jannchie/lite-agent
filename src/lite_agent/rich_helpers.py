@@ -7,6 +7,7 @@ and function call outputs.
 """
 
 import json
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from rich.console import Console
@@ -500,3 +501,180 @@ def print_chat_summary(messages: RunnerMessages, *, console: Console | None = No
 
     summary_table = create_chat_summary_table(messages)
     console.print(summary_table)
+
+
+def print_messages(
+    messages: RunnerMessages,
+    *,
+    console: Console | None = None,
+    show_indices: bool = True,
+    max_content_length: int = 100,
+) -> None:
+    """
+    以紧凑的单行格式打印消息列表。
+
+    Args:
+        messages: 要打印的消息列表
+        console: Rich Console 实例，如果为 None 则创建新的
+        show_indices: 是否显示消息索引
+        max_content_length: 内容的最大显示长度，超过会被截断
+
+    Example:
+        >>> from lite_agent.runner import Runner
+        >>> from lite_agent.rich_helpers import print_messages
+        >>>
+        >>> runner = Runner(agent=my_agent)
+        >>> # ... add some messages ...
+        >>> print_messages(runner.messages)
+    """
+    if console is None:
+        console = Console()
+
+    if not messages:
+        console.print("[dim]No messages to display[/dim]")
+        return
+
+    for i, message in enumerate(messages):
+        _print_single_message_compact(
+            message,
+            index=i if show_indices else None,
+            console=console,
+            max_content_length=max_content_length,
+        )
+
+
+def _print_single_message_compact(
+    message: object,
+    *,
+    index: int | None = None,
+    console: Console,
+    max_content_length: int = 100,
+) -> None:
+    """以紧凑格式打印单个消息。"""
+
+    def truncate_content(content: str, max_length: int) -> str:
+        """截断内容并添加省略号。"""
+        if len(content) <= max_length:
+            return content
+        return content[: max_length - 3] + "..."
+
+    index_str = f"#{index:2d} " if index is not None else ""
+
+    # 处理不同类型的消息
+    if isinstance(message, AgentUserMessage):
+        _print_user_message_compact(message, index_str, console, max_content_length, truncate_content)
+    elif isinstance(message, AgentAssistantMessage):
+        _print_assistant_message_compact(message, index_str, console, max_content_length, truncate_content)
+    elif isinstance(message, AgentSystemMessage):
+        _print_system_message_compact(message, index_str, console, max_content_length, truncate_content)
+    elif isinstance(message, AgentFunctionToolCallMessage):
+        _print_function_call_message_compact(message, index_str, console, max_content_length, truncate_content)
+    elif isinstance(message, AgentFunctionCallOutput):
+        _print_function_output_message_compact(message, index_str, console, max_content_length, truncate_content)
+    elif isinstance(message, dict):
+        _print_dict_message_compact(message, index_str, console, max_content_length)
+    else:
+        _print_unknown_message_compact(message, index_str, console, max_content_length, truncate_content)
+
+
+def _print_user_message_compact(message: AgentUserMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+    """打印用户消息的紧凑格式。"""
+    content = truncate_content(str(message.content), max_content_length)
+    console.print(f"{index_str}[blue]👤 User:[/blue] {content}")
+
+
+def _print_assistant_message_compact(message: AgentAssistantMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+    """打印助手消息的紧凑格式。"""
+    content = truncate_content(str(message.content), max_content_length)
+    console.print(f"{index_str}[green]🤖 Assistant:[/green] {content}")
+
+
+def _print_system_message_compact(message: AgentSystemMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+    """打印系统消息的紧凑格式。"""
+    content = truncate_content(str(message.content), max_content_length)
+    console.print(f"{index_str}[yellow]💻 System:[/yellow] {content}")
+
+
+def _print_function_call_message_compact(message: AgentFunctionToolCallMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+    """打印函数调用消息的紧凑格式。"""
+    args_str = ""
+    if message.arguments:
+        try:
+            parsed_args = json.loads(message.arguments)
+            args_str = f" {parsed_args}"
+        except (json.JSONDecodeError, TypeError):
+            args_str = f" {message.arguments}"
+
+    args_display = truncate_content(args_str, max_content_length - len(message.name) - 10)
+    console.print(f"{index_str}[magenta]🔨 Call:[/magenta] {message.name}{args_display}")
+
+
+def _print_function_output_message_compact(message: AgentFunctionCallOutput, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+    """打印函数输出消息的紧凑格式。"""
+    output = truncate_content(str(message.output), max_content_length)
+    console.print(f"{index_str}[cyan]📤 Output:[/cyan] {output}")
+
+
+def _print_unknown_message_compact(message: object, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+    """打印未知类型消息的紧凑格式。"""
+    try:
+        content = str(message.model_dump()) if hasattr(message, "model_dump") else str(message)  # type: ignore[attr-defined]
+    except Exception:
+        content = str(message)
+
+    content = truncate_content(content, max_content_length)
+    console.print(f"{index_str}[red]❓ Unknown:[/red] {content}")
+
+
+def _print_dict_message_compact(
+    message: dict[str, object],
+    index_str: str,
+    console: Console,
+    max_content_length: int,
+) -> None:
+    """以紧凑格式打印字典消息。"""
+
+    def truncate_content(content: str, max_length: int) -> str:
+        """截断内容并添加省略号。"""
+        if len(content) <= max_length:
+            return content
+        return content[: max_length - 3] + "..."
+
+    message_type = message.get("type")
+    role = message.get("role")
+
+    if message_type == "function_call":
+        name = str(message.get("name", "unknown"))
+        args = str(message.get("arguments", ""))
+
+        args_str = ""
+        if args:
+            try:
+                parsed_args = json.loads(args)
+                args_str = f" {parsed_args}"
+            except (json.JSONDecodeError, TypeError):
+                args_str = f" {args}"
+
+        args_display = truncate_content(args_str, max_content_length - len(name) - 10)
+        console.print(f"{index_str}[magenta]🛠️ Call:[/magenta] {name}{args_display}")
+
+    elif message_type == "function_call_output":
+        output = truncate_content(str(message.get("output", "")), max_content_length)
+        console.print(f"{index_str}[cyan]📤 Output:[/cyan] {output}")
+
+    elif role == "user":
+        content = truncate_content(str(message.get("content", "")), max_content_length)
+        console.print(f"{index_str}[blue]👤 User:[/blue] {content}")
+
+    elif role == "assistant":
+        content = truncate_content(str(message.get("content", "")), max_content_length)
+        console.print(f"{index_str}[green]🤖 Assistant:[/green] {content}")
+
+    elif role == "system":
+        content = truncate_content(str(message.get("content", "")), max_content_length)
+        console.print(f"{index_str}[yellow]⚙️ System:[/yellow] {content}")
+
+    else:
+        # 未知类型的字典消息
+        content = truncate_content(str(message), max_content_length)
+        console.print(f"{index_str}[red]❓ Unknown:[/red] {content}")

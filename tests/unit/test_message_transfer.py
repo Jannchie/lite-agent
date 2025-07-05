@@ -69,7 +69,7 @@ async def test_message_transfer_called_in_completion():
         for msg in messages:
             if isinstance(msg, dict) and msg.get("role") == "user":
                 new_msg = msg.copy()
-                new_msg["content"] = f"[TEST] {msg['content']}"
+                new_msg["content"] = f"[TEST] {msg['content']}"  # type: ignore
                 processed.append(new_msg)
             else:
                 processed.append(msg)
@@ -165,11 +165,11 @@ def test_message_transfer_with_different_message_types():
         processed = []
         for msg in messages:
             if isinstance(msg, dict):
-                if msg.get("role") == "user":
+                if msg.get("role") == "user" and "content" in msg:
                     new_msg = msg.copy()
                     new_msg["content"] = f"[USER] {msg['content']}"
                     processed.append(new_msg)
-                elif msg.get("role") == "assistant":
+                elif msg.get("role") == "assistant" and "content" in msg:
                     new_msg = msg.copy()
                     new_msg["content"] = f"[ASSISTANT] {msg['content']}"
                     processed.append(new_msg)

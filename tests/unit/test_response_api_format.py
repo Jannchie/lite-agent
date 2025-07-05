@@ -80,20 +80,23 @@ class TestResponseAPIFormat:
 
         assert len(self.runner.messages) == 1
         message = self.runner.messages[0]
-        assert message.role == "user"
-        assert isinstance(message.content, list)
-        assert len(message.content) == 2
+        assert hasattr(message, "role")
+        assert message.role == "user"  # type: ignore
+        assert hasattr(message, "content")
+        assert isinstance(message.content, list)  # type: ignore
+        assert len(message.content) == 2  # type: ignore
 
         # 检查第一个内容项 (text)
-        text_item = message.content[0]
-        assert text_item.type == "input_text"
-        assert text_item.text == "What's in this image?"
+        if hasattr(message, "content"):
+            text_item = message.content[0]  # type: ignore
+            assert text_item.type == "input_text"
+            assert text_item.text == "What's in this image?"
 
-        # 检查第二个内容项 (image)
-        image_item = message.content[1]
-        assert image_item.type == "input_image"
-        assert image_item.detail == "high"
-        assert image_item.image_url == "https://example.com/test.jpg"
+            # 检查第二个内容项 (image)
+            image_item = message.content[1]  # type: ignore
+            assert image_item.type == "input_image"
+            assert image_item.detail == "high"
+            assert image_item.image_url == "https://example.com/test.jpg"
 
     def test_append_message_with_dict_format(self):
         """测试使用字典格式的 Response API 内容"""
@@ -118,19 +121,22 @@ class TestResponseAPIFormat:
 
         assert len(self.runner.messages) == 1
         message = self.runner.messages[0]
-        assert message.role == "user"
-        assert isinstance(message.content, list)
-        assert len(message.content) == 2
+        assert hasattr(message, "role")
+        assert message.role == "user"  # type: ignore
+        assert hasattr(message, "content")
+        assert isinstance(message.content, list)  # type: ignore
+        assert len(message.content) == 2  # type: ignore
 
         # 检查内容被正确转换为 Pydantic 对象
-        text_item = message.content[0]
-        assert text_item.type == "input_text"
-        assert text_item.text == "What's in this image?"
+        if hasattr(message, "content"):
+            text_item = message.content[0]  # type: ignore
+            assert text_item.type == "input_text"
+            assert text_item.text == "What's in this image?"
 
-        image_item = message.content[1]
-        assert image_item.type == "input_image"
-        assert image_item.detail == "high"
-        assert image_item.image_url == "https://example.com/test.jpg"
+            image_item = message.content[1]  # type: ignore
+            assert image_item.type == "input_image"
+            assert image_item.detail == "high"
+            assert image_item.image_url == "https://example.com/test.jpg"
 
     def test_conversion_to_completion_api_format(self):
         """测试转换为 Completion API 格式"""

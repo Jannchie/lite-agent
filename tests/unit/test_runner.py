@@ -13,7 +13,7 @@ class DummyAgent(Agent):
     def __init__(self) -> None:
         super().__init__(model="dummy-model", name="Dummy Agent", instructions="This is a dummy agent for testing.")
 
-    async def completion(self, message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore  # noqa: ARG002
+    async def completion(self, _message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
@@ -24,7 +24,7 @@ class DummyAgent(Agent):
 async def test_run_until_complete():
     mock_agent = Mock()
 
-    async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ARG001
+    async def async_gen(_: object, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:
         yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
     mock_agent.completion = AsyncMock(side_effect=async_gen)
@@ -180,7 +180,7 @@ async def test_run_continue_stream_with_tool_calls():
     # Mock the agent.handle_tool_calls method
     from lite_agent.types import FunctionCallEvent, FunctionCallOutputEvent
 
-    async def mock_handle_tool_calls(tool_calls, context=None) -> AsyncGenerator[FunctionCallEvent | FunctionCallOutputEvent, None]:  # type: ignore  # noqa: ARG001
+    async def mock_handle_tool_calls(tool_calls, context=None) -> AsyncGenerator[FunctionCallEvent | FunctionCallOutputEvent, None]:  # type: ignore
         yield FunctionCallEvent(name="test_tool", arguments="{}", call_id="test_id")
         yield FunctionCallOutputEvent(tool_call_id="test_id", name="test_tool", content="result")
 

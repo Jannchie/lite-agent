@@ -80,6 +80,8 @@ ignore = [
     "ANN002",
     "ANN003",
     "ARG005",
+    "ARG001",
+    "ARG002",
 ]
 
 [tool.uv]

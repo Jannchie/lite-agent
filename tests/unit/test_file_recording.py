@@ -41,7 +41,7 @@ async def test_litellm_completion_stream_handler_with_record_to_existing_directo
             yield mock_stream
 
         mock_resp = AsyncMock()
-        mock_resp.__aiter__ = lambda self: mock_response_stream()
+        mock_resp.__aiter__ = lambda _: mock_response_stream()
 
         # 测试 litellm_completion_stream_handler 的文件记录功能
         handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
@@ -96,7 +96,7 @@ async def test_litellm_completion_stream_handler_with_record_to_nonexistent_dire
             yield mock_stream
 
         mock_resp = AsyncMock()
-        mock_resp.__aiter__ = lambda self: mock_response_stream()
+        mock_resp.__aiter__ = lambda _: mock_response_stream()
 
         # 测试 litellm_completion_stream_handler 的文件记录功能
         handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
@@ -197,7 +197,7 @@ async def test_litellm_completion_stream_handler_record_multiple_chunks():
                 yield stream
 
         mock_resp = AsyncMock()
-        mock_resp.__aiter__ = lambda self: mock_response_stream()
+        mock_resp.__aiter__ = lambda _: mock_response_stream()
 
         # 测试 litellm_completion_stream_handler 的文件记录功能
         handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
@@ -255,7 +255,7 @@ async def test_litellm_completion_stream_handler_with_deeply_nested_directory():
             yield mock_stream
 
         mock_resp = AsyncMock()
-        mock_resp.__aiter__ = lambda self: mock_response_stream()
+        mock_resp.__aiter__ = lambda _: mock_response_stream()
 
         # 测试 litellm_completion_stream_handler 的文件记录功能
         handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
@@ -298,7 +298,7 @@ async def test_litellm_completion_stream_handler_record_with_string_path():
             yield mock_stream
 
         mock_resp = AsyncMock()
-        mock_resp.__aiter__ = lambda self: mock_response_stream()
+        mock_resp.__aiter__ = lambda _: mock_response_stream()
 
         # 测试 litellm_completion_stream_handler 的文件记录功能
         handler = litellm_completion_stream_handler(mock_resp, record_to=Path(record_path_str))

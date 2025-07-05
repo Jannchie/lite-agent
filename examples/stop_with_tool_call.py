@@ -4,6 +4,7 @@ import logging
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
+from lite_agent.chat_display import display_chat_history
 from lite_agent.runner import Runner
 
 logging.basicConfig(

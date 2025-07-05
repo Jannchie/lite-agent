@@ -177,7 +177,6 @@ class TestSetChatHistory:
             function_call_id="call_1",
             name="transfer_to_agent",
             arguments='{"name": "WeatherAgent"}',
-            content="",
         )
 
         output_message = AgentFunctionCallOutput(
@@ -289,8 +288,10 @@ class TestSetChatHistory:
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
         assert len(self.runner.messages) == 2
-        assert self.runner.messages[0].content == "New message"
-        assert self.runner.messages[1].content == "New response"
+        assert hasattr(self.runner.messages[0], "content")
+        assert self.runner.messages[0].content == "New message"  # type: ignore
+        assert hasattr(self.runner.messages[1], "content")
+        assert self.runner.messages[1].content == "New response"  # type: ignore
 
     def test_set_chat_history_without_root_agent(self):
         """Test set_chat_history without specifying root_agent."""
@@ -319,7 +320,6 @@ class TestSetChatHistory:
             function_call_id="call_1",
             name="test_function",
             arguments='{"test": "value"}',
-            content="",
         )
         self.runner.append_message(function_call_msg)
         assert len(self.runner.messages) == 2

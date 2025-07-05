@@ -23,8 +23,8 @@ ruff format              # Format code
 ### Package Management
 
 ```bash
-uv pip install -e .      # Install in development mode
-uv pip install lite-agent # Install from PyPI
+uv add lite-agent # Install from PyPI
+uv add --dev lite-agent # Install dev package
 ```
 
 ## Project Architecture

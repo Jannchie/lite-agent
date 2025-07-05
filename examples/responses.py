@@ -3,7 +3,7 @@ from openai.types.responses.response_input_param import ResponseInputParam
 from rich import print  # noqa: A004
 
 from lite_agent.client import LiteLLMClient
-from lite_agent.stream_handlers.litellm import litellm_response_stream_handler
+from lite_agent.stream_handlers import litellm_response_stream_handler
 
 
 def get_temperature(city: str) -> str:
@@ -44,10 +44,11 @@ messages: ResponseInputParam = [
 async def main():
     client = LiteLLMClient(model="gpt-4.1-nano")
     resp = await client.responses(messages=messages, tools=fc.get_tools(), tool_choice="auto")
-
     handler_resp = litellm_response_stream_handler(resp)
     async for event in handler_resp:
         print(event)
+
+    # Close any remaining aiohttp sessions
 
 
 if __name__ == "__main__":

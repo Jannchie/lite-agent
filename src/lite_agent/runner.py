@@ -146,7 +146,7 @@ class Runner:
             return finish_reason == "stop"
 
         while not is_finish() and steps < max_steps:
-            if self.api == "completion":
+            if self.api == "-":
                 resp = await self.agent.completion(self.messages, record_to_file=record_to)
             else:
                 resp = await self.agent.responses(self.messages, record_to_file=record_to)

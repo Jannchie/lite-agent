@@ -1,4 +1,5 @@
 import abc
+import os
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
@@ -53,6 +54,8 @@ class LiteLLMClient(BaseLLMClient):
         tool_choice: Literal["none", "auto", "required"] = "auto",
     ) -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
         """Perform a response request to the Litellm API."""
+
+        os.environ["DISABLE_AIOHTTP_TRANSPORT"] = "True"
 
         return await litellm.aresponses(
             model=self.model,

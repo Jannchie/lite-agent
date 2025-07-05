@@ -7,10 +7,9 @@ from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
 from pydantic import BaseModel
 
-from examples.responses import litellm_response_stream_handler
-from lite_agent.client import BaseLLMClient, LiteLLMClient
+from lite_agent.client import BaseLLMClient, LiteLLMClient, ResponseInputParam
 from lite_agent.loggers import logger
-from lite_agent.stream_handlers import litellm_completion_stream_handler
+from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -181,7 +180,7 @@ class Agent:
             *converted_messages,
         ]
 
-    def prepare_responses_messages(self, messages: RunnerMessages) -> Sequence[dict]:
+    def prepare_responses_messages(self, messages: RunnerMessages) -> ResponseInputParam:
         """Prepare messages for responses API (no conversion, just add system message if needed)."""
         instructions = self.instructions
         if self.handoffs:

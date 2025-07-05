@@ -1,7 +1,7 @@
 """
-Rich chat history renderer for lite-agent.
+Chat display utilities for lite-agent.
 
-This module provides utilities to beautifully render chat history using the rich library.
+This module provides utilities to beautifully display chat history using the rich library.
 It supports all message types including user messages, assistant messages, function calls,
 and function call outputs.
 """
@@ -25,7 +25,7 @@ from lite_agent.types import (
 )
 
 
-def print_chat_history(
+def display_chat_history(
     messages: RunnerMessages,
     *,
     console: Console | None = None,
@@ -34,7 +34,7 @@ def print_chat_history(
     chat_width: int = 80,
 ) -> None:
     """
-    使用 rich 库美观地渲染聊天记录。
+    使用 rich 库美观地显示聊天记录。
 
     Args:
         messages: 要渲染的消息列表
@@ -45,11 +45,11 @@ def print_chat_history(
 
     Example:
         >>> from lite_agent.runner import Runner
-        >>> from lite_agent.rich_helpers import render_chat_history
+        >>> from lite_agent.chat_display import display_chat_history
         >>>
         >>> runner = Runner(agent=my_agent)
         >>> # ... add some messages ...
-        >>> render_chat_history(runner.messages)
+        >>> display_chat_history(runner.messages)
     """
     if console is None:
         console = Console()
@@ -440,7 +440,7 @@ def _render_unknown_message(
     )
 
 
-def create_chat_summary_table(messages: RunnerMessages) -> Table:
+def build_chat_summary_table(messages: RunnerMessages) -> Table:
     """
     创建聊天记录摘要表格。
 
@@ -488,7 +488,7 @@ def create_chat_summary_table(messages: RunnerMessages) -> Table:
     return table
 
 
-def print_chat_summary(messages: RunnerMessages, *, console: Console | None = None) -> None:
+def display_chat_summary(messages: RunnerMessages, *, console: Console | None = None) -> None:
     """
     打印聊天记录摘要。
 
@@ -499,11 +499,11 @@ def print_chat_summary(messages: RunnerMessages, *, console: Console | None = No
     if console is None:
         console = Console()
 
-    summary_table = create_chat_summary_table(messages)
+    summary_table = build_chat_summary_table(messages)
     console.print(summary_table)
 
 
-def print_messages(
+def display_messages(
     messages: RunnerMessages,
     *,
     console: Console | None = None,
@@ -521,11 +521,11 @@ def print_messages(
 
     Example:
         >>> from lite_agent.runner import Runner
-        >>> from lite_agent.rich_helpers import print_messages
+        >>> from lite_agent.chat_display import display_messages
         >>>
         >>> runner = Runner(agent=my_agent)
         >>> # ... add some messages ...
-        >>> print_messages(runner.messages)
+        >>> display_messages(runner.messages)
     """
     if console is None:
         console = Console()
@@ -535,7 +535,7 @@ def print_messages(
         return
 
     for i, message in enumerate(messages):
-        _print_single_message_compact(
+        _display_single_message_compact(
             message,
             index=i if show_indices else None,
             console=console,
@@ -543,7 +543,7 @@ def print_messages(
         )
 
 
-def _print_single_message_compact(
+def _display_single_message_compact(
     message: object,
     *,
     index: int | None = None,
@@ -562,40 +562,40 @@ def _print_single_message_compact(
 
     # 处理不同类型的消息
     if isinstance(message, AgentUserMessage):
-        _print_user_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_user_message_compact(message, index_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentAssistantMessage):
-        _print_assistant_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_assistant_message_compact(message, index_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentSystemMessage):
-        _print_system_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_system_message_compact(message, index_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentFunctionToolCallMessage):
-        _print_function_call_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_function_call_message_compact(message, index_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentFunctionCallOutput):
-        _print_function_output_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_function_output_message_compact(message, index_str, console, max_content_length, truncate_content)
     elif isinstance(message, dict):
-        _print_dict_message_compact(message, index_str, console, max_content_length)
+        _display_dict_message_compact(message, index_str, console, max_content_length)
     else:
-        _print_unknown_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_unknown_message_compact(message, index_str, console, max_content_length, truncate_content)
 
 
-def _print_user_message_compact(message: AgentUserMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_user_message_compact(message: AgentUserMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印用户消息的紧凑格式。"""
     content = truncate_content(str(message.content), max_content_length)
     console.print(f"{index_str}[blue]👤 User:[/blue] {content}")
 
 
-def _print_assistant_message_compact(message: AgentAssistantMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_assistant_message_compact(message: AgentAssistantMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印助手消息的紧凑格式。"""
     content = truncate_content(str(message.content), max_content_length)
     console.print(f"{index_str}[green]🤖 Assistant:[/green] {content}")
 
 
-def _print_system_message_compact(message: AgentSystemMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_system_message_compact(message: AgentSystemMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印系统消息的紧凑格式。"""
     content = truncate_content(str(message.content), max_content_length)
     console.print(f"{index_str}[yellow]💻 System:[/yellow] {content}")
 
 
-def _print_function_call_message_compact(message: AgentFunctionToolCallMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_function_call_message_compact(message: AgentFunctionToolCallMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印函数调用消息的紧凑格式。"""
     args_str = ""
     if message.arguments:
@@ -609,13 +609,13 @@ def _print_function_call_message_compact(message: AgentFunctionToolCallMessage, 
     console.print(f"{index_str}[magenta]🔨 Call:[/magenta] {message.name}{args_display}")
 
 
-def _print_function_output_message_compact(message: AgentFunctionCallOutput, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_function_output_message_compact(message: AgentFunctionCallOutput, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印函数输出消息的紧凑格式。"""
     output = truncate_content(str(message.output), max_content_length)
     console.print(f"{index_str}[cyan]📤 Output:[/cyan] {output}")
 
 
-def _print_unknown_message_compact(message: object, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_unknown_message_compact(message: object, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印未知类型消息的紧凑格式。"""
     try:
         content = str(message.model_dump()) if hasattr(message, "model_dump") else str(message)  # type: ignore[attr-defined]
@@ -626,7 +626,7 @@ def _print_unknown_message_compact(message: object, index_str: str, console: Con
     console.print(f"{index_str}[red]❓ Unknown:[/red] {content}")
 
 
-def _print_dict_message_compact(
+def _display_dict_message_compact(
     message: dict[str, object],
     index_str: str,
     console: Console,

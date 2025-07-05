@@ -10,6 +10,7 @@ class Usage(BaseModel):
     input_tokens: int
     output_tokens: int
 
+
 class CompletionRawEvent(BaseModel):
     """
     Define the type of chunk

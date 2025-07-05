@@ -87,7 +87,7 @@ Examples demonstrate various usage patterns:
 - `basic.py`: Simple agent with tool calling
 - `handoffs.py`: Agent-to-agent transfers
 - `context.py`: Context passing to tools
-- `rich_helpers_demo.py`: Rich console output formatting
+- `chat_display_demo.py`: Rich console output formatting
 - `channels/`: Channel-based communication patterns
 
 ### Testing Architecture

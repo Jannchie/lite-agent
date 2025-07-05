@@ -1,14 +1,14 @@
 """
-示例：使用 rich_helpers 美观渲染聊天记录
+示例：使用 chat_display 美观显示聊天记录
 
-这个示例展示了如何使用 rich_helpers 模块中的函数来美观地渲染聊天记录。
+这个示例展示了如何使用 chat_display 模块中的函数来美观地显示聊天记录。
 """
 
 import asyncio
 
-from lite_agent import print_messages
+from lite_agent import display_messages
 from lite_agent.agent import Agent
-from lite_agent.rich_helpers import print_chat_history, print_chat_summary
+from lite_agent.chat_display import display_chat_history, display_chat_summary
 from lite_agent.runner import Runner
 
 
@@ -98,20 +98,20 @@ async def create_sample_chat_history() -> Runner:
 
 
 async def main():
-    """主函数：演示 rich_helpers 的使用。"""
-    print("🎨 Rich Chat History Renderer Demo\n")
+    """主函数：演示 chat_display 的使用。"""
+    print("🎨 Chat Display Demo\n")
 
     # 创建示例聊天历史
     runner = await create_sample_chat_history()
 
     # 1. 展示聊天摘要
     print("📊 Chat Summary:")
-    print_chat_summary(runner.messages)
+    display_chat_summary(runner.messages)
     print()
 
     # 2. 渲染完整的聊天历史
     print("💬 Full Chat History:")
-    print_chat_history(runner.messages)
+    display_chat_history(runner.messages)
 
     # 3. 展示不同的渲染选项
     print("\n" + "=" * 60)
@@ -120,14 +120,14 @@ async def main():
 
     # 不显示时间戳和索引
     print("\n📝 Without timestamps and indices:")
-    print_chat_history(
+    display_chat_history(
         runner.messages,
         show_timestamps=False,
         show_indices=False,
     )
 
     # print demo
-    print_messages(
+    display_messages(
         runner.messages,
     )
 

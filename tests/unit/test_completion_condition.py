@@ -86,4 +86,3 @@ def test_wait_for_user_instructions_not_added_for_stop():
 
     # Check that wait_for_user instructions are not included
     assert "wait_for_user" not in system_message["content"].lower()
-

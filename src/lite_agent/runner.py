@@ -2,7 +2,7 @@ import json
 from collections.abc import AsyncGenerator, Sequence
 from os import PathLike
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
@@ -34,9 +34,10 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
 
 
 class Runner:
-    def __init__(self, agent: Agent) -> None:
+    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "completion") -> None:
         self.agent = agent
         self.messages: list[RunnerMessage] = []
+        self.api = api
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""
@@ -145,7 +146,10 @@ class Runner:
             return finish_reason == "stop"
 
         while not is_finish() and steps < max_steps:
-            resp = await self.agent.completion(self.messages, record_to_file=record_to)
+            if self.api == "completion":
+                resp = await self.agent.completion(self.messages, record_to_file=record_to)
+            else:
+                resp = await self.agent.responses(self.messages, record_to_file=record_to)
             async for chunk in resp:
                 if chunk.type in includes:
                     yield chunk
@@ -154,7 +158,7 @@ class Runner:
                 if chunk.type == "function_call":
                     self.messages.append(
                         AgentFunctionToolCallMessage(
-                            function_call_id=chunk.call_id,
+                            call_id=chunk.call_id,
                             name=chunk.name,
                             arguments=chunk.arguments or "",
                         ),
@@ -248,22 +252,22 @@ class Runner:
     def _find_pending_function_calls(self) -> list[AgentFunctionToolCallMessage]:
         """Find function call messages that don't have corresponding outputs yet."""
         function_calls: list[AgentFunctionToolCallMessage] = []
-        function_call_ids = set()
+        call_ids = set()
 
         # Collect all function call messages
         for msg in reversed(self.messages):
             if isinstance(msg, AgentFunctionToolCallMessage):
                 function_calls.append(msg)
-                function_call_ids.add(msg.function_call_id)
+                call_ids.add(msg.call_id)
             elif isinstance(msg, AgentFunctionCallOutput):
                 # Remove the corresponding function call from our list
-                function_call_ids.discard(msg.call_id)
+                call_ids.discard(msg.call_id)
             elif isinstance(msg, AgentAssistantMessage):
                 # Stop when we hit the assistant message that initiated these calls
                 break
 
         # Return only function calls that don't have outputs yet
-        return [fc for fc in function_calls if fc.function_call_id in function_call_ids]
+        return [fc for fc in function_calls if fc.call_id in call_ids]
 
     def _convert_function_calls_to_tool_calls(self, function_calls: list[AgentFunctionToolCallMessage]) -> list[ToolCall]:
         """Convert function call messages to ToolCall objects for compatibility."""
@@ -271,7 +275,7 @@ class Runner:
         tool_calls = []
         for fc in function_calls:
             tool_call = ToolCall(
-                id=fc.function_call_id,
+                id=fc.call_id,
                 type="function",
                 function=ToolCallFunction(
                     name=fc.name,
@@ -436,7 +440,7 @@ class Runner:
                 for tool_call in message.get("tool_calls", []):
                     function_call_msg = AgentFunctionToolCallMessage(
                         type="function_call",
-                        function_call_id=tool_call["id"],
+                        call_id=tool_call["id"],
                         name=tool_call["function"]["name"],
                         arguments=tool_call["function"]["arguments"],
                     )

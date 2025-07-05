@@ -171,7 +171,7 @@ class TestAppendMessage:
 
         assert isinstance(self.runner.messages[1], AgentFunctionToolCallMessage)
         assert self.runner.messages[1].type == "function_call"
-        assert self.runner.messages[1].function_call_id == "call_123"
+        assert self.runner.messages[1].call_id == "call_123"
         assert self.runner.messages[1].name == "get_weather"
         assert self.runner.messages[1].arguments == '{"city": "New York"}'
 

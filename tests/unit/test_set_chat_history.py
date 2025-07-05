@@ -64,7 +64,7 @@ class TestSetChatHistory:
             {"role": "assistant", "content": "Let me transfer you to our weather specialist."},
             {
                 "type": "function_call",
-                "function_call_id": "call_1",
+                "call_id": "call_1",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "WeatherAgent"}',
                 "content": "",
@@ -88,7 +88,7 @@ class TestSetChatHistory:
             {"role": "user", "content": "I need weather info"},
             {
                 "type": "function_call",
-                "function_call_id": "call_1",
+                "call_id": "call_1",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "WeatherAgent"}',
                 "content": "",
@@ -101,7 +101,7 @@ class TestSetChatHistory:
             {"role": "assistant", "content": "Weather info provided"},
             {
                 "type": "function_call",
-                "function_call_id": "call_2",
+                "call_id": "call_2",
                 "name": "transfer_to_parent",
                 "arguments": "{}",
                 "content": "",
@@ -125,7 +125,7 @@ class TestSetChatHistory:
             # Transfer to weather agent
             {
                 "type": "function_call",
-                "function_call_id": "call_1",
+                "call_id": "call_1",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "WeatherAgent"}',
                 "content": "",
@@ -139,7 +139,7 @@ class TestSetChatHistory:
             # Transfer back to parent
             {
                 "type": "function_call",
-                "function_call_id": "call_2",
+                "call_id": "call_2",
                 "name": "transfer_to_parent",
                 "arguments": "{}",
                 "content": "",
@@ -153,7 +153,7 @@ class TestSetChatHistory:
             # Transfer to temperature agent
             {
                 "type": "function_call",
-                "function_call_id": "call_3",
+                "call_id": "call_3",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "TemperatureAgent"}',
                 "content": "",
@@ -174,7 +174,7 @@ class TestSetChatHistory:
         """Test chat history setting with AgentFunctionToolCallMessage objects."""
         transfer_message = AgentFunctionToolCallMessage(
             type="function_call",
-            function_call_id="call_1",
+            call_id="call_1",
             name="transfer_to_agent",
             arguments='{"name": "WeatherAgent"}',
         )
@@ -202,7 +202,7 @@ class TestSetChatHistory:
             {"role": "user", "content": "Hello"},
             {
                 "type": "function_call",
-                "function_call_id": "call_1",
+                "call_id": "call_1",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "NonExistentAgent"}',
                 "content": "",
@@ -225,7 +225,7 @@ class TestSetChatHistory:
             {"role": "user", "content": "Hello"},
             {
                 "type": "function_call",
-                "function_call_id": "call_1",
+                "call_id": "call_1",
                 "name": "transfer_to_agent",
                 "arguments": "invalid_json",
                 "content": "",
@@ -256,7 +256,7 @@ class TestSetChatHistory:
             {"role": "user", "content": "Hello"},
             {
                 "type": "function_call",
-                "function_call_id": "call_1",
+                "call_id": "call_1",
                 "name": "transfer_to_parent",
                 "arguments": "{}",
                 "content": "",
@@ -317,7 +317,7 @@ class TestSetChatHistory:
         # Test AgentFunctionToolCallMessage
         function_call_msg = AgentFunctionToolCallMessage(
             type="function_call",
-            function_call_id="call_1",
+            call_id="call_1",
             name="test_function",
             arguments='{"test": "value"}',
         )

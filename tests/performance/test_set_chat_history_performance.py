@@ -46,7 +46,7 @@ def test_set_chat_history_performance():
             {"role": "assistant", "content": f"Response {i}"},
             {
                 "type": "function_call",
-                "function_call_id": f"call_{i}_1",
+                "call_id": f"call_{i}_1",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "Child1Agent"}',
                 "content": "",
@@ -59,7 +59,7 @@ def test_set_chat_history_performance():
             {"role": "assistant", "content": f"Child1 response {i}"},
             {
                 "type": "function_call",
-                "function_call_id": f"call_{i}_2",
+                "call_id": f"call_{i}_2",
                 "name": "transfer_to_parent",
                 "arguments": "{}",
                 "content": "",
@@ -71,7 +71,7 @@ def test_set_chat_history_performance():
             },
             {
                 "type": "function_call",
-                "function_call_id": f"call_{i}_3",
+                "call_id": f"call_{i}_3",
                 "name": "transfer_to_agent",
                 "arguments": '{"name": "Child2Agent"}',
                 "content": "",
@@ -84,7 +84,7 @@ def test_set_chat_history_performance():
             {"role": "assistant", "content": f"Child2 response {i}"},
             {
                 "type": "function_call",
-                "function_call_id": f"call_{i}_4",
+                "call_id": f"call_{i}_4",
                 "name": "transfer_to_parent",
                 "arguments": "{}",
                 "content": "",

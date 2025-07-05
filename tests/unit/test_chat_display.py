@@ -35,7 +35,7 @@ def test_render_chat_history_dict_messages():
         {"role": "assistant", "content": "Hi from dict"},
         {
             "type": "function_call",
-            "function_call_id": "call_123",
+            "call_id": "call_123",
             "name": "test_function",
             "arguments": '{"param": "value"}',
             "content": "",
@@ -80,7 +80,7 @@ def test_create_chat_summary_table():
         {"role": "system", "content": "System message"},
         {
             "type": "function_call",
-            "function_call_id": "call_1",
+            "call_id": "call_1",
             "name": "test_func",
             "arguments": "{}",
             "content": "",

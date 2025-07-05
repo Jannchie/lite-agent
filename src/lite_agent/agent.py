@@ -7,6 +7,7 @@ from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
 from pydantic import BaseModel
 
+from examples.responses import litellm_response_stream_handler
 from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_completion_stream_handler
@@ -162,31 +163,39 @@ class Agent:
             # Regenerate transfer tools to include the new agent
             self._add_transfer_tools(self.handoffs)
 
-    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict[str, str]]:
-        # Convert from responses format to completions format
+    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict]:
+        """Prepare messages for completions API (with conversion)."""
         converted_messages = self._convert_responses_to_completions_format(messages)
-
-        # Prepare instructions with handoff-specific additions
         instructions = self.instructions
-
-        # Add source instructions if this agent can handoff to others
         if self.handoffs:
             instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-
-        # Add target instructions if this agent can be handed off to (has a parent)
         if self.parent:
             instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-
-        # Add wait_for_user instructions if completion condition is "call"
         if self.completion_condition == "call":
             instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-
         return [
             AgentSystemMessage(
                 role="system",
                 content=f"You are {self.name}. {instructions}",
             ).model_dump(),
             *converted_messages,
+        ]
+
+    def prepare_responses_messages(self, messages: RunnerMessages) -> Sequence[dict]:
+        """Prepare messages for responses API (no conversion, just add system message if needed)."""
+        instructions = self.instructions
+        if self.handoffs:
+            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        if self.parent:
+            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        if self.completion_condition == "call":
+            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        return [
+            AgentSystemMessage(
+                role="system",
+                content=f"You are {self.name}. {instructions}",
+            ).model_dump(),
+            *[m.model_dump() if hasattr(m, "model_dump") else m for m in messages],  # type: ignore
         ]
 
     async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
@@ -196,6 +205,7 @@ class Agent:
             logger.debug(f"Applying message transfer callback for agent {self.name}")
             processed_messages = self.message_transfer(messages)
 
+        # For completions API, use prepare_completion_messages
         self.message_histories = self.prepare_completion_messages(processed_messages)
         tools = self.fc.get_tools(target="completion")
         resp = await self.client.completion(
@@ -209,6 +219,23 @@ class Agent:
             return litellm_completion_stream_handler(resp, record_to=record_to_file)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
+
+    async def responses(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+        # Apply message transfer callback if provided
+        processed_messages = messages
+        if self.message_transfer:
+            logger.debug(f"Applying message transfer callback for agent {self.name}")
+            processed_messages = self.message_transfer(messages)
+
+        # For responses API, use prepare_responses_messages (no conversion)
+        self.message_histories = self.prepare_responses_messages(processed_messages)
+        tools = self.fc.get_tools()
+        resp = await self.client.responses(
+            messages=self.message_histories,
+            tools=tools,
+            tool_choice="auto",  # TODO: make this configurable
+        )
+        return litellm_response_stream_handler(resp, record_to=record_to_file)
 
     async def list_require_confirm_tools(self, tool_calls: Sequence[ToolCall] | None) -> Sequence[ToolCall]:
         if not tool_calls:
@@ -279,7 +306,7 @@ class Agent:
 
                     if next_dict.get("type") == "function_call":
                         tool_call = {
-                            "id": next_dict["function_call_id"],  # type: ignore
+                            "id": next_dict["call_id"],  # type: ignore
                             "type": "function",
                             "function": {
                                 "name": next_dict["name"],  # type: ignore

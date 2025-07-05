@@ -36,7 +36,7 @@ class SystemMessageDict(TypedDict):
 
 class FunctionCallDict(TypedDict):
     type: Literal["function_call"]
-    function_call_id: str
+    call_id: str
     name: str
     arguments: str
     content: str
@@ -112,7 +112,7 @@ class AgentSystemMessage(BaseModel):
 class AgentFunctionToolCallMessage(BaseModel):
     type: Literal["function_call"] = "function_call"
     arguments: str
-    function_call_id: str
+    call_id: str
     name: str
 
 

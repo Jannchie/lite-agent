@@ -12,7 +12,7 @@ messages = [
     {"role": "user", "content": "今天天气怎么样?"},
     {
         "type": "function_call",
-        "function_call_id": "call_1",
+        "call_id": "call_1",
         "name": "get_weather",
         "arguments": '{"city": "北京"}',
         "content": "",

@@ -1,8 +1,9 @@
 import abc
+from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
 import litellm
-from litellm.responses.streaming_iterator import ResponsesAPIStreamingIterator
+from litellm.types.llms.openai import ResponsesAPIStreamingResponse
 from openai.types.chat import ChatCompletionToolParam
 from openai.types.responses import FunctionToolParam
 from openai.types.responses.response_input_param import ResponseInputParam
@@ -27,7 +28,7 @@ class BaseLLMClient(abc.ABC):
         messages: ResponseInputParam,
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
-    ) -> ResponsesAPIStreamingIterator:
+    ) -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
         """Perform a response request to the LLM."""
 
 
@@ -50,8 +51,9 @@ class LiteLLMClient(BaseLLMClient):
         messages: ResponseInputParam,
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
-    ) -> ResponsesAPIStreamingIterator:
+    ) -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
         """Perform a response request to the Litellm API."""
+
         return await litellm.aresponses(
             model=self.model,
             input=messages,

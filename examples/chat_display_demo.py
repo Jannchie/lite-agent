@@ -54,7 +54,7 @@ async def create_sample_chat_history() -> Runner:
     runner.append_message(
         {
             "type": "function_call",
-            "function_call_id": "call_123",
+            "call_id": "call_123",
             "name": "get_weather",
             "arguments": '{"city": "Tokyo"}',
             "content": "",
@@ -77,7 +77,7 @@ async def create_sample_chat_history() -> Runner:
     runner.append_message(
         {
             "type": "function_call",
-            "function_call_id": "call_456",
+            "call_id": "call_456",
             "name": "calculate",
             "arguments": '{"expression": "25 * 4 + 10"}',
             "content": "",

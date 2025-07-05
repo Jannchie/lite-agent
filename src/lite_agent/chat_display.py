@@ -224,7 +224,7 @@ def _render_function_call_message(
     table.add_column("Value", style="white")
 
     table.add_row("Name:", f"[bold]{message.name}[/bold]")
-    table.add_row("Call ID:", f"[dim]{message.function_call_id}[/dim]")
+    table.add_row("Call ID:", f"[dim]{message.call_id}[/dim]")
 
     if message.arguments:
         # 尝试格式化 JSON 参数 - 显示完整内容
@@ -379,7 +379,7 @@ def _render_dict_message(
         # 创建临时 AgentFunctionToolCallMessage 对象进行渲染
         temp_message = AgentFunctionToolCallMessage(
             type="function_call",
-            function_call_id=str(message.get("function_call_id", "")),
+            call_id=str(message.get("call_id", "")),
             name=str(message.get("name", "unknown")),
             arguments=str(message.get("arguments", "")),
         )

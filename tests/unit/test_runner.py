@@ -169,7 +169,7 @@ async def test_run_continue_stream_with_tool_calls():
     )
 
     function_call_msg = AgentFunctionToolCallMessage(
-        function_call_id="test_id",
+        call_id="test_id",
         name="test_tool",
         arguments="{}",
     )

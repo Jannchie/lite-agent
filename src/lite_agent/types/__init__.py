@@ -8,6 +8,7 @@ from .events import (
     FunctionCallDeltaEvent,
     FunctionCallEvent,
     FunctionCallOutputEvent,
+    ResponseRawEvent,
     Usage,
     UsageEvent,
 )
@@ -62,6 +63,7 @@ __all__ = [
     "MessageDict",
     "ResponseInputImage",
     "ResponseInputText",
+    "ResponseRawEvent",
     "RunnerMessage",
     "RunnerMessages",
     "SystemMessageDict",

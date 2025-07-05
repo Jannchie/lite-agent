@@ -23,7 +23,7 @@ def ensure_record_file(record_to: Path | None) -> Path | None:
     return record_to
 
 
-async def litellm_stream_handler(
+async def litellm_completion_stream_handler(
     resp: litellm.CustomStreamWrapper,
     record_to: Path | None = None,
 ) -> AsyncGenerator[AgentChunk, None]:

@@ -1,5 +1,5 @@
-from lite_agent.stream_handlers.litellm import litellm_stream_handler
+from lite_agent.stream_handlers.litellm import litellm_completion_stream_handler
 
 __all__ = [
-    "litellm_stream_handler",
+    "litellm_completion_stream_handler",
 ]

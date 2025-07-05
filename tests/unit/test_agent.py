@@ -23,14 +23,14 @@ async def test_stream_async_success():
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     fake_resp = MagicMock()
     with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=fake_resp)), patch("lite_agent.agent.CustomStreamWrapper", new=lambda x: True):
-        # Patch Agent模块作用域下的litellm_stream_handler
+        # Patch Agent模块作用域下的litellm_completion_stream_handler
         from collections.abc import AsyncGenerator
         from typing import Any
 
         async def fake_async_gen(*_args, **_kwargs) -> AsyncGenerator[Any, None]:  # type: ignore
             yield "GENERATOR"
 
-        with patch("lite_agent.agent.litellm_stream_handler", new=fake_async_gen), patch("lite_agent.agent.isinstance", new=lambda obj, typ: True):
+        with patch("lite_agent.agent.litellm_completion_stream_handler", new=fake_async_gen), patch("lite_agent.agent.isinstance", new=lambda obj, typ: True):
             result = await agent.completion([AgentUserMessage(role="user", content="hi")])
             assert hasattr(result, "__aiter__")
             items = []

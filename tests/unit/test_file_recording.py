@@ -1,5 +1,5 @@
 """
-测试 litellm_stream_handler 文件记录功能的单元测试
+测试 litellm_completion_stream_handler 文件记录功能的单元测试
 """
 
 import json
@@ -12,11 +12,11 @@ import aiofiles
 import pytest
 from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
-from lite_agent.stream_handlers.litellm import litellm_stream_handler
+from lite_agent.stream_handlers.litellm import litellm_completion_stream_handler
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_with_record_to_existing_directory():
+async def test_litellm_completion_stream_handler_with_record_to_existing_directory():
     """测试当记录目录存在时的文件记录功能"""
     with tempfile.TemporaryDirectory() as temp_dir:
         record_file = Path(temp_dir) / "test_record.jsonl"
@@ -43,8 +43,8 @@ async def test_litellm_stream_handler_with_record_to_existing_directory():
         mock_resp = AsyncMock()
         mock_resp.__aiter__ = lambda self: mock_response_stream()
 
-        # 测试 litellm_stream_handler 的文件记录功能
-        handler = litellm_stream_handler(mock_resp, record_to=record_file)
+        # 测试 litellm_completion_stream_handler 的文件记录功能
+        handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
 
         results = []
         async for chunk in handler:
@@ -66,7 +66,7 @@ async def test_litellm_stream_handler_with_record_to_existing_directory():
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_with_record_to_nonexistent_directory():
+async def test_litellm_completion_stream_handler_with_record_to_nonexistent_directory():
     """测试当记录目录不存在时的自动创建功能"""
     with tempfile.TemporaryDirectory() as temp_dir:
         # 创建一个不存在的子目录路径
@@ -98,8 +98,8 @@ async def test_litellm_stream_handler_with_record_to_nonexistent_directory():
         mock_resp = AsyncMock()
         mock_resp.__aiter__ = lambda self: mock_response_stream()
 
-        # 测试 litellm_stream_handler 的文件记录功能
-        handler = litellm_stream_handler(mock_resp, record_to=record_file)
+        # 测试 litellm_completion_stream_handler 的文件记录功能
+        handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
 
         results = []
         async for chunk in handler:
@@ -120,7 +120,7 @@ async def test_litellm_stream_handler_with_record_to_nonexistent_directory():
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_without_record_to():
+async def test_litellm_completion_stream_handler_without_record_to():
     """测试不使用文件记录功能时的正常运行"""
     # 创建模拟的 ModelResponseStream
     mock_stream = ModelResponseStream(
@@ -145,7 +145,7 @@ async def test_litellm_stream_handler_without_record_to():
     mock_resp.__aiter__ = lambda self: mock_response_stream()
 
     # 测试不使用 record_to 参数
-    handler = litellm_stream_handler(mock_resp, record_to=None)
+    handler = litellm_completion_stream_handler(mock_resp, record_to=None)
 
     results = []
     async for chunk in handler:
@@ -156,7 +156,7 @@ async def test_litellm_stream_handler_without_record_to():
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_record_multiple_chunks():
+async def test_litellm_completion_stream_handler_record_multiple_chunks():
     """测试记录多个数据块到文件"""
     with tempfile.TemporaryDirectory() as temp_dir:
         record_file = Path(temp_dir) / "multi_chunk_record.jsonl"
@@ -199,8 +199,8 @@ async def test_litellm_stream_handler_record_multiple_chunks():
         mock_resp = AsyncMock()
         mock_resp.__aiter__ = lambda self: mock_response_stream()
 
-        # 测试 litellm_stream_handler 的文件记录功能
-        handler = litellm_stream_handler(mock_resp, record_to=record_file)
+        # 测试 litellm_completion_stream_handler 的文件记录功能
+        handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
 
         results = []
         async for chunk in handler:
@@ -225,7 +225,7 @@ async def test_litellm_stream_handler_record_multiple_chunks():
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_with_deeply_nested_directory():
+async def test_litellm_completion_stream_handler_with_deeply_nested_directory():
     """测试创建深层嵌套目录"""
     with tempfile.TemporaryDirectory() as temp_dir:
         # 创建一个深层嵌套的目录路径
@@ -257,8 +257,8 @@ async def test_litellm_stream_handler_with_deeply_nested_directory():
         mock_resp = AsyncMock()
         mock_resp.__aiter__ = lambda self: mock_response_stream()
 
-        # 测试 litellm_stream_handler 的文件记录功能
-        handler = litellm_stream_handler(mock_resp, record_to=record_file)
+        # 测试 litellm_completion_stream_handler 的文件记录功能
+        handler = litellm_completion_stream_handler(mock_resp, record_to=record_file)
 
         results = []
         async for chunk in handler:
@@ -273,7 +273,7 @@ async def test_litellm_stream_handler_with_deeply_nested_directory():
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_record_with_string_path():
+async def test_litellm_completion_stream_handler_record_with_string_path():
     """测试使用字符串路径进行文件记录"""
     with tempfile.TemporaryDirectory() as temp_dir:
         record_path_str = str(Path(temp_dir) / "string_path_record.jsonl")
@@ -300,8 +300,8 @@ async def test_litellm_stream_handler_record_with_string_path():
         mock_resp = AsyncMock()
         mock_resp.__aiter__ = lambda self: mock_response_stream()
 
-        # 测试 litellm_stream_handler 的文件记录功能
-        handler = litellm_stream_handler(mock_resp, record_to=Path(record_path_str))
+        # 测试 litellm_completion_stream_handler 的文件记录功能
+        handler = litellm_completion_stream_handler(mock_resp, record_to=Path(record_path_str))
 
         results = []
         async for chunk in handler:

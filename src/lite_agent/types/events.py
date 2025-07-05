@@ -20,6 +20,15 @@ class CompletionRawEvent(BaseModel):
     raw: ModelResponseStream
 
 
+class ResponseRawEvent(BaseModel):
+    """
+    Define the type of response raw chunk
+    """
+
+    type: Literal["response_raw"] = "response_raw"
+    raw: object
+
+
 class UsageEvent(BaseModel):
     """
     Define the type of usage info chunk
@@ -80,10 +89,11 @@ class FunctionCallDeltaEvent(BaseModel):
     arguments_delta: str
 
 
-AgentChunk = CompletionRawEvent | UsageEvent | FunctionCallEvent | FunctionCallOutputEvent | ContentDeltaEvent | FunctionCallDeltaEvent | AssistantMessageEvent
+AgentChunk = CompletionRawEvent | ResponseRawEvent | UsageEvent | FunctionCallEvent | FunctionCallOutputEvent | ContentDeltaEvent | FunctionCallDeltaEvent | AssistantMessageEvent
 
 AgentChunkType = Literal[
     "completion_raw",
+    "response_raw",
     "usage",
     "function_call",
     "function_call_output",

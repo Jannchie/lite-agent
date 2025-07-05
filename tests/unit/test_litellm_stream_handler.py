@@ -6,7 +6,7 @@ from litellm.types.utils import Delta, ModelResponseStream, StreamingChoices
 
 import lite_agent.stream_handlers.litellm as handler_mod
 from lite_agent.stream_handlers.litellm import (
-    litellm_stream_handler,
+    litellm_completion_stream_handler,
 )
 from lite_agent.types import ToolCall, ToolCallFunction
 
@@ -50,7 +50,7 @@ class DummyFunction:
 
 @pytest.mark.asyncio
 async def test_chunk_handler_yields_usage():
-    import lite_agent.stream_handlers.litellm as litellm_stream_handler
+    import lite_agent.stream_handlers.litellm as litellm_completion_stream_handler
 
     chunk = MagicMock(spec=ModelResponseStream)
     chunk.usage = {"prompt_tokens": 10, "completion_tokens": 10}
@@ -59,7 +59,7 @@ async def test_chunk_handler_yields_usage():
     resp = MagicMock(spec=litellm.CustomStreamWrapper)
     resp.__aiter__.return_value = iter([chunk])
     results = []
-    async for c in litellm_stream_handler.litellm_stream_handler(resp):
+    async for c in litellm_completion_stream_handler.litellm_completion_stream_handler(resp):
         results.append(c)
 
 
@@ -71,12 +71,12 @@ async def test_chunk_handler_yields_completion_raw():
     resp = MagicMock(spec=litellm.CustomStreamWrapper)
     resp.__aiter__.return_value = iter([chunk])
     results = []
-    async for c in handler_mod.litellm_stream_handler(resp):
+    async for c in handler_mod.litellm_completion_stream_handler(resp):
         results.append(c)
     assert any(r.type == "completion_raw" for r in results)
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_handler_yields_require_confirm():
+async def test_litellm_completion_stream_handler_yields_require_confirm():
     resp = MagicMock(spec=litellm.CustomStreamWrapper)
-    litellm_stream_handler(resp)
+    litellm_completion_stream_handler(resp)

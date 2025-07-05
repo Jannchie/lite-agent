@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
-from lite_agent.stream_handlers import litellm_stream_handler
+from lite_agent.stream_handlers import litellm_completion_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -206,7 +206,7 @@ class Agent:
 
         # Ensure resp is a CustomStreamWrapper
         if isinstance(resp, CustomStreamWrapper):
-            return litellm_stream_handler(resp, record_to=record_to_file)
+            return litellm_completion_stream_handler(resp, record_to=record_to_file)
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 

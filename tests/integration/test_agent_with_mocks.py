@@ -33,7 +33,7 @@ agent = Agent(
     tools=[get_whether, get_temperature],
 )
 
-runner = Runner(agent)
+runner = Runner(agent, api="completion")
 
 
 @pytest.mark.asyncio
@@ -66,7 +66,7 @@ async def test_agent_without_mock_data_fails():
             tools=[get_whether, get_temperature],
         )
 
-        runner = Runner(agent)
+        runner = Runner(agent, api="completion")
 
         # This should raise FileNotFoundError since no mock data exists
         error_raised = False

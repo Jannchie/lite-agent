@@ -34,7 +34,7 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
 
 
 class Runner:
-    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "completion") -> None:
+    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "responses") -> None:
         self.agent = agent
         self.messages: list[RunnerMessage] = []
         self.api = api
@@ -146,10 +146,14 @@ class Runner:
             return finish_reason == "stop"
 
         while not is_finish() and steps < max_steps:
-            if self.api == "-":
-                resp = await self.agent.completion(self.messages, record_to_file=record_to)
-            else:
-                resp = await self.agent.responses(self.messages, record_to_file=record_to)
+            match self.api:
+                case "completion":
+                    resp = await self.agent.completion(self.messages, record_to_file=record_to)
+                case "responses":
+                    resp = await self.agent.responses(self.messages, record_to_file=record_to)
+                case _:
+                    msg = f"Unknown API type: {self.api}"
+                    raise ValueError(msg)
             async for chunk in resp:
                 if chunk.type in includes:
                     yield chunk
@@ -256,15 +260,16 @@ class Runner:
 
         # Collect all function call messages
         for msg in reversed(self.messages):
-            if isinstance(msg, AgentFunctionToolCallMessage):
-                function_calls.append(msg)
-                call_ids.add(msg.call_id)
-            elif isinstance(msg, AgentFunctionCallOutput):
-                # Remove the corresponding function call from our list
-                call_ids.discard(msg.call_id)
-            elif isinstance(msg, AgentAssistantMessage):
-                # Stop when we hit the assistant message that initiated these calls
-                break
+            match msg:
+                case AgentFunctionToolCallMessage():
+                    function_calls.append(msg)
+                    call_ids.add(msg.call_id)
+                case AgentFunctionCallOutput():
+                    # Remove the corresponding function call from our list
+                    call_ids.discard(msg.call_id)
+                case AgentAssistantMessage():
+                    # Stop when we hit the assistant message that initiated these calls
+                    break
 
         # Return only function calls that don't have outputs yet
         return [fc for fc in function_calls if fc.call_id in call_ids]

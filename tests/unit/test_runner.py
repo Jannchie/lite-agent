@@ -19,6 +19,11 @@ class DummyAgent(Agent):
 
         return async_gen()
 
+    async def responses(self, _message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
+        async def async_gen() -> AsyncGenerator[AgentChunk, None]:
+            yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
+        return async_gen()
+
 
 @pytest.mark.asyncio
 async def test_run_until_complete():
@@ -28,7 +33,7 @@ async def test_run_until_complete():
         yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
     mock_agent.completion = AsyncMock(side_effect=async_gen)
-    runner = Runner(agent=mock_agent)
+    runner = Runner(agent=mock_agent, api="completion")
     result = await runner.run_until_complete("hello")
     assert isinstance(result, list)
     assert len(result) == 1

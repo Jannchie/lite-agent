@@ -23,7 +23,6 @@ async def mock_acompletion(jsonl_file: str | Path, **_kwargs: object) -> AsyncGe
         Mock response objects from recorded data
     """
     record_path = Path(jsonl_file)
-
     if not record_path.exists():
         error_msg = f"No recorded response found at: {record_path}"
         raise FileNotFoundError(error_msg)
@@ -63,7 +62,7 @@ def create_litellm_mock(jsonl_file: str | Path):
         def __aiter__(self):
             return self._async_iterable.__aiter__()
 
-    async def mock_func(model, messages, **kwargs: object) -> MockCustomStreamWrapper:  # noqa: ARG001
+    async def mock_func(model, messages, **kwargs: object) -> MockCustomStreamWrapper:
         async def _gen() -> AsyncGenerator[ModelResponseStream, None]:
             async for response in mock_acompletion(jsonl_file, **kwargs):
                 yield response

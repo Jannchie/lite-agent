@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+from datetime import datetime, timezone
 from typing import Literal
 
 import litellm
@@ -15,6 +16,9 @@ from lite_agent.types import (
     ContentDeltaEvent,
     FunctionCallDeltaEvent,
     FunctionCallEvent,
+    LLMResponseMeta,
+    Timing,
+    TimingEvent,
     ToolCall,
     ToolCallFunction,
     Usage,
@@ -32,19 +36,29 @@ class CompletionEventProcessor:
         self.last_processed_chunk: ModelResponseStream | None = None
         self.yielded_content = False
         self.yielded_function = set()
+        self._start_time: datetime | None = None
+        self._first_output_time: datetime | None = None
+        self._output_complete_time: datetime | None = None
+        self._usage_time: datetime | None = None
+        self._usage_data: dict[str, int] = {}
 
-    async def process_chunk(  # noqa: C901, PLR0912
+    async def process_chunk(  # noqa: C901, PLR0912, PLR0915
         self,
         chunk: ModelResponseStream,
         record_file: AsyncTextIOWrapper | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
+        # Mark start time on first chunk
+        if self._start_time is None:
+            self._start_time = datetime.now(timezone.utc)
+
         if record_file:
             await record_file.write(chunk.model_dump_json() + "\n")
             await record_file.flush()
         yield CompletionRawEvent(raw=chunk)
-        usage_chunk = self.handle_usage_chunk(chunk)
-        if usage_chunk:
-            yield usage_chunk
+        usage_chunks = self.handle_usage_chunk(chunk)
+        if usage_chunks:
+            for usage_chunk in usage_chunks:
+                yield usage_chunk
             return
         if not chunk.choices:
             return
@@ -54,10 +68,28 @@ class CompletionEventProcessor:
         if delta.tool_calls:
             if not self.yielded_content:
                 self.yielded_content = True
+                end_time = datetime.now(timezone.utc)
+                latency_ms = None
+                output_time_ms = None
+                # latency_ms: 从开始准备输出到 LLM 输出第一个字符的时间差
+                if self._start_time and self._first_output_time:
+                    latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
+                # output_time_ms: 从输出第一个字符到输出完成的时间差
+                if self._first_output_time and self._output_complete_time:
+                    output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+
+                meta = LLMResponseMeta(
+                    sent_at=end_time,
+                    latency_ms=latency_ms,
+                    output_time_ms=output_time_ms,
+                    input_tokens=self._usage_data.get("input_tokens"),
+                    output_tokens=self._usage_data.get("output_tokens"),
+                )
                 yield AssistantMessageEvent(
                     message=AgentAssistantMessage(
                         role=self.current_message.role,
                         content=self.current_message.content,
+                        meta=meta,
                     ),
                 )
             first_tool_call = delta.tool_calls[0]
@@ -81,6 +113,9 @@ class CompletionEventProcessor:
         if not self.is_initialized:
             self.initialize_message(chunk, choice)
         if delta.content and self._current_message:
+            # Mark first output time if not already set
+            if self._first_output_time is None:
+                self._first_output_time = datetime.now(timezone.utc)
             self._current_message.content += delta.content
             yield ContentDeltaEvent(delta=delta.content)
         if delta.tool_calls is not None:
@@ -94,6 +129,10 @@ class CompletionEventProcessor:
                     arguments_delta=tool_call.function.arguments or "",
                 )
         if choice.finish_reason:
+            # Mark output complete time when finish_reason appears
+            if self._output_complete_time is None:
+                self._output_complete_time = datetime.now(timezone.utc)
+
             if self.current_message.tool_calls:
                 tool_call = self.current_message.tool_calls[-1]
                 yield FunctionCallEvent(
@@ -103,19 +142,62 @@ class CompletionEventProcessor:
                 )
             if not self.yielded_content:
                 self.yielded_content = True
+                end_time = datetime.now(timezone.utc)
+                latency_ms = None
+                output_time_ms = None
+                # latency_ms: 从开始准备输出到 LLM 输出第一个字符的时间差
+                if self._start_time and self._first_output_time:
+                    latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
+                # output_time_ms: 从输出第一个字符到输出完成的时间差
+                if self._first_output_time and self._output_complete_time:
+                    output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+
+                meta = LLMResponseMeta(
+                    sent_at=end_time,
+                    latency_ms=latency_ms,
+                    output_time_ms=output_time_ms,
+                    input_tokens=self._usage_data.get("input_tokens"),
+                    output_tokens=self._usage_data.get("output_tokens"),
+                )
                 yield AssistantMessageEvent(
                     message=AgentAssistantMessage(
                         role=self.current_message.role,
                         content=self.current_message.content,
+                        meta=meta,
                     ),
                 )
         self.last_processed_chunk = chunk
 
-    def handle_usage_chunk(self, chunk: ModelResponseStream) -> UsageEvent | None:
+    def handle_usage_chunk(self, chunk: ModelResponseStream) -> list[AgentChunk]:
         usage = getattr(chunk, "usage", None)
         if usage:
-            return UsageEvent(usage=Usage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"]))
-        return None
+            # Mark usage time
+            self._usage_time = datetime.now(timezone.utc)
+            # Store usage data for meta information
+            self._usage_data["input_tokens"] = usage["prompt_tokens"]
+            self._usage_data["output_tokens"] = usage["completion_tokens"]
+
+            results = []
+
+            # First yield usage event
+            results.append(UsageEvent(usage=Usage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"])))
+
+            # Then yield timing event if we have timing data
+            if self._start_time and self._first_output_time and self._output_complete_time:
+                latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
+                output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+
+                results.append(
+                    TimingEvent(
+                        timing=Timing(
+                            latency_ms=latency_ms,
+                            output_time_ms=output_time_ms,
+                        ),
+                    ),
+                )
+
+            return results
+        return []
 
     def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:
         """Initialize the message object"""

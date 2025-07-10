@@ -1,10 +1,10 @@
 import asyncio
 import logging
 
-from rich import print  # noqa: A004
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
+from lite_agent.chat_display import display_chat_history, display_messages
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -36,12 +36,12 @@ async def main():
     runner = Runner(agent)
     resp = runner.run(
         "What is the temperature in New York?",
-        includes=["usage", "assistant_message", "function_call", "function_call_output"],
-        record_to="tests/mocks/basic/1.jsonl",
+        includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],
     )
     async for chunk in resp:
         logger.info(chunk)
-    print(runner.messages)
+    display_chat_history(runner.messages)
+    display_messages(runner.messages)
 
 
 if __name__ == "__main__":

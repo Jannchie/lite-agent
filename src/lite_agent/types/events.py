@@ -11,6 +11,11 @@ class Usage(BaseModel):
     output_tokens: int
 
 
+class Timing(BaseModel):
+    latency_ms: int
+    output_time_ms: int
+
+
 class CompletionRawEvent(BaseModel):
     """
     Define the type of chunk
@@ -36,6 +41,15 @@ class UsageEvent(BaseModel):
 
     type: Literal["usage"] = "usage"
     usage: Usage
+
+
+class TimingEvent(BaseModel):
+    """
+    Define the type of timing info chunk
+    """
+
+    type: Literal["timing"] = "timing"
+    timing: Timing
 
 
 class AssistantMessageEvent(BaseModel):
@@ -67,6 +81,7 @@ class FunctionCallOutputEvent(BaseModel):
     tool_call_id: str
     name: str
     content: str
+    execution_time_ms: int | None = None
 
 
 class ContentDeltaEvent(BaseModel):
@@ -89,12 +104,13 @@ class FunctionCallDeltaEvent(BaseModel):
     arguments_delta: str
 
 
-AgentChunk = CompletionRawEvent | ResponseRawEvent | UsageEvent | FunctionCallEvent | FunctionCallOutputEvent | ContentDeltaEvent | FunctionCallDeltaEvent | AssistantMessageEvent
+AgentChunk = CompletionRawEvent | ResponseRawEvent | UsageEvent | TimingEvent | FunctionCallEvent | FunctionCallOutputEvent | ContentDeltaEvent | FunctionCallDeltaEvent | AssistantMessageEvent
 
 AgentChunkType = Literal[
     "completion_raw",
     "response_raw",
     "usage",
+    "timing",
     "function_call",
     "function_call_output",
     "content_delta",

@@ -9,6 +9,8 @@ from .events import (
     FunctionCallEvent,
     FunctionCallOutputEvent,
     ResponseRawEvent,
+    Timing,
+    TimingEvent,
     Usage,
     UsageEvent,
 )
@@ -21,9 +23,11 @@ from .messages import (
     AgentUserMessage,
     AssistantMessage,
     AssistantMessageDict,
+    BasicMessageMeta,
     FlexibleRunnerMessage,
     FunctionCallDict,
     FunctionCallOutputDict,
+    LLMResponseMeta,
     Message,
     MessageDict,
     ResponseInputImage,
@@ -36,6 +40,7 @@ from .messages import (
     UserMessageContentItemImageURLImageURL,
     UserMessageContentItemText,
     UserMessageDict,
+    messages_to_llm_format,
 )
 from .tool_calls import ToolCall, ToolCallFunction
 
@@ -51,6 +56,7 @@ __all__ = [
     "AssistantMessage",
     "AssistantMessageDict",
     "AssistantMessageEvent",
+    "BasicMessageMeta",
     "CompletionRawEvent",
     "ContentDeltaEvent",
     "FlexibleRunnerMessage",
@@ -59,6 +65,7 @@ __all__ = [
     "FunctionCallEvent",
     "FunctionCallOutputDict",
     "FunctionCallOutputEvent",
+    "LLMResponseMeta",
     "Message",
     "MessageDict",
     "ResponseInputImage",
@@ -67,6 +74,8 @@ __all__ = [
     "RunnerMessage",
     "RunnerMessages",
     "SystemMessageDict",
+    "Timing",
+    "TimingEvent",
     "ToolCall",
     "ToolCallFunction",
     "Usage",
@@ -76,4 +85,5 @@ __all__ = [
     "UserMessageContentItemImageURLImageURL",
     "UserMessageContentItemText",
     "UserMessageDict",
+    "messages_to_llm_format",
 ]

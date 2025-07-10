@@ -1,3 +1,4 @@
+import time
 from collections.abc import AsyncGenerator, Callable, Sequence
 from pathlib import Path
 from typing import Any, Optional
@@ -5,7 +6,6 @@ from typing import Any, Optional
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
-from pydantic import BaseModel
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient, ResponseInputParam
 from lite_agent.loggers import logger
@@ -176,7 +176,7 @@ class Agent:
             AgentSystemMessage(
                 role="system",
                 content=f"You are {self.name}. {instructions}",
-            ).model_dump(),
+            ).to_llm_dict(),
             *converted_messages,
         ]
 
@@ -193,8 +193,8 @@ class Agent:
             AgentSystemMessage(
                 role="system",
                 content=f"You are {self.name}. {instructions}",
-            ).model_dump(),
-            *[m.model_dump() if hasattr(m, "model_dump") else m for m in messages],  # type: ignore
+            ).to_llm_dict(),
+            *[m.to_llm_dict() if hasattr(m, "to_llm_dict") else m for m in messages],  # type: ignore
         ]
 
     async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
@@ -262,24 +262,31 @@ class Agent:
                     continue
 
             for tool_call in tool_calls:
+                yield FunctionCallEvent(
+                    call_id=tool_call.id,
+                    name=tool_call.function.name,
+                    arguments=tool_call.function.arguments or "",
+                )
+                start_time = time.time()
                 try:
-                    yield FunctionCallEvent(
-                        call_id=tool_call.id,
-                        name=tool_call.function.name,
-                        arguments=tool_call.function.arguments or "",
-                    )
                     content = await self.fc.call_function_async(tool_call.function.name, tool_call.function.arguments or "", context)
+                    end_time = time.time()
+                    execution_time_ms = int((end_time - start_time) * 1000)
                     yield FunctionCallOutputEvent(
                         tool_call_id=tool_call.id,
                         name=tool_call.function.name,
                         content=str(content),
+                        execution_time_ms=execution_time_ms,
                     )
-                except Exception as e:  # noqa: PERF203
+                except Exception as e:
                     logger.exception("Tool call %s failed", tool_call.id)
+                    end_time = time.time()
+                    execution_time_ms = int((end_time - start_time) * 1000)
                     yield FunctionCallOutputEvent(
                         tool_call_id=tool_call.id,
                         name=tool_call.function.name,
                         content=str(e),
+                        execution_time_ms=execution_time_ms,
                     )
 
     def _convert_responses_to_completions_format(self, messages: RunnerMessages) -> list[dict]:
@@ -289,7 +296,7 @@ class Agent:
 
         while i < len(messages):
             message = messages[i]
-            message_dict = message.model_dump() if isinstance(message, BaseModel) else message
+            message_dict = message.to_llm_dict() if hasattr(message, "to_llm_dict") else message
 
             message_type = message_dict.get("type")
             role = message_dict.get("role")
@@ -301,7 +308,7 @@ class Agent:
 
                 while j < len(messages):
                     next_message = messages[j]
-                    next_dict = next_message.model_dump() if isinstance(next_message, BaseModel) else next_message
+                    next_dict = next_message.to_llm_dict() if hasattr(next_message, "to_llm_dict") else next_message
 
                     if next_dict.get("type") == "function_call":
                         tool_call = {

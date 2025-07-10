@@ -7,8 +7,14 @@ and function call outputs.
 """
 
 import json
+import time
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
 
 from rich.console import Console
 from rich.panel import Panel
@@ -25,13 +31,95 @@ from lite_agent.types import (
 )
 
 
-def display_chat_history(
+def _get_local_timezone() -> timezone:
+    """
+    检测并返回用户本地时区。
+
+    Returns:
+        用户的本地时区对象
+    """
+    # 获取本地时区偏移（秒）
+    offset_seconds = -time.timezone if time.daylight == 0 else -time.altzone
+    # 转换为 timezone 对象
+    return timezone(timedelta(seconds=offset_seconds))
+
+
+def _get_timezone_by_name(timezone_name: str) -> timezone:  # noqa: PLR0911
+    """
+    根据时区名称获取时区对象。
+
+    Args:
+        timezone_name: 时区名称，支持：
+            - "local": 自动检测本地时区
+            - "UTC": UTC 时区
+            - "+8", "-5": UTC 偏移量（小时）
+            - "Asia/Shanghai", "America/New_York": IANA 时区名称（需要 zoneinfo）
+
+    Returns:
+        对应的时区对象
+    """
+    if timezone_name.lower() == "local":
+        return _get_local_timezone()
+    if timezone_name.upper() == "UTC":
+        return timezone.utc
+    if timezone_name.startswith(("+", "-")):
+        # 解析 UTC 偏移量，如 "+8", "-5"
+        try:
+            hours = int(timezone_name)
+            return timezone(timedelta(hours=hours))
+        except ValueError:
+            return _get_local_timezone()
+    # 尝试使用 zoneinfo (Python 3.9+)
+    elif ZoneInfo is not None:
+        try:
+            return ZoneInfo(timezone_name)
+        except Exception:
+            # 如果不支持 zoneinfo，返回本地时区
+            return _get_local_timezone()
+    else:
+        return _get_local_timezone()
+
+
+def _format_timestamp(
+    dt: datetime | None = None,
+    *,
+    local_timezone: timezone | None = None,
+    format_str: str = "%H:%M:%S",
+) -> str:
+    """
+    格式化时间戳，自动转换为本地时区。
+
+    Args:
+        dt: 要格式化的 datetime 对象，如果为 None 则使用当前时间
+        local_timezone: 本地时区，如果为 None 则自动检测
+        format_str: 时间格式字符串
+
+    Returns:
+        格式化后的时间字符串
+    """
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+
+    if local_timezone is None:
+        local_timezone = _get_local_timezone()
+
+    # 如果 datetime 对象没有时区信息，假设为 UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+
+    # 转换到本地时区
+    local_dt = dt.astimezone(local_timezone)
+    return local_dt.strftime(format_str)
+
+
+def display_chat_history(  # noqa: PLR0913
     messages: RunnerMessages,
     *,
     console: Console | None = None,
     show_timestamps: bool = True,
     show_indices: bool = True,
     chat_width: int = 80,
+    local_timezone: timezone | str | None = None,
 ) -> None:
     """
     使用 rich 库美观地显示聊天记录。
@@ -42,6 +130,7 @@ def display_chat_history(
         show_timestamps: 是否显示时间戳
         show_indices: 是否显示消息索引
         chat_width: 聊天气泡的最大宽度
+        local_timezone: 本地时区，支持 timezone 对象或字符串（如 "local", "UTC", "+8", "Asia/Shanghai"），如果为 None 则自动检测
 
     Example:
         >>> from lite_agent.runner import Runner
@@ -58,6 +147,12 @@ def display_chat_history(
         console.print("[dim]No messages to display[/dim]")
         return
 
+    # 处理时区参数
+    if local_timezone is None:
+        local_timezone = _get_local_timezone()
+    elif isinstance(local_timezone, str):
+        local_timezone = _get_timezone_by_name(local_timezone)
+
     console.print(f"\n[bold blue]Chat History[/bold blue] ([dim]{len(messages)} messages[/dim])\n")
 
     for i, message in enumerate(messages):
@@ -67,19 +162,32 @@ def display_chat_history(
             console=console,
             show_timestamp=show_timestamps,
             chat_width=chat_width,
+            local_timezone=local_timezone,
         )
 
 
-def _render_single_message(
+def _render_single_message(  # noqa: PLR0913, C901
     message: object,
     *,
     index: int | None = None,
     console: Console,
     show_timestamp: bool = True,
     chat_width: int = 80,
+    local_timezone: timezone | None = None,
 ) -> None:
     """渲染单个消息。"""
-    timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S") if show_timestamp else None
+    timestamp = None
+    if show_timestamp:
+        # 尝试从消息中获取时间戳，否则使用当前时间
+        message_time = None
+        if isinstance(message, AgentAssistantMessage) and message.meta and message.meta.sent_at:
+            message_time = message.meta.sent_at
+        elif isinstance(message, dict) and message.get("meta") and isinstance(message["meta"], dict):
+            sent_at = message["meta"].get("sent_at")
+            if isinstance(sent_at, datetime):
+                message_time = sent_at
+
+        timestamp = _format_timestamp(message_time, local_timezone=local_timezone)
 
     # 处理不同类型的消息
     if isinstance(message, AgentUserMessage):
@@ -108,7 +216,7 @@ def _render_user_message(
     """渲染用户消息 - 靠右显示的蓝色气泡。"""
     content = str(message.content)  # 显示完整内容，不截断
 
-    title_parts = ["👤 User"]
+    title_parts = ["User"]
     if index is not None:
         title_parts.append(f"#{index}")
     if timestamp:
@@ -144,17 +252,32 @@ def _render_assistant_message(
     """渲染助手消息 - 靠左显示的绿色气泡。"""
     content = message.content  # 显示完整内容，不截断
 
-    title_parts = ["🤖 Assistant"]
+    title_parts = ["Assistant"]
     if index is not None:
         title_parts.append(f"#{index}")
     if timestamp:
         title_parts.append(f"[dim]{timestamp}[/dim]")
 
+    # 添加 meta 数据信息（使用英文标签）
+    if message.meta:
+        meta_parts = []
+        if message.meta.latency_ms is not None:
+            meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
+        if message.meta.output_time_ms is not None:
+            meta_parts.append(f"Output:{message.meta.output_time_ms}ms")
+        if message.meta.input_tokens is not None and message.meta.output_tokens is not None:
+            total_tokens = message.meta.input_tokens + message.meta.output_tokens
+            meta_parts.append(f"Tokens:↑{message.meta.input_tokens}↓{message.meta.output_tokens}={total_tokens}")
+
+        if meta_parts:
+            title_parts.append(f"[dim]({' | '.join(meta_parts)})[/dim]")
+
     title = " ".join(title_parts)
 
-    # 计算内容的实际宽度，用于气泡大小
+    # 如果有 meta 数据，可能需要稍微增加宽度来容纳更长的标题
+    min_width_for_meta = len(title) - 20 if message.meta else 20  # 减去颜色标记的长度
     content_width = min(len(content) + 4, chat_width)  # +4 for padding
-    bubble_width = max(content_width, 20)  # 最小宽度
+    bubble_width = max(content_width, min_width_for_meta, 20)  # 最小宽度
 
     # 创建助手消息气泡 - 靠左
     panel = Panel(
@@ -180,7 +303,7 @@ def _render_system_message(
     """渲染系统消息 - 居中显示的黄色气泡。"""
     content = message.content  # 显示完整内容，不截断
 
-    title_parts = ["⚙️ System"]
+    title_parts = ["System"]
     if index is not None:
         title_parts.append(f"#{index}")
     if timestamp:
@@ -210,7 +333,7 @@ def _render_function_call_message(
     chat_width: int,
 ) -> None:
     """渲染函数调用消息 - 靠左显示的紫色气泡。"""
-    title_parts = ["🛠️ Function Call"]
+    title_parts = ["Function Call"]
     if index is not None:
         title_parts.append(f"#{index}")
     if timestamp:
@@ -257,7 +380,7 @@ def _render_function_output_message(
     chat_width: int,
 ) -> None:
     """渲染函数输出消息 - 靠左显示的青色气泡。"""
-    title_parts = ["📤 Function Output"]
+    title_parts = ["Function Output"]
     if index is not None:
         title_parts.append(f"#{index}")
     if timestamp:
@@ -302,7 +425,7 @@ def _render_role_based_dict_message(  # noqa: PLR0913
 
     title_parts = []
     if role == "user":
-        title_parts = ["👤 User"]
+        title_parts = ["User"]
         border_style = "blue"
         # 用户消息靠右
         content_width = min(len(content) + 4, chat_width)
@@ -322,19 +445,36 @@ def _render_role_based_dict_message(  # noqa: PLR0913
         )
         console.print(panel, justify="right")
     elif role == "assistant":
-        title_parts = ["🤖 Assistant"]
+        title_parts = ["Assistant"]
         border_style = "green"
-        # 助手消息靠左
-        content_width = min(len(content) + 4, chat_width)
-        bubble_width = max(content_width, 20)
         if index is not None:
             title_parts.append(f"#{index}")
         if timestamp:
             title_parts.append(f"[dim]{timestamp}[/dim]")
 
+        # 尝试从字典中提取 meta 数据
+        meta = message.get("meta")
+        if meta and isinstance(meta, dict):
+            meta_parts = []
+            if meta.get("latency_ms") is not None:
+                meta_parts.append(f"Latency:{meta['latency_ms']}ms")
+            if meta.get("output_time_ms") is not None:
+                meta_parts.append(f"Output:{meta['output_time_ms']}ms")
+            if meta.get("input_tokens") is not None and meta.get("output_tokens") is not None:
+                total_tokens = meta["input_tokens"] + meta["output_tokens"]
+                meta_parts.append(f"Tokens:↑{meta['input_tokens']}↓{meta['output_tokens']}={total_tokens}")
+
+            if meta_parts:
+                title_parts.append(f"[dim]({' | '.join(meta_parts)})[/dim]")
+
+        title = " ".join(title_parts)
+        min_width_for_meta = len(title) - 20 if meta else 20  # 减去颜色标记的长度
+        content_width = min(len(content) + 4, chat_width)
+        bubble_width = max(content_width, min_width_for_meta, 20)
+
         panel = Panel(
             content,
-            title=" ".join(title_parts),
+            title=title,
             title_align="left",
             border_style=border_style,
             padding=(0, 1),
@@ -343,7 +483,7 @@ def _render_role_based_dict_message(  # noqa: PLR0913
         # 助手消息靠左
         console.print(panel)
     else:  # system
-        title_parts = ["⚙️ System"]
+        title_parts = ["System"]
         border_style = "yellow"
         if index is not None:
             title_parts.append(f"#{index}")
@@ -413,7 +553,7 @@ def _render_unknown_message(
     chat_width: int,
 ) -> None:
     """渲染未知类型的消息 - 居中显示的红色气泡。"""
-    title_parts = ["❓ Unknown"]
+    title_parts = ["Unknown"]
     if index is not None:
         title_parts.append(f"#{index}")
     if timestamp:
@@ -464,11 +604,47 @@ def build_chat_summary_table(messages: RunnerMessages) -> Table:
         "Unknown": 0,
     }
 
+    # 统计 meta 数据
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_latency_ms = 0
+    total_output_time_ms = 0
+    assistant_with_meta_count = 0
+
     for message in messages:
         if isinstance(message, AgentUserMessage) or (isinstance(message, dict) and message.get("role") == "user"):
             counts["User"] += 1
         elif isinstance(message, AgentAssistantMessage) or (isinstance(message, dict) and message.get("role") == "assistant"):
             counts["Assistant"] += 1
+
+            # 收集 meta 数据
+            meta = None
+            if isinstance(message, AgentAssistantMessage) and message.meta:
+                meta = message.meta
+            elif isinstance(message, dict) and message.get("meta"):
+                meta = message["meta"]
+
+            if meta:
+                assistant_with_meta_count += 1
+                if hasattr(meta, "input_tokens"):
+                    if meta.input_tokens is not None:
+                        total_input_tokens += meta.input_tokens
+                    if meta.output_tokens is not None:
+                        total_output_tokens += meta.output_tokens
+                    if meta.latency_ms is not None:
+                        total_latency_ms += meta.latency_ms
+                    if meta.output_time_ms is not None:
+                        total_output_time_ms += meta.output_time_ms
+                elif isinstance(meta, dict):
+                    if meta.get("input_tokens") is not None:
+                        total_input_tokens += meta["input_tokens"]
+                    if meta.get("output_tokens") is not None:
+                        total_output_tokens += meta["output_tokens"]
+                    if meta.get("latency_ms") is not None:
+                        total_latency_ms += meta["latency_ms"]
+                    if meta.get("output_time_ms") is not None:
+                        total_output_time_ms += meta["output_time_ms"]
+
         elif isinstance(message, AgentSystemMessage) or (isinstance(message, dict) and message.get("role") == "system"):
             counts["System"] += 1
         elif isinstance(message, AgentFunctionToolCallMessage) or (isinstance(message, dict) and message.get("type") == "function_call"):
@@ -484,6 +660,23 @@ def build_chat_summary_table(messages: RunnerMessages) -> Table:
             table.add_row(msg_type, str(count))
 
     table.add_row("[bold]Total[/bold]", f"[bold]{len(messages)}[/bold]")
+
+    # 添加 meta 数据统计（使用文字而非 emoji）
+    if assistant_with_meta_count > 0:
+        table.add_row("", "")  # 空行分隔
+        table.add_row("[bold cyan]Performance Stats[/bold cyan]", "")
+
+        if total_input_tokens > 0 or total_output_tokens > 0:
+            total_tokens = total_input_tokens + total_output_tokens
+            table.add_row("Total Tokens", f"↑{total_input_tokens}↓{total_output_tokens}={total_tokens}")
+
+        if assistant_with_meta_count > 0 and total_latency_ms > 0:
+            avg_latency = total_latency_ms / assistant_with_meta_count
+            table.add_row("Avg Latency", f"{avg_latency:.1f}ms")
+
+        if assistant_with_meta_count > 0 and total_output_time_ms > 0:
+            avg_output_time = total_output_time_ms / assistant_with_meta_count
+            table.add_row("Avg Output Time", f"{avg_output_time:.1f}ms")
 
     return table
 
@@ -508,7 +701,9 @@ def display_messages(
     *,
     console: Console | None = None,
     show_indices: bool = True,
-    max_content_length: int = 100,
+    show_timestamps: bool = True,
+    max_content_length: int = 1000,
+    local_timezone: timezone | str | None = None,
 ) -> None:
     """
     以紧凑的单行格式打印消息列表。
@@ -517,7 +712,9 @@ def display_messages(
         messages: 要打印的消息列表
         console: Rich Console 实例，如果为 None 则创建新的
         show_indices: 是否显示消息索引
-        max_content_length: 内容的最大显示长度，超过会被截断
+        show_timestamps: 是否显示时间戳
+        max_content_length: 内容的最大显示长度，超过会被截断，默认1000（不截断）
+        local_timezone: 本地时区，支持 timezone 对象或字符串（如 "local", "UTC", "+8", "Asia/Shanghai"），如果为 None 则自动检测
 
     Example:
         >>> from lite_agent.runner import Runner
@@ -534,21 +731,31 @@ def display_messages(
         console.print("[dim]No messages to display[/dim]")
         return
 
+    # 处理时区参数
+    if local_timezone is None:
+        local_timezone = _get_local_timezone()
+    elif isinstance(local_timezone, str):
+        local_timezone = _get_timezone_by_name(local_timezone)
+
     for i, message in enumerate(messages):
         _display_single_message_compact(
             message,
             index=i if show_indices else None,
             console=console,
             max_content_length=max_content_length,
+            show_timestamp=show_timestamps,
+            local_timezone=local_timezone,
         )
 
 
-def _display_single_message_compact(
+def _display_single_message_compact(  # noqa: PLR0913
     message: object,
     *,
     index: int | None = None,
     console: Console,
     max_content_length: int = 100,
+    show_timestamp: bool = False,
+    local_timezone: timezone | None = None,
 ) -> None:
     """以紧凑格式打印单个消息。"""
 
@@ -558,44 +765,76 @@ def _display_single_message_compact(
             return content
         return content[: max_length - 3] + "..."
 
+    # 获取时间戳
+    timestamp = None
+    if show_timestamp:
+        message_time = None
+        if isinstance(message, AgentAssistantMessage) and message.meta and message.meta.sent_at:
+            message_time = message.meta.sent_at
+        elif isinstance(message, dict) and message.get("meta") and isinstance(message["meta"], dict):
+            sent_at = message["meta"].get("sent_at")
+            if isinstance(sent_at, datetime):
+                message_time = sent_at
+
+        timestamp = _format_timestamp(message_time, local_timezone=local_timezone)
+
+    timestamp_str = f"[{timestamp}] " if timestamp else ""
     index_str = f"#{index:2d} " if index is not None else ""
 
     # 处理不同类型的消息
     if isinstance(message, AgentUserMessage):
-        _display_user_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_user_message_compact(message, index_str, timestamp_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentAssistantMessage):
-        _display_assistant_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_assistant_message_compact(message, index_str, timestamp_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentSystemMessage):
-        _display_system_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_system_message_compact(message, index_str, timestamp_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentFunctionToolCallMessage):
-        _display_function_call_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_function_call_message_compact(message, index_str, timestamp_str, console, max_content_length, truncate_content)
     elif isinstance(message, AgentFunctionCallOutput):
-        _display_function_output_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_function_output_message_compact(message, index_str, timestamp_str, console, max_content_length, truncate_content)
     elif isinstance(message, dict):
-        _display_dict_message_compact(message, index_str, console, max_content_length)
+        _display_dict_message_compact(message, index_str, timestamp_str, console, max_content_length)
     else:
-        _display_unknown_message_compact(message, index_str, console, max_content_length, truncate_content)
+        _display_unknown_message_compact(message, index_str, timestamp_str, console, max_content_length, truncate_content)
 
 
-def _display_user_message_compact(message: AgentUserMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_user_message_compact(message: AgentUserMessage, index_str: str, timestamp_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印用户消息的紧凑格式。"""
     content = truncate_content(str(message.content), max_content_length)
-    console.print(f"{index_str}[blue]👤 User:[/blue] {content}")
+    console.print(f"{timestamp_str}{index_str}[blue]User:[/blue]")
+    console.print(f"  {content}")
 
 
-def _display_assistant_message_compact(message: AgentAssistantMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_assistant_message_compact(message: AgentAssistantMessage, index_str: str, timestamp_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印助手消息的紧凑格式。"""
     content = truncate_content(str(message.content), max_content_length)
-    console.print(f"{index_str}[green]🤖 Assistant:[/green] {content}")
+
+    # 添加 meta 数据信息（使用英文标签）
+    meta_info = ""
+    if message.meta:
+        meta_parts = []
+        if message.meta.latency_ms is not None:
+            meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
+        if message.meta.output_time_ms is not None:
+            meta_parts.append(f"Output:{message.meta.output_time_ms}ms")
+        if message.meta.input_tokens is not None and message.meta.output_tokens is not None:
+            total_tokens = message.meta.input_tokens + message.meta.output_tokens
+            meta_parts.append(f"Tokens:↑{message.meta.input_tokens}↓{message.meta.output_tokens}={total_tokens}")
+
+        if meta_parts:
+            meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
+
+    console.print(f"{timestamp_str}{index_str}[green]Assistant:[/green]{meta_info}")
+    console.print(f"  {content}")
 
 
-def _display_system_message_compact(message: AgentSystemMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_system_message_compact(message: AgentSystemMessage, index_str: str, timestamp_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印系统消息的紧凑格式。"""
     content = truncate_content(str(message.content), max_content_length)
-    console.print(f"{index_str}[yellow]💻 System:[/yellow] {content}")
+    console.print(f"{timestamp_str}{index_str}[yellow]System:[/yellow] {content}")
 
 
-def _display_function_call_message_compact(message: AgentFunctionToolCallMessage, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_function_call_message_compact(message: AgentFunctionToolCallMessage, index_str: str, timestamp_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印函数调用消息的紧凑格式。"""
     args_str = ""
     if message.arguments:
@@ -606,16 +845,16 @@ def _display_function_call_message_compact(message: AgentFunctionToolCallMessage
             args_str = f" {message.arguments}"
 
     args_display = truncate_content(args_str, max_content_length - len(message.name) - 10)
-    console.print(f"{index_str}[magenta]🔨 Call:[/magenta] {message.name}{args_display}")
+    console.print(f"{timestamp_str}{index_str}[magenta]Call:[/magenta] {message.name}{args_display}")
 
 
-def _display_function_output_message_compact(message: AgentFunctionCallOutput, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_function_output_message_compact(message: AgentFunctionCallOutput, index_str: str, timestamp_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印函数输出消息的紧凑格式。"""
     output = truncate_content(str(message.output), max_content_length)
-    console.print(f"{index_str}[cyan]📤 Output:[/cyan] {output}")
+    console.print(f"{timestamp_str}{index_str}[cyan]Output:[/cyan] {output}")
 
 
-def _display_unknown_message_compact(message: object, index_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
+def _display_unknown_message_compact(message: object, index_str: str, timestamp_str: str, console: Console, max_content_length: int, truncate_content: Callable[[str, int], str]) -> None:
     """打印未知类型消息的紧凑格式。"""
     try:
         content = str(message.model_dump()) if hasattr(message, "model_dump") else str(message)  # type: ignore[attr-defined]
@@ -623,12 +862,13 @@ def _display_unknown_message_compact(message: object, index_str: str, console: C
         content = str(message)
 
     content = truncate_content(content, max_content_length)
-    console.print(f"{index_str}[red]❓ Unknown:[/red] {content}")
+    console.print(f"{timestamp_str}{index_str}[red]Unknown:[/red] {content}")
 
 
-def _display_dict_message_compact(
+def _display_dict_message_compact(  # noqa: PLR0913
     message: dict[str, object],
     index_str: str,
+    timestamp_str: str,
     console: Console,
     max_content_length: int,
 ) -> None:
@@ -656,25 +896,49 @@ def _display_dict_message_compact(
                 args_str = f" {args}"
 
         args_display = truncate_content(args_str, max_content_length - len(name) - 10)
-        console.print(f"{index_str}[magenta]🛠️ Call:[/magenta] {name}{args_display}")
+        console.print(f"{timestamp_str}{index_str}[magenta]Call:[/magenta] {name}")
+        if args_display.strip():  # Only show args if they exist
+            console.print(f"  {args_display.strip()}")
 
     elif message_type == "function_call_output":
         output = truncate_content(str(message.get("output", "")), max_content_length)
-        console.print(f"{index_str}[cyan]📤 Output:[/cyan] {output}")
+        console.print(f"{timestamp_str}{index_str}[cyan]Output:[/cyan]")
+        console.print(f"  {output}")
 
     elif role == "user":
         content = truncate_content(str(message.get("content", "")), max_content_length)
-        console.print(f"{index_str}[blue]👤 User:[/blue] {content}")
+        console.print(f"{timestamp_str}{index_str}[blue]User:[/blue]")
+        console.print(f"  {content}")
 
     elif role == "assistant":
         content = truncate_content(str(message.get("content", "")), max_content_length)
-        console.print(f"{index_str}[green]🤖 Assistant:[/green] {content}")
+
+        # 添加 meta 数据信息（使用英文标签）
+        meta_info = ""
+        meta = message.get("meta")
+        if meta and isinstance(meta, dict):
+            meta_parts = []
+            if meta.get("latency_ms") is not None:
+                meta_parts.append(f"Latency:{meta['latency_ms']}ms")
+            if meta.get("output_time_ms") is not None:
+                meta_parts.append(f"Output:{meta['output_time_ms']}ms")
+            if meta.get("input_tokens") is not None and meta.get("output_tokens") is not None:
+                total_tokens = meta["input_tokens"] + meta["output_tokens"]
+                meta_parts.append(f"Tokens:↑{meta['input_tokens']}↓{meta['output_tokens']}={total_tokens}")
+
+            if meta_parts:
+                meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
+
+        console.print(f"{timestamp_str}{index_str}[green]Assistant:[/green]{meta_info}")
+        console.print(f"  {content}")
 
     elif role == "system":
         content = truncate_content(str(message.get("content", "")), max_content_length)
-        console.print(f"{index_str}[yellow]⚙️ System:[/yellow] {content}")
+        console.print(f"{timestamp_str}{index_str}[yellow]System:[/yellow]")
+        console.print(f"  {content}")
 
     else:
         # 未知类型的字典消息
         content = truncate_content(str(message), max_content_length)
-        console.print(f"{index_str}[red]❓ Unknown:[/red] {content}")
+        console.print(f"{timestamp_str}{index_str}[red]Unknown:[/red]")
+        console.print(f"  {content}")

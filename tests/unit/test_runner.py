@@ -22,6 +22,7 @@ class DummyAgent(Agent):
     async def responses(self, _message, record_to_file=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
+
         return async_gen()
 
 

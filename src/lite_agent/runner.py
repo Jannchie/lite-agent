@@ -1,5 +1,6 @@
 import json
 from collections.abc import AsyncGenerator, Sequence
+from datetime import datetime, timedelta, timezone
 from os import PathLike
 from pathlib import Path
 from typing import Any, Literal
@@ -21,6 +22,7 @@ from lite_agent.types import (
     ToolCallFunction,
     UserInput,
 )
+from lite_agent.types.messages import BasicMessageMeta
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
@@ -96,11 +98,13 @@ class Runner:
                 if tool_call_chunk.type in includes:
                     yield tool_call_chunk
                 # Create function call output in responses format
+                meta = BasicMessageMeta(execution_time_ms=tool_call_chunk.execution_time_ms)
                 self.messages.append(
                     AgentFunctionCallOutput(
                         type="function_call_output",
                         call_id=tool_call_chunk.tool_call_id,
                         output=tool_call_chunk.content,
+                        meta=meta,
                     ),
                 )
 
@@ -130,7 +134,7 @@ class Runner:
             self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: Any | None = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: PLR0912, ANN401, C901
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -167,6 +171,25 @@ class Runner:
                             arguments=chunk.arguments or "",
                         ),
                     )
+                if chunk.type == "usage":
+                    # Update the last assistant message with usage data and output_time_ms
+                    usage_time = datetime.now(timezone.utc)
+                    for i in range(len(self.messages) - 1, -1, -1):
+                        current_message = self.messages[i]
+                        if isinstance(current_message, AgentAssistantMessage):
+                            if hasattr(current_message.meta, "input_tokens"):
+                                current_message.meta.input_tokens = chunk.usage.input_tokens
+                                current_message.meta.output_tokens = chunk.usage.output_tokens
+                                # Calculate output_time_ms if latency_ms is available
+                                if current_message.meta.latency_ms is not None:
+                                    # We need to calculate from first output to usage time
+                                    # We'll calculate: usage_time - (sent_at - latency_ms)
+                                    # This gives us the time from first output to usage completion
+                                    # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
+                                    first_output_time_approx = current_message.meta.sent_at - timedelta(milliseconds=current_message.meta.latency_ms)
+                                    output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
+                                    current_message.meta.output_time_ms = max(0, output_time_ms)
+                            break
             pending_function_calls = self._find_pending_function_calls()
             if pending_function_calls:
                 # Convert to ToolCall format for existing handler

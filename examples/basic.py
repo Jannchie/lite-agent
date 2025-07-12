@@ -4,7 +4,7 @@ import logging
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
-from lite_agent.chat_display import display_chat_history, display_messages
+from lite_agent.chat_display import display_messages
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -20,7 +20,6 @@ logger.setLevel(logging.DEBUG)
 
 async def get_temperature(city: str) -> str:
     """Get the temperature for a city."""
-    await asyncio.sleep(1)
     return f"The temperature in {city} is 25°C."
 
 
@@ -40,7 +39,6 @@ async def main():
     )
     async for chunk in resp:
         logger.info(chunk)
-    display_chat_history(runner.messages)
     display_messages(runner.messages)
 
 

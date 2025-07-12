@@ -8,7 +8,6 @@ import asyncio
 
 from lite_agent import display_messages
 from lite_agent.agent import Agent
-from lite_agent.chat_display import display_chat_history, display_chat_summary
 from lite_agent.runner import Runner
 
 
@@ -103,28 +102,6 @@ async def main():
 
     # 创建示例聊天历史
     runner = await create_sample_chat_history()
-
-    # 1. 展示聊天摘要
-    print("📊 Chat Summary:")
-    display_chat_summary(runner.messages)
-    print()
-
-    # 2. 渲染完整的聊天历史
-    print("💬 Full Chat History:")
-    display_chat_history(runner.messages)
-
-    # 3. 展示不同的渲染选项
-    print("\n" + "=" * 60)
-    print("🎛️  Different Rendering Options:")
-    print("=" * 60)
-
-    # 不显示时间戳和索引
-    print("\n📝 Without timestamps and indices:")
-    display_chat_history(
-        runner.messages,
-        show_timestamps=False,
-        show_indices=False,
-    )
 
     # print demo
     display_messages(

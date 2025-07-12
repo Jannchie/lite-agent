@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .tool_calls import ToolCall
 
@@ -81,6 +81,14 @@ class ResponseInputImage(BaseModel):
     type: Literal["input_image"] = "input_image"
     file_id: str | None = None
     image_url: str | None = None
+
+    @model_validator(mode="after")
+    def validate_image_source(self) -> "ResponseInputImage":
+        """Ensure at least one of file_id or image_url is provided."""
+        if not self.file_id and not self.image_url:
+            msg = "ResponseInputImage must have either file_id or image_url"
+            raise ValueError(msg)
+        return self
 
 
 # Compatibility types for old completion API format

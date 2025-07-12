@@ -242,24 +242,13 @@ class TestResponseAPIFormat:
 
     def test_conversion_with_missing_image_data_raises_error(self):
         """测试既没有 image_url 也没有 file_id时会抛出异常"""
-        file_content = [
+        # 应该在创建对象时就抛出异常
+        with pytest.raises(ValueError, match="ResponseInputImage must have either file_id or image_url"):
             ResponseInputImage(
                 type="input_image",
                 detail="auto",
                 # 既没有 file_id 也没有 image_url
-            ),
-        ]
-
-        self.runner.append_message(
-            {
-                "role": "user",
-                "content": file_content,
-            },
-        )
-
-        # 应该抛出 ValueError 异常
-        with pytest.raises(ValueError, match="ResponseInputImage must have either file_id or image_url"):
-            self.agent._convert_responses_to_completions_format(self.runner.messages)
+            )
 
     def test_mixed_with_legacy_format(self):
         """测试新格式与传统格式的混合使用"""

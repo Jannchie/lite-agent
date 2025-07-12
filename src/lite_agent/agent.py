@@ -363,7 +363,7 @@ class Agent:
 
         return converted_messages
 
-    def _convert_user_content_to_completions_format(self, content: list) -> list:
+    def _convert_user_content_to_completions_format(self, content: list) -> list:  # noqa: C901
         """Convert user message content from Response API format to Completion API format."""
         # Handle the case where content might not actually be a list due to test mocking
         if type(content) is not list:  # Use type() instead of isinstance() to avoid test mocking issues
@@ -371,44 +371,52 @@ class Agent:
 
         converted_content = []
         for item in content:
-            if isinstance(item, dict):
-                item_type = item.get("type")
-                if item_type == "input_text":
-                    # Convert ResponseInputText to completion API format
-                    converted_content.append(
-                        {
-                            "type": "text",
-                            "text": item["text"],
-                        },
-                    )
-                elif item_type == "input_image":
-                    # Convert ResponseInputImage to completion API format
-                    if item.get("file_id"):
-                        msg = "File ID input is not supported for Completion API. Please use image_url instead of file_id for image input."
-                        raise ValueError(msg)
-
-                    if not item.get("image_url"):
-                        msg = "ResponseInputImage must have either file_id or image_url, but image_url is required for Completion API."
-                        raise ValueError(msg)
-
-                    # Build image_url object with detail inside
-                    image_data = {"url": item["image_url"]}
-                    detail = item.get("detail", "auto")
-                    if detail:  # Include detail if provided
-                        image_data["detail"] = detail
-
-                    converted_content.append(
-                        {
-                            "type": "image_url",
-                            "image_url": image_data,
-                        },
-                    )
-                else:
-                    # Keep existing format (text, image_url)
-                    converted_content.append(item)
+            # Convert Pydantic objects to dict first
+            if hasattr(item, "model_dump"):
+                item_dict = item.model_dump()
+            elif hasattr(item, "dict"):  # For older Pydantic versions
+                item_dict = item.dict()
+            elif isinstance(item, dict):
+                item_dict = item
             else:
                 # Handle non-dict items (shouldn't happen, but just in case)
                 converted_content.append(item)
+                continue
+
+            item_type = item_dict.get("type")
+            if item_type == "input_text":
+                # Convert ResponseInputText to completion API format
+                converted_content.append(
+                    {
+                        "type": "text",
+                        "text": item_dict["text"],
+                    },
+                )
+            elif item_type == "input_image":
+                # Convert ResponseInputImage to completion API format
+                if item_dict.get("file_id"):
+                    msg = "File ID input is not supported for Completion API"
+                    raise ValueError(msg)
+
+                if not item_dict.get("image_url"):
+                    msg = "ResponseInputImage must have either file_id or image_url"
+                    raise ValueError(msg)
+
+                # Build image_url object with detail inside
+                image_data = {"url": item_dict["image_url"]}
+                detail = item_dict.get("detail", "auto")
+                if detail:  # Include detail if provided
+                    image_data["detail"] = detail
+
+                converted_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": image_data,
+                    },
+                )
+            else:
+                # Keep existing format (text, image_url)
+                converted_content.append(item_dict)
 
         return converted_content
 

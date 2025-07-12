@@ -6,6 +6,7 @@ from typing import Any, Optional
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
+from pydantic import BaseModel
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient, ResponseInputParam
 from lite_agent.loggers import logger
@@ -296,7 +297,7 @@ class Agent:
 
         while i < len(messages):
             message = messages[i]
-            message_dict = message.to_llm_dict() if hasattr(message, "to_llm_dict") else message
+            message_dict = message.to_llm_dict() if isinstance(message, BaseModel) else message
 
             message_type = message_dict.get("type")
             role = message_dict.get("role")
@@ -308,7 +309,7 @@ class Agent:
 
                 while j < len(messages):
                     next_message = messages[j]
-                    next_dict = next_message.to_llm_dict() if hasattr(next_message, "to_llm_dict") else next_message
+                    next_dict = next_message.to_llm_dict() if isinstance(next_message, BaseModel) else next_message
 
                     if next_dict.get("type") == "function_call":
                         tool_call = {

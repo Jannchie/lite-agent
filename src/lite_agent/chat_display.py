@@ -30,6 +30,10 @@ from lite_agent.types import (
     BasicMessageMeta,
     FlexibleRunnerMessage,
     LLMResponseMeta,
+    NewAssistantMessage,
+    NewMessage,
+    NewSystemMessage,
+    NewUserMessage,
     RunnerMessages,
 )
 
@@ -218,7 +222,21 @@ def _analyze_messages(messages: RunnerMessages) -> tuple[dict[str, int], dict[st
 
 def _update_message_counts(message: FlexibleRunnerMessage, counts: dict[str, int]) -> None:
     """更新消息计数。"""
-    if isinstance(message, AgentUserMessage) or (isinstance(message, dict) and message.get("role") == "user"):
+    # Handle new message format first
+    if isinstance(message, NewUserMessage):
+        counts["User"] += 1
+    elif isinstance(message, NewAssistantMessage):
+        counts["Assistant"] += 1
+        # Count tool calls and outputs within the assistant message
+        for content_item in message.content:
+            if content_item.type == "tool_call":
+                counts["Function Call"] += 1
+            elif content_item.type == "tool_call_result":
+                counts["Function Output"] += 1
+    elif isinstance(message, NewSystemMessage):
+        counts["System"] += 1
+    # Handle legacy message format
+    elif isinstance(message, AgentUserMessage) or (isinstance(message, dict) and message.get("role") == "user"):
         counts["User"] += 1
     elif _is_assistant_message(message):
         counts["Assistant"] += 1
@@ -234,7 +252,8 @@ def _update_message_counts(message: FlexibleRunnerMessage, counts: dict[str, int
 
 def _is_assistant_message(message: FlexibleRunnerMessage) -> bool:
     """判断是否为助手消息。"""
-    return isinstance(message, AgentAssistantMessage) or (isinstance(message, dict) and message.get("role") == "assistant")
+    return (isinstance(message, (AgentAssistantMessage, NewAssistantMessage)) or
+            (isinstance(message, dict) and message.get("role") == "assistant"))
 
 
 def _extract_meta_data(message: FlexibleRunnerMessage, total_input: int, total_output: int, total_latency: int, total_output_time: int) -> tuple[int, int, int, int] | None:
@@ -245,6 +264,19 @@ def _extract_meta_data(message: FlexibleRunnerMessage, total_input: int, total_o
         更新后的统计数据元组，如果没有 meta 数据则返回 None
     """
     meta = None
+    if isinstance(message, NewAssistantMessage) and message.meta:
+        # Handle new message format
+        meta = message.meta
+        if meta.usage:
+            if meta.usage.input_tokens is not None:
+                total_input += meta.usage.input_tokens
+            if meta.usage.output_tokens is not None:
+                total_output += meta.usage.output_tokens
+        if meta.latency_ms is not None:
+            total_latency += meta.latency_ms
+        if meta.total_time_ms is not None:
+            total_output_time += meta.total_time_ms
+        return total_input, total_output, total_latency, total_output_time
     if isinstance(message, AgentAssistantMessage) and message.meta:
         meta = message.meta
     elif isinstance(message, dict) and message.get("meta"):
@@ -471,10 +503,12 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
     timestamp = None
     if show_timestamp:
         # 确保 message 是正确的类型
-        if isinstance(message, (AgentUserMessage, AgentAssistantMessage, AgentSystemMessage, AgentFunctionToolCallMessage, AgentFunctionCallOutput, dict)):
-            message_time = _extract_message_time(message)
-        else:
-            message_time = None
+        valid_types = (
+            AgentUserMessage, AgentAssistantMessage, AgentSystemMessage,
+            AgentFunctionToolCallMessage, AgentFunctionCallOutput,
+            NewUserMessage, NewAssistantMessage, NewSystemMessage, dict,
+        )
+        message_time = _extract_message_time(message) if isinstance(message, valid_types) else None
         timestamp = _format_timestamp(message_time, local_timezone=local_timezone if isinstance(local_timezone, timezone) else None)
 
     timestamp_str = f"[{timestamp}] " if timestamp else ""
@@ -491,7 +525,8 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
 
 def _extract_message_time(message: FlexibleRunnerMessage) -> datetime | None:
     """从消息中提取时间戳。"""
-    if isinstance(message, AgentAssistantMessage) and message.meta and message.meta.sent_at:
+    # Handle new message format first
+    if (isinstance(message, NewMessage) and message.meta and message.meta.sent_at) or (isinstance(message, AgentAssistantMessage) and message.meta and message.meta.sent_at):
         return message.meta.sent_at
     if isinstance(message, dict) and message.get("meta") and isinstance(message["meta"], dict):  # type: ignore[typeddict-item]
         sent_at = message["meta"].get("sent_at")  # type: ignore[typeddict-item]
@@ -502,7 +537,15 @@ def _extract_message_time(message: FlexibleRunnerMessage) -> datetime | None:
 
 def _dispatch_message_display(message: FlexibleRunnerMessage, context: MessageContext) -> None:
     """根据消息类型分发显示处理。"""
-    if isinstance(message, AgentUserMessage):
+    # Handle new message format first
+    if isinstance(message, NewUserMessage):
+        _display_new_user_message_compact(message, context)
+    elif isinstance(message, NewAssistantMessage):
+        _display_new_assistant_message_compact(message, context)
+    elif isinstance(message, NewSystemMessage):
+        _display_new_system_message_compact(message, context)
+    # Handle legacy message format
+    elif isinstance(message, AgentUserMessage):
         _display_user_message_compact_v2(message, context)
     elif isinstance(message, AgentAssistantMessage):
         _display_assistant_message_compact_v2(message, context)
@@ -667,3 +710,92 @@ def _display_dict_system_compact(message: dict, context: MessageContext) -> None
     content = context.truncate_content(str(message.get("content", "")), context.max_content_length)
     context.console.print(f"{context.timestamp_str}{context.index_str}[yellow]System:[/yellow]")
     context.console.print(f"{content}")
+
+
+# New message format display functions
+def _display_new_user_message_compact(message: NewUserMessage, context: MessageContext) -> None:
+    """显示新格式用户消息的紧凑格式。"""
+    # Combine all content into a single string
+    content_parts = []
+    for item in message.content:
+        if item.type == "text":
+            content_parts.append(item.text)
+        elif item.type == "image":
+            if item.image_url:
+                content_parts.append(f"[Image: {item.image_url}]")
+            elif item.file_id:
+                content_parts.append(f"[Image: {item.file_id}]")
+        elif item.type == "file":
+            file_name = item.file_name or item.file_id
+            content_parts.append(f"[File: {file_name}]")
+
+    content = " ".join(content_parts)
+    content = context.truncate_content(content, context.max_content_length)
+    context.console.print(f"{context.timestamp_str}{context.index_str}[blue]User:[/blue]")
+    context.console.print(f"{content}")
+
+
+def _display_new_system_message_compact(message: NewSystemMessage, context: MessageContext) -> None:
+    """显示新格式系统消息的紧凑格式。"""
+    content = context.truncate_content(message.content, context.max_content_length)
+    context.console.print(f"{context.timestamp_str}{context.index_str}[yellow]System:[/yellow]")
+    context.console.print(f"{content}")
+
+
+def _display_new_assistant_message_compact(message: NewAssistantMessage, context: MessageContext) -> None:
+    """显示新格式助手消息的紧凑格式。"""
+    # Extract text content and tool information
+    text_parts = []
+    tool_calls = []
+    tool_results = []
+
+    for item in message.content:
+        if item.type == "text":
+            text_parts.append(item.text)
+        elif item.type == "tool_call":
+            tool_calls.append(item)
+        elif item.type == "tool_call_result":
+            tool_results.append(item)
+
+    # Display text content first if available
+    if text_parts:
+        content = " ".join(text_parts)
+        content = context.truncate_content(content, context.max_content_length)
+
+        # Add meta data information (使用英文标签)
+        meta_info = ""
+        if message.meta:
+            meta_parts = []
+            if message.meta.latency_ms is not None:
+                meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
+            if message.meta.total_time_ms is not None:
+                meta_parts.append(f"Output:{message.meta.total_time_ms}ms")
+            if message.meta.usage and message.meta.usage.input_tokens is not None and message.meta.usage.output_tokens is not None:
+                total_tokens = message.meta.usage.input_tokens + message.meta.usage.output_tokens
+                meta_parts.append(f"Tokens:↑{message.meta.usage.input_tokens}↓{message.meta.usage.output_tokens}={total_tokens}")
+
+            if meta_parts:
+                meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
+
+        context.console.print(f"{context.timestamp_str}{context.index_str}[green]Assistant:[/green]{meta_info}")
+        context.console.print(f"{content}")
+
+    # Display tool calls
+    for tool_call in tool_calls:
+        args_str = ""
+        if tool_call.arguments:
+            try:
+                parsed_args = json.loads(tool_call.arguments) if isinstance(tool_call.arguments, str) else tool_call.arguments
+                args_str = f" {parsed_args}"
+            except (json.JSONDecodeError, TypeError):
+                args_str = f" {tool_call.arguments}"
+
+        args_display = context.truncate_content(args_str, context.max_content_length - len(tool_call.name) - 10)
+        context.console.print(f"{context.timestamp_str}{context.index_str}[magenta]Call:[/magenta]")
+        context.console.print(f"{tool_call.name}{args_display}")
+
+    # Display tool results
+    for tool_result in tool_results:
+        output = context.truncate_content(str(tool_result.output), context.max_content_length)
+        context.console.print(f"{context.timestamp_str}{context.index_str}[cyan]Output:[/cyan]")
+        context.console.print(f"{output}")

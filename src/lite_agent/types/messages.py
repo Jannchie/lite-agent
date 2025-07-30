@@ -333,7 +333,7 @@ AgentMessage = RunnerMessage | AgentSystemMessage
 
 # Enhanced type definitions for better type hints
 # Supports BaseModel instances, TypedDict, and plain dict
-FlexibleRunnerMessage = RunnerMessage | MessageDict | dict[str, Any]
+FlexibleRunnerMessage = RunnerMessage | NewMessage | MessageDict | dict[str, Any]
 RunnerMessages = Sequence[FlexibleRunnerMessage]
 
 # Type alias for user input - supports string, single message, or sequence of messages

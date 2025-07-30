@@ -1,5 +1,6 @@
+from typing import Any
+
 from funcall import Funcall
-from openai.types.responses.response_input_param import ResponseInputParam
 from rich import print  # noqa: A004
 
 from lite_agent.client import LiteLLMClient
@@ -18,7 +19,7 @@ def get_whether(city: str) -> str:
 
 fc = Funcall([get_temperature, get_whether])
 
-messages: ResponseInputParam = [
+messages: list[dict[str, Any]] = [
     {
         "role": "system",
         "content": "You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses.",

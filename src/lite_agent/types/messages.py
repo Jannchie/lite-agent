@@ -159,6 +159,12 @@ class NewUserMessage(BaseModel):
         content = self.content[0].text if len(self.content) == 1 and self.content[0].type == "text" else [item.model_dump() for item in self.content]
         return {"role": self.role, "content": content}
 
+    def to_response_dict(self) -> dict[str, Any]:
+        """Convert to dict for Response API"""
+        # Convert content to simplified format for Response API
+        content = self.content[0].text if len(self.content) == 1 and self.content[0].type == "text" else [item.model_dump() for item in self.content]
+        return {"role": self.role, "content": content}
+
 
 class NewSystemMessage(BaseModel):
     """System message"""
@@ -169,6 +175,10 @@ class NewSystemMessage(BaseModel):
 
     def to_llm_dict(self) -> dict[str, Any]:
         """Convert to dict for LLM API"""
+        return {"role": self.role, "content": self.content}
+
+    def to_response_dict(self) -> dict[str, Any]:
+        """Convert to dict for Response API"""
         return {"role": self.role, "content": self.content}
 
 
@@ -209,6 +219,16 @@ class NewAssistantMessage(BaseModel):
             result["tool_calls"] = tool_calls
 
         return result
+
+    def to_response_dict(self) -> dict[str, Any]:
+        """Convert to dict for Response API (excludes tool_calls)."""
+        # For Response API, only include text content, no tool_calls
+        text_parts = [item.text for item in self.content if item.type == "text"]
+
+        return {
+            "role": self.role,
+            "content": " ".join(text_parts) if text_parts else "",
+        }
 
 
 # Union type for new structured messages
@@ -364,20 +384,22 @@ def convert_legacy_to_new(messages: Sequence[RunnerMessage]) -> list[NewMessage]
         if isinstance(message, AgentUserMessage):
             # Convert user message
             if isinstance(message.content, str):
-                content = [UserTextContent(text=message.content)]
+                user_content: list[UserMessageContent] = [UserTextContent(text=message.content)]
             else:
-                content = []
+                user_content: list[UserMessageContent] = []
                 for item in message.content:
                     if hasattr(item, "text"):
-                        content.append(UserTextContent(text=item.text))
+                        user_content.append(UserTextContent(text=getattr(item, "text", "")))
                     elif hasattr(item, "image_url"):
-                        image_url = item.image_url.url if hasattr(item.image_url, "url") else str(item.image_url)
-                        content.append(UserImageContent(image_url=image_url))
+                        image_url_attr = getattr(item, "image_url", None)
+                        if image_url_attr is not None:
+                            image_url = getattr(image_url_attr, "url", str(image_url_attr)) if hasattr(image_url_attr, "url") else str(image_url_attr)
+                            user_content.append(UserImageContent(image_url=image_url))
                     # Add more conversion logic as needed
 
             result.append(
                 NewUserMessage(
-                    content=content,
+                    content=user_content,
                     meta=MessageMeta(sent_at=message.meta.sent_at),
                 ),
             )
@@ -392,18 +414,18 @@ def convert_legacy_to_new(messages: Sequence[RunnerMessage]) -> list[NewMessage]
 
         elif isinstance(message, AgentAssistantMessage):
             # Look ahead for related tool calls and results
-            content: list[AssistantMessageContent] = []
+            assistant_content: list[AssistantMessageContent] = []
 
             # Add text content
             if message.content:
-                content.append(AssistantTextContent(text=message.content))
+                assistant_content.append(AssistantTextContent(text=message.content))
 
             # Collect tool calls and results that follow
             j = i + 1
             while j < len(messages):
                 next_message = messages[j]
                 if isinstance(next_message, AgentFunctionToolCallMessage):
-                    content.append(
+                    assistant_content.append(
                         AssistantToolCall(
                             call_id=next_message.call_id,
                             name=next_message.name,
@@ -413,7 +435,7 @@ def convert_legacy_to_new(messages: Sequence[RunnerMessage]) -> list[NewMessage]
                     j += 1
                 elif isinstance(next_message, AgentFunctionCallOutput):
                     # Find matching tool call
-                    content.append(
+                    assistant_content.append(
                         AssistantToolCallResult(
                             call_id=next_message.call_id,
                             output=next_message.output,
@@ -439,7 +461,7 @@ def convert_legacy_to_new(messages: Sequence[RunnerMessage]) -> list[NewMessage]
 
             result.append(
                 NewAssistantMessage(
-                    content=content,
+                    content=assistant_content,
                     meta=assistant_meta,
                 ),
             )

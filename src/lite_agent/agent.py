@@ -8,10 +8,10 @@ from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
 from pydantic import BaseModel
 
-from lite_agent.client import BaseLLMClient, LiteLLMClient, ResponseInputParam
+from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
-from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall
+from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, NewMessages, RunnerMessages, ToolCall
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
@@ -181,7 +181,7 @@ class Agent:
             *converted_messages,
         ]
 
-    def prepare_responses_messages(self, messages: RunnerMessages) -> ResponseInputParam:
+    def prepare_responses_messages(self, messages: RunnerMessages) -> list[dict[str, Any]]:
         """Prepare messages for responses API (no conversion, just add system message if needed)."""
         instructions = self.instructions
         if self.handoffs:
@@ -198,8 +198,56 @@ class Agent:
             *[m.to_llm_dict() if hasattr(m, "to_llm_dict") else m for m in messages],  # type: ignore
         ]
 
-    async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
-        # Apply message transfer callback if provided
+    def prepare_completion_messages_new(self, messages: NewMessages) -> list[dict]:
+        """Prepare new format messages for completions API."""
+        instructions = self.instructions
+        if self.handoffs:
+            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        if self.parent:
+            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        if self.completion_condition == "call":
+            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+
+        # Convert new messages to completion format
+        completion_messages = [message.to_llm_dict() for message in messages]
+
+        return [
+            AgentSystemMessage(
+                role="system",
+                content=f"You are {self.name}. {instructions}",
+            ).to_llm_dict(),
+            *completion_messages,
+        ]
+
+    def prepare_responses_messages_new(self, messages: NewMessages) -> list[dict[str, Any]]:
+        """Prepare new format messages for responses API."""
+        instructions = self.instructions
+        if self.handoffs:
+            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        if self.parent:
+            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        if self.completion_condition == "call":
+            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+
+        # Convert new messages to response format (without tool_calls for Response API)
+        response_messages = []
+        for message in messages:
+            if hasattr(message, "to_response_dict"):
+                response_messages.append(message.to_response_dict())
+            else:
+                # For non-assistant messages, use regular to_llm_dict
+                response_messages.append(message.to_llm_dict())
+
+        return [
+            AgentSystemMessage(
+                role="system",
+                content=f"You are {self.name}. {instructions}",
+            ).to_llm_dict(),
+            *response_messages,
+        ]
+
+    async def completion(self, messages: RunnerMessages | NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+        # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
             logger.debug(f"Applying message transfer callback for agent {self.name}")
@@ -207,6 +255,7 @@ class Agent:
 
         # For completions API, use prepare_completion_messages
         self.message_histories = self.prepare_completion_messages(processed_messages)
+
         tools = self.fc.get_tools(target="completion")
         resp = await self.client.completion(
             messages=self.message_histories,
@@ -220,8 +269,8 @@ class Agent:
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
-    async def responses(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
-        # Apply message transfer callback if provided
+    async def responses(self, messages: RunnerMessages | NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+        # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
             logger.debug(f"Applying message transfer callback for agent {self.name}")

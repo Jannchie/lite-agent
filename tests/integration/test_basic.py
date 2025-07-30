@@ -18,7 +18,7 @@ agent = Agent(
     instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses.",
     tools=[get_temperature],
 )
-runner = Runner(agent)
+runner = Runner(agent, api="completion")
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,6 @@ import litellm
 from litellm.types.llms.openai import ResponsesAPIStreamingResponse
 from openai.types.chat import ChatCompletionToolParam
 from openai.types.responses import FunctionToolParam
-from openai.types.responses.response_input_param import ResponseInputParam
 
 
 class BaseLLMClient(abc.ABC):
@@ -26,7 +25,7 @@ class BaseLLMClient(abc.ABC):
     @abc.abstractmethod
     async def responses(
         self,
-        messages: ResponseInputParam,
+        messages: list[dict[str, Any]],  # Changed from ResponseInputParam
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
     ) -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
@@ -49,7 +48,7 @@ class LiteLLMClient(BaseLLMClient):
 
     async def responses(
         self,
-        messages: ResponseInputParam,
+        messages: list[dict[str, Any]],  # Changed from ResponseInputParam
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
     ) -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:

@@ -39,8 +39,8 @@ runner = Runner(agent, api="completion")
 @pytest.mark.asyncio
 async def test_agent_with_mock_data():
     """Test the agent using real mock data generated from basic.py."""
-    mock1 = create_litellm_mock("tests/mocks/confirm_and_continue/1.jsonl")
-    mock2 = create_litellm_mock("tests/mocks/confirm_and_continue/2.jsonl")
+    mock1 = create_litellm_mock("tests/mocks/basic/1.jsonl")
+    mock2 = create_litellm_mock("tests/mocks/basic/1.jsonl")  # 使用同一个文件作为示例
     with patch("lite_agent.client.litellm.acompletion", mock1):
         await runner.run_until_complete(
             "What is the weather in New York? And what is the temperature there?",

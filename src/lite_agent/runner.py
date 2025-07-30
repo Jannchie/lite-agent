@@ -8,11 +8,11 @@ from typing import Any, Literal
 from lite_agent.agent import Agent
 from lite_agent.loggers import logger
 from lite_agent.types import (
-    AgentAssistantMessage,
     AgentChunk,
     AgentChunkType,
     AgentFunctionCallOutput,
     AgentFunctionToolCallMessage,
+    AssistantMessageContent,
     AssistantMessageMeta,
     AssistantTextContent,
     AssistantToolCall,
@@ -30,6 +30,7 @@ from lite_agent.types import (
     ToolCallFunction,
     UserImageContent,
     UserInput,
+    UserMessageContent,
     UserTextContent,
     convert_legacy_to_new,
     convert_new_to_legacy,
@@ -64,9 +65,9 @@ class Runner:
             meta = AssistantMessageMeta()
 
         # Always add text content, even if empty (we can update it later)
-        content_items = [AssistantTextContent(text=content)]
+        assistant_content_items: list[AssistantMessageContent] = [AssistantTextContent(text=content)]
         self._current_assistant_message = NewAssistantMessage(
-            content=content_items,
+            content=assistant_content_items,
             meta=meta,
         )
 
@@ -75,7 +76,8 @@ class Runner:
         if self._current_assistant_message is None:
             self._start_assistant_message()
 
-        self._current_assistant_message.content.append(content_item)
+        if self._current_assistant_message is not None:
+            self._current_assistant_message.content.append(content_item)
 
     def _finalize_assistant_message(self) -> None:
         """Finalize the current assistant message and add it to messages."""
@@ -192,9 +194,10 @@ class Runner:
 
         while not is_finish() and steps < max_steps:
             logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
-            # Convert to legacy format for agent communication
+            # Convert to legacy format only when needed for LLM communication
+            # This allows us to keep the new format internally but ensures compatibility
+            logger.debug(f"Converting {len(self.messages)} new format messages to legacy for LLM:")
             legacy_messages = self.legacy_messages
-            logger.debug(f"Sending {len(legacy_messages)} legacy messages to agent:")
             for i, msg in enumerate(legacy_messages):
                 logger.debug(f"  {i}: {msg.__class__.__name__} - {getattr(msg, 'role', getattr(msg, 'type', 'unknown'))}")
             match self.api:
@@ -343,26 +346,35 @@ class Runner:
 
     def _find_pending_function_calls(self) -> list[AgentFunctionToolCallMessage]:
         """Find function call messages that don't have corresponding outputs yet."""
-        # Convert to legacy format and find pending calls
-        legacy_messages = self.legacy_messages
+        # Find pending calls directly in new format messages
         function_calls: list[AgentFunctionToolCallMessage] = []
-        call_ids = set()
 
-        # Collect all function call messages
-        for msg in reversed(legacy_messages):
-            match msg:
-                case AgentFunctionToolCallMessage():
-                    function_calls.append(msg)
-                    call_ids.add(msg.call_id)
-                case AgentFunctionCallOutput():
-                    # Remove the corresponding function call from our list
-                    call_ids.discard(msg.call_id)
-                case AgentAssistantMessage():
-                    # Stop when we hit the assistant message that initiated these calls
-                    break
+        # Look at the last assistant message for pending tool calls
+        if not self.messages:
+            return function_calls
 
-        # Return only function calls that don't have outputs yet
-        return [fc for fc in function_calls if fc.call_id in call_ids]
+        last_message = self.messages[-1]
+        if not isinstance(last_message, NewAssistantMessage):
+            return function_calls
+
+        # Collect tool calls and results from the last assistant message
+        tool_calls = {}
+        tool_results = set()
+
+        for content_item in last_message.content:
+            if content_item.type == "tool_call":
+                # Convert to legacy format for compatibility
+                legacy_call = AgentFunctionToolCallMessage(
+                    call_id=content_item.call_id,
+                    name=content_item.name,
+                    arguments=content_item.arguments if isinstance(content_item.arguments, str) else str(content_item.arguments),
+                )
+                tool_calls[content_item.call_id] = legacy_call
+            elif content_item.type == "tool_call_result":
+                tool_results.add(content_item.call_id)
+
+        # Return tool calls that don't have corresponding results
+        return [call for call_id, call in tool_calls.items() if call_id not in tool_results]
 
     def _convert_function_calls_to_tool_calls(self, function_calls: list[AgentFunctionToolCallMessage]) -> list[ToolCall]:
         """Convert function call messages to ToolCall objects for compatibility."""
@@ -576,21 +588,21 @@ class Runner:
                     user_message = NewUserMessage(content=[UserTextContent(text=content)])
                 elif isinstance(content, list):
                     # Handle complex content array
-                    content_items = []
+                    user_content_items: list[UserMessageContent] = []
                     for item in content:
                         if isinstance(item, dict):
                             item_type = item.get("type")
                             if item_type in {"input_text", "text"}:
-                                content_items.append(UserTextContent(text=item.get("text", "")))
+                                user_content_items.append(UserTextContent(text=item.get("text", "")))
                             elif item_type in {"input_image", "image_url"}:
                                 if item_type == "image_url":
                                     # Handle completion API format
                                     image_url = item.get("image_url", {})
                                     url = image_url.get("url", "") if isinstance(image_url, dict) else str(image_url)
-                                    content_items.append(UserImageContent(image_url=url))
+                                    user_content_items.append(UserImageContent(image_url=url))
                                 else:
                                     # Handle response API format
-                                    content_items.append(
+                                    user_content_items.append(
                                         UserImageContent(
                                             image_url=item.get("image_url"),
                                             file_id=item.get("file_id"),
@@ -600,9 +612,9 @@ class Runner:
                         elif hasattr(item, "type"):
                             # Handle Pydantic models
                             if item.type == "input_text":
-                                content_items.append(UserTextContent(text=item.text))
+                                user_content_items.append(UserTextContent(text=item.text))
                             elif item.type == "input_image":
-                                content_items.append(
+                                user_content_items.append(
                                     UserImageContent(
                                         image_url=getattr(item, "image_url", None),
                                         file_id=getattr(item, "file_id", None),
@@ -611,9 +623,9 @@ class Runner:
                                 )
                         else:
                             # Fallback: convert to text
-                            content_items.append(UserTextContent(text=str(item)))
+                            user_content_items.append(UserTextContent(text=str(item)))
 
-                    user_message = NewUserMessage(content=content_items)
+                    user_message = NewUserMessage(content=user_content_items)
                 else:
                     # Handle non-string, non-list content
                     user_message = NewUserMessage(content=[UserTextContent(text=str(content))])
@@ -624,7 +636,7 @@ class Runner:
                 self.messages.append(system_message)
             elif role == "assistant":
                 content = message.get("content", "")
-                content_items = [AssistantTextContent(text=str(content))] if content else []
+                assistant_content_items: list[AssistantMessageContent] = [AssistantTextContent(text=str(content))] if content else []
 
                 # Handle tool calls if present
                 if "tool_calls" in message:
@@ -634,7 +646,7 @@ class Runner:
                         except (json.JSONDecodeError, TypeError):
                             arguments = tool_call["function"]["arguments"]
 
-                        content_items.append(
+                        assistant_content_items.append(
                             AssistantToolCall(
                                 call_id=tool_call["id"],
                                 name=tool_call["function"]["name"],
@@ -642,46 +654,52 @@ class Runner:
                             ),
                         )
 
-                assistant_message = NewAssistantMessage(content=content_items)
+                assistant_message = NewAssistantMessage(content=assistant_content_items)
                 self.messages.append(assistant_message)
             elif message_type == "function_call":
                 # Handle function_call directly like AgentFunctionToolCallMessage
-                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                    tool_call = AssistantToolCall(
-                        call_id=message["call_id"],
-                        name=message["name"],
-                        arguments=message["arguments"],
-                    )
-                    self.messages[-1].content.append(tool_call)
-                else:
-                    assistant_message = NewAssistantMessage(
-                        content=[
-                            AssistantToolCall(
-                                call_id=message["call_id"],
-                                name=message["name"],
-                                arguments=message["arguments"],
-                            ),
-                        ],
-                    )
-                    self.messages.append(assistant_message)
+                # Type guard: ensure we have the right message type
+                if "call_id" in message and "name" in message and "arguments" in message:
+                    function_call_msg = message  # Type should be FunctionCallDict now
+                    if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                        tool_call = AssistantToolCall(
+                            call_id=function_call_msg["call_id"],  # type: ignore
+                            name=function_call_msg["name"],  # type: ignore
+                            arguments=function_call_msg["arguments"],  # type: ignore
+                        )
+                        self.messages[-1].content.append(tool_call)
+                    else:
+                        assistant_message = NewAssistantMessage(
+                            content=[
+                                AssistantToolCall(
+                                    call_id=function_call_msg["call_id"],  # type: ignore
+                                    name=function_call_msg["name"],  # type: ignore
+                                    arguments=function_call_msg["arguments"],  # type: ignore
+                                ),
+                            ],
+                        )
+                        self.messages.append(assistant_message)
             elif message_type == "function_call_output":
                 # Handle function_call_output directly like AgentFunctionCallOutput
-                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                    tool_result = AssistantToolCallResult(
-                        call_id=message["call_id"],
-                        output=message["output"],
-                    )
-                    self.messages[-1].content.append(tool_result)
-                else:
-                    assistant_message = NewAssistantMessage(
-                        content=[
-                            AssistantToolCallResult(
-                                call_id=message["call_id"],
-                                output=message["output"],
-                            ),
-                        ],
-                    )
-                    self.messages.append(assistant_message)
+                # Type guard: ensure we have the right message type
+                if "call_id" in message and "output" in message:
+                    function_output_msg = message  # Type should be FunctionCallOutputDict now
+                    if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                        tool_result = AssistantToolCallResult(
+                            call_id=function_output_msg["call_id"],  # type: ignore
+                            output=function_output_msg["output"],  # type: ignore
+                        )
+                        self.messages[-1].content.append(tool_result)
+                    else:
+                        assistant_message = NewAssistantMessage(
+                            content=[
+                                AssistantToolCallResult(
+                                    call_id=function_output_msg["call_id"],  # type: ignore
+                                    output=function_output_msg["output"],  # type: ignore
+                                ),
+                            ],
+                        )
+                        self.messages.append(assistant_message)
             else:
                 msg = "Message must have a 'role' or 'type' field."
                 raise ValueError(msg)

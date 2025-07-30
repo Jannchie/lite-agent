@@ -113,8 +113,10 @@ def test_set_chat_history_performance():
     print(f"Final agent: {runner.agent.name}")
     print(f"Final message count: {len(runner.messages)}")
 
-    # Verify correctness
-    assert len(runner.messages) == total_messages
+    # Verify correctness - in new format, messages are aggregated
+    # Each cycle: user + 3 assistant messages (original 12 messages -> 4 aggregated messages)
+    expected_messages = num_cycles * 4  # 4 aggregated messages per cycle
+    assert len(runner.messages) == expected_messages
     assert runner.agent.name == "ParentAgent"  # Should end at parent after all transfers
 
     # Performance expectations (these are reasonable thresholds)

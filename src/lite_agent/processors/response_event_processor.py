@@ -20,12 +20,12 @@ from lite_agent.types import (
     AgentChunk,
     AssistantMessageEvent,
     ContentDeltaEvent,
+    EventUsage,
     FunctionCallEvent,
     LLMResponseMeta,
     ResponseRawEvent,
     Timing,
     TimingEvent,
-    Usage,
     UsageEvent,
 )
 
@@ -166,7 +166,7 @@ class ResponseEventProcessor:
                 # First yield usage event
                 results.append(
                     UsageEvent(
-                        usage=Usage(
+                        usage=EventUsage(
                             input_tokens=usage.input_tokens,
                             output_tokens=usage.output_tokens,
                         ),

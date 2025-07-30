@@ -14,6 +14,7 @@ from lite_agent.types import (
     AssistantMessageEvent,
     CompletionRawEvent,
     ContentDeltaEvent,
+    EventUsage,
     FunctionCallDeltaEvent,
     FunctionCallEvent,
     LLMResponseMeta,
@@ -21,7 +22,6 @@ from lite_agent.types import (
     TimingEvent,
     ToolCall,
     ToolCallFunction,
-    Usage,
     UsageEvent,
 )
 
@@ -180,7 +180,7 @@ class CompletionEventProcessor:
             results = []
 
             # First yield usage event
-            results.append(UsageEvent(usage=Usage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"])))
+            results.append(UsageEvent(usage=EventUsage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"])))
 
             # Then yield timing event if we have timing data
             if self._start_time and self._first_output_time and self._output_complete_time:

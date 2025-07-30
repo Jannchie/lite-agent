@@ -67,6 +67,8 @@ async def test_runner_init():
 @pytest.mark.asyncio
 async def test_runner_append_message():
     """Test Runner append_message method"""
+    from lite_agent.types import NewUserMessage
+
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
@@ -74,16 +76,18 @@ async def test_runner_append_message():
     user_msg = AgentUserMessage(role="user", content="Hello")
     runner.append_message(user_msg)
     assert len(runner.messages) == 1
-    assert isinstance(runner.messages[0], AgentUserMessage)
+    # Now expects NewUserMessage since append_message converts legacy to new format
+    assert isinstance(runner.messages[0], NewUserMessage)
     assert runner.messages[0].role == "user"
-    assert runner.messages[0].content == "Hello"
+    assert len(runner.messages[0].content) == 1
+    assert runner.messages[0].content[0].text == "Hello"
 
     # Test appending message object from dict
     user_msg_dict = {"role": "user", "content": "How are you?"}
     runner.append_message(user_msg_dict)
     assert len(runner.messages) == 2
-    assert isinstance(runner.messages[1], AgentUserMessage)
-    assert runner.messages[1].content == "How are you?"
+    assert isinstance(runner.messages[1], NewUserMessage)
+    assert runner.messages[1].content[0].text == "How are you?"
 
 
 @pytest.mark.asyncio
@@ -164,24 +168,24 @@ async def test_run_continue_stream_with_empty_messages():
 @pytest.mark.asyncio
 async def test_run_continue_stream_with_tool_calls():
     """Test run_continue_stream with tool calls in last assistant message"""
+    from lite_agent.types import AssistantTextContent, AssistantToolCall, NewAssistantMessage
+
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
-    # In the new format, create an assistant message and a function call message
-    from lite_agent.types import AgentAssistantMessage, AgentFunctionToolCallMessage
-
-    assistant_msg = AgentAssistantMessage(
-        content="Let me call a tool",
-    )
-
-    function_call_msg = AgentFunctionToolCallMessage(
-        call_id="test_id",
-        name="test_tool",
-        arguments="{}",
+    # Create an assistant message with a tool call using the new format
+    assistant_msg = NewAssistantMessage(
+        content=[
+            AssistantTextContent(text="Let me call a tool"),
+            AssistantToolCall(
+                call_id="test_id",
+                name="test_tool",
+                arguments="{}",
+            ),
+        ],
     )
 
     runner.messages.append(assistant_msg)
-    runner.messages.append(function_call_msg)
 
     # Mock the agent.handle_tool_calls method
     from lite_agent.types import FunctionCallEvent, FunctionCallOutputEvent

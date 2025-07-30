@@ -11,8 +11,10 @@ from .events import (
     ResponseRawEvent,
     Timing,
     TimingEvent,
-    Usage,
     UsageEvent,
+)
+from .events import (
+    Usage as EventUsage,
 )
 from .messages import (
     AgentAssistantMessage,
@@ -22,7 +24,12 @@ from .messages import (
     AgentSystemMessage,
     AgentUserMessage,
     AssistantMessage,
+    AssistantMessageContent,
     AssistantMessageDict,
+    AssistantMessageMeta,
+    AssistantTextContent,
+    AssistantToolCall,
+    AssistantToolCallResult,
     BasicMessageMeta,
     FlexibleRunnerMessage,
     FunctionCallDict,
@@ -30,16 +37,33 @@ from .messages import (
     LLMResponseMeta,
     Message,
     MessageDict,
+    # New metadata types
+    MessageMeta,
+    MessageUsage,
+    NewAssistantMessage,
+    NewMessage,
+    NewMessages,
+    NewSystemMessage,
+    # New structured message types
+    NewUserMessage,
     ResponseInputImage,
     ResponseInputText,
     RunnerMessage,
     RunnerMessages,
     SystemMessageDict,
+    UserFileContent,
+    UserImageContent,
     UserInput,
+    # New content types
+    UserMessageContent,
     UserMessageContentItemImageURL,
     UserMessageContentItemImageURLImageURL,
     UserMessageContentItemText,
     UserMessageDict,
+    UserTextContent,
+    # Conversion functions
+    convert_legacy_to_new,
+    convert_new_to_legacy,
     messages_to_llm_format,
 )
 from .tool_calls import ToolCall, ToolCallFunction
@@ -78,7 +102,7 @@ __all__ = [
     "TimingEvent",
     "ToolCall",
     "ToolCallFunction",
-    "Usage",
+    "EventUsage",
     "UsageEvent",
     "UserInput",
     "UserMessageContentItemImageURL",
@@ -86,4 +110,26 @@ __all__ = [
     "UserMessageContentItemText",
     "UserMessageDict",
     "messages_to_llm_format",
+    # New structured message types
+    "NewUserMessage",
+    "NewSystemMessage",
+    "NewAssistantMessage",
+    "NewMessage",
+    "NewMessages",
+    # New content types
+    "UserMessageContent",
+    "UserTextContent",
+    "UserImageContent",
+    "UserFileContent",
+    "AssistantMessageContent",
+    "AssistantTextContent",
+    "AssistantToolCall",
+    "AssistantToolCallResult",
+    # New metadata types
+    "MessageMeta",
+    "AssistantMessageMeta",
+    "MessageUsage",
+    # Conversion functions
+    "convert_legacy_to_new",
+    "convert_new_to_legacy",
 ]

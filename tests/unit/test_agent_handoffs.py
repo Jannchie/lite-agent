@@ -7,7 +7,7 @@ import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AgentFunctionCallOutput, ToolCall, ToolCallFunction
+from lite_agent.types import AgentFunctionCallOutput, NewAssistantMessage, ToolCall, ToolCallFunction
 
 
 class TestAgentHandoffs:
@@ -123,13 +123,15 @@ class TestAgentHandoffs:
         # Verify agent was switched
         assert runner.agent.name == "SalesAgent"
 
-        # Verify function call output was added
+        # Verify function call output was added (now as NewAssistantMessage with tool result)
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
-        assert isinstance(output_msg, AgentFunctionCallOutput)
-        assert output_msg.type == "function_call_output"
-        assert output_msg.call_id == "test_transfer_001"
-        assert "SalesAgent" in output_msg.output
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert tool_result.call_id == "test_transfer_001"
+        assert "SalesAgent" in tool_result.output
 
     @pytest.mark.asyncio
     async def test_runner_invalid_agent_transfer(self):
@@ -166,12 +168,14 @@ class TestAgentHandoffs:
         # Agent should remain unchanged
         assert runner.agent.name == "MainAgent"
 
-        # Error result should be added to messages
+        # Error result should be added to messages (now as NewAssistantMessage with tool result)
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
-        assert isinstance(output_msg, AgentFunctionCallOutput)
-        assert output_msg.type == "function_call_output"
-        assert "not found" in output_msg.output
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert "not found" in tool_result.output
 
     @pytest.mark.asyncio
     async def test_runner_handle_tool_calls_with_transfer(self):
@@ -212,10 +216,14 @@ class TestAgentHandoffs:
         # Verify agent was transferred
         assert runner.agent.name == "SalesAgent"
 
-        # Verify transfer result added to messages
-        transfer_outputs = [msg for msg in runner.messages if isinstance(msg, AgentFunctionCallOutput)]
-        assert len(transfer_outputs) == 1
-        assert "SalesAgent" in transfer_outputs[0].output
+        # Verify transfer result added to messages (now as NewAssistantMessage with tool result)
+        assert len(runner.messages) == 1
+        output_msg = runner.messages[0]
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert "SalesAgent" in tool_result.output
 
     @pytest.mark.asyncio
     async def test_runner_no_handoffs_configured(self):
@@ -246,12 +254,14 @@ class TestAgentHandoffs:
         # Agent should remain unchanged
         assert runner.agent.name == "MainAgent"
 
-        # Error result should be added to messages
+        # Error result should be added to messages (now as NewAssistantMessage with tool result)
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
-        assert isinstance(output_msg, AgentFunctionCallOutput)
-        assert output_msg.type == "function_call_output"
-        assert "no handoffs configured" in output_msg.output
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert "no handoffs configured" in tool_result.output
 
     @pytest.mark.asyncio
     async def test_handle_parent_transfer_success(self):
@@ -292,12 +302,14 @@ class TestAgentHandoffs:
         assert runner.agent.name == "ParentAgent"
         assert runner.agent == parent_agent
 
-        # Function call output should be added to messages
+        # Function call output should be added to messages (now as NewAssistantMessage with tool result)
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
-        assert isinstance(output_msg, AgentFunctionCallOutput)
-        assert output_msg.type == "function_call_output"
-        assert output_msg.call_id == "call_123"
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert tool_result.call_id == "call_123"
 
     @pytest.mark.asyncio
     async def test_handle_parent_transfer_no_parent(self):
@@ -327,13 +339,15 @@ class TestAgentHandoffs:
         # Agent should remain unchanged
         assert runner.agent.name == "MainAgent"
 
-        # Error result should be added to messages
+        # Error result should be added to messages (now as NewAssistantMessage with tool result)
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
-        assert isinstance(output_msg, AgentFunctionCallOutput)
-        assert output_msg.type == "function_call_output"
-        assert output_msg.call_id == "call_456"
-        assert "no parent to transfer back to" in output_msg.output
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert tool_result.call_id == "call_456"
+        assert "no parent to transfer back to" in tool_result.output
 
     @pytest.mark.asyncio
     async def test_handle_tool_calls_with_parent_transfer(self):
@@ -379,12 +393,14 @@ class TestAgentHandoffs:
         assert runner.agent.name == "ParentAgent"
         assert runner.agent == parent_agent
 
-        # Function call output should be added to messages
+        # Function call output should be added to messages (now as NewAssistantMessage with tool result)
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
-        assert isinstance(output_msg, AgentFunctionCallOutput)
-        assert output_msg.type == "function_call_output"
-        assert output_msg.call_id == "call_789"
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 1
+        tool_result = output_msg.content[0]
+        assert tool_result.type == "tool_call_result"
+        assert tool_result.call_id == "call_789"
 
     @pytest.mark.asyncio
     async def test_handle_tool_calls_with_multiple_parent_transfers(self):
@@ -440,18 +456,19 @@ class TestAgentHandoffs:
         assert runner.agent.name == "ParentAgent"
         assert runner.agent == parent_agent
 
-        # Should have 2 function call outputs
-        assert len(runner.messages) == 2
+        # Should have 1 assistant message with 2 function call outputs  
+        assert len(runner.messages) == 1
+        output_msg = runner.messages[0]
+        assert isinstance(output_msg, NewAssistantMessage)
+        assert len(output_msg.content) == 2
 
         # First call should execute
-        output_msg_1 = runner.messages[0]
-        assert isinstance(output_msg_1, AgentFunctionCallOutput)
-        assert output_msg_1.type == "function_call_output"
-        assert output_msg_1.call_id == "call_111"
+        tool_result_1 = output_msg.content[0]
+        assert tool_result_1.type == "tool_call_result"
+        assert tool_result_1.call_id == "call_111"
 
         # Second call should be skipped
-        output_msg_2 = runner.messages[1]
-        assert isinstance(output_msg_2, AgentFunctionCallOutput)
-        assert output_msg_2.type == "function_call_output"
-        assert output_msg_2.call_id == "call_222"
-        assert "Transfer already executed" in output_msg_2.output
+        tool_result_2 = output_msg.content[1]
+        assert tool_result_2.type == "tool_call_result"
+        assert tool_result_2.call_id == "call_222"
+        assert "Transfer already executed" in tool_result_2.output

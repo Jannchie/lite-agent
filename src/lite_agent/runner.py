@@ -13,16 +13,27 @@ from lite_agent.types import (
     AgentChunkType,
     AgentFunctionCallOutput,
     AgentFunctionToolCallMessage,
-    AgentSystemMessage,
-    AgentUserMessage,
+    AssistantMessageMeta,
+    AssistantTextContent,
+    AssistantToolCall,
+    AssistantToolCallResult,
     FlexibleRunnerMessage,
     MessageDict,
+    MessageUsage,
+    NewAssistantMessage,
+    NewMessage,
+    NewSystemMessage,
+    # New structured message types
+    NewUserMessage,
     RunnerMessage,
     ToolCall,
     ToolCallFunction,
+    UserImageContent,
     UserInput,
+    UserTextContent,
+    convert_legacy_to_new,
+    convert_new_to_legacy,
 )
-from lite_agent.types.messages import BasicMessageMeta
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
@@ -38,8 +49,39 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
 class Runner:
     def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "responses") -> None:
         self.agent = agent
-        self.messages: list[RunnerMessage] = []
+        self.messages: list[NewMessage] = []
         self.api = api
+        self._current_assistant_message: NewAssistantMessage | None = None
+
+    @property
+    def legacy_messages(self) -> list[RunnerMessage]:
+        """Return messages in legacy format for backward compatibility."""
+        return convert_new_to_legacy(self.messages)
+
+    def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
+        """Start a new assistant message."""
+        if meta is None:
+            meta = AssistantMessageMeta()
+
+        # Always add text content, even if empty (we can update it later)
+        content_items = [AssistantTextContent(text=content)]
+        self._current_assistant_message = NewAssistantMessage(
+            content=content_items,
+            meta=meta,
+        )
+
+    def _add_to_current_assistant_message(self, content_item: AssistantTextContent | AssistantToolCall | AssistantToolCallResult) -> None:
+        """Add content to the current assistant message."""
+        if self._current_assistant_message is None:
+            self._start_assistant_message()
+
+        self._current_assistant_message.content.append(content_item)
+
+    def _finalize_assistant_message(self) -> None:
+        """Finalize the current assistant message and add it to messages."""
+        if self._current_assistant_message is not None:
+            self.messages.append(self._current_assistant_message)
+            self._current_assistant_message = None
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""
@@ -64,7 +106,7 @@ class Runner:
                     await self._handle_agent_transfer(tool_call, includes)
                 else:
                     # Add response for additional transfer calls without executing them
-                    self.messages.append(
+                    self.append_message(
                         AgentFunctionCallOutput(
                             type="function_call_output",
                             call_id=tool_call.id,
@@ -82,7 +124,7 @@ class Runner:
                     await self._handle_parent_transfer(tool_call, includes)
                 else:
                     # Add response for additional transfer calls without executing them
-                    self.messages.append(
+                    self.append_message(
                         AgentFunctionCallOutput(
                             type="function_call_output",
                             call_id=tool_call.id,
@@ -97,16 +139,14 @@ class Runner:
             if tool_call_chunk.type == "function_call_output":
                 if tool_call_chunk.type in includes:
                     yield tool_call_chunk
-                # Create function call output in responses format
-                meta = BasicMessageMeta(execution_time_ms=tool_call_chunk.execution_time_ms)
-                self.messages.append(
-                    AgentFunctionCallOutput(
-                        type="function_call_output",
+                # Add tool result to the last assistant message
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    tool_result = AssistantToolCallResult(
                         call_id=tool_call_chunk.tool_call_id,
                         output=tool_call_chunk.content,
-                        meta=meta,
-                    ),
-                )
+                        execution_time_ms=tool_call_chunk.execution_time_ms,
+                    )
+                    self.messages[-1].content.append(tool_result)
 
     async def _collect_all_chunks(self, stream: AsyncGenerator[AgentChunk, None]) -> list[AgentChunk]:
         """Collect all chunks from an async generator into a list."""
@@ -123,7 +163,8 @@ class Runner:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
         if isinstance(user_input, str):
-            self.messages.append(AgentUserMessage(role="user", content=user_input))
+            user_message = NewUserMessage(content=[UserTextContent(text=user_input)])
+            self.messages.append(user_message)
         elif isinstance(user_input, (list, tuple)):
             # Handle sequence of messages
             for message in user_input:
@@ -150,11 +191,17 @@ class Runner:
             return finish_reason == "stop"
 
         while not is_finish() and steps < max_steps:
+            logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
+            # Convert to legacy format for agent communication
+            legacy_messages = self.legacy_messages
+            logger.debug(f"Sending {len(legacy_messages)} legacy messages to agent:")
+            for i, msg in enumerate(legacy_messages):
+                logger.debug(f"  {i}: {msg.__class__.__name__} - {getattr(msg, 'role', getattr(msg, 'type', 'unknown'))}")
             match self.api:
                 case "completion":
-                    resp = await self.agent.completion(self.messages, record_to_file=record_to)
+                    resp = await self.agent.completion(legacy_messages, record_to_file=record_to)
                 case "responses":
-                    resp = await self.agent.responses(self.messages, record_to_file=record_to)
+                    resp = await self.agent.responses(legacy_messages, record_to_file=record_to)
                 case _:
                     msg = f"Unknown API type: {self.api}"
                     raise ValueError(msg)
@@ -162,35 +209,53 @@ class Runner:
                 if chunk.type in includes:
                     yield chunk
                 if chunk.type == "assistant_message":
-                    self.messages.append(chunk.message)
-                if chunk.type == "function_call":
-                    self.messages.append(
-                        AgentFunctionToolCallMessage(
-                            call_id=chunk.call_id,
-                            name=chunk.name,
-                            arguments=chunk.arguments or "",
-                        ),
+                    # Start or update assistant message in new format
+                    meta = AssistantMessageMeta(
+                        sent_at=chunk.message.meta.sent_at,
+                        latency_ms=getattr(chunk.message.meta, "latency_ms", None),
+                        total_time_ms=getattr(chunk.message.meta, "output_time_ms", None),
                     )
+                    # Always start with the text content from assistant message
+                    self._start_assistant_message(chunk.message.content or "", meta)
+                if chunk.type == "function_call":
+                    # Add tool call to current assistant message
+                    # Keep arguments as string for compatibility with funcall library
+                    tool_call = AssistantToolCall(
+                        call_id=chunk.call_id,
+                        name=chunk.name,
+                        arguments=chunk.arguments or "{}",
+                    )
+                    self._add_to_current_assistant_message(tool_call)
                 if chunk.type == "usage":
                     # Update the last assistant message with usage data and output_time_ms
                     usage_time = datetime.now(timezone.utc)
                     for i in range(len(self.messages) - 1, -1, -1):
                         current_message = self.messages[i]
-                        if isinstance(current_message, AgentAssistantMessage):
-                            if hasattr(current_message.meta, "input_tokens"):
-                                current_message.meta.input_tokens = chunk.usage.input_tokens
-                                current_message.meta.output_tokens = chunk.usage.output_tokens
-                                # Calculate output_time_ms if latency_ms is available
-                                if current_message.meta.latency_ms is not None:
-                                    # We need to calculate from first output to usage time
-                                    # We'll calculate: usage_time - (sent_at - latency_ms)
-                                    # This gives us the time from first output to usage completion
-                                    # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
-                                    first_output_time_approx = current_message.meta.sent_at - timedelta(milliseconds=current_message.meta.latency_ms)
-                                    output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
-                                    current_message.meta.output_time_ms = max(0, output_time_ms)
+                        if isinstance(current_message, NewAssistantMessage):
+                            # Update usage information
+                            if current_message.meta.usage is None:
+                                current_message.meta.usage = MessageUsage()
+                            current_message.meta.usage.input_tokens = chunk.usage.input_tokens
+                            current_message.meta.usage.output_tokens = chunk.usage.output_tokens
+                            current_message.meta.usage.total_tokens = (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
+
+                            # Calculate output_time_ms if latency_ms is available
+                            if current_message.meta.latency_ms is not None:
+                                # We need to calculate from first output to usage time
+                                # We'll calculate: usage_time - (sent_at - latency_ms)
+                                # This gives us the time from first output to usage completion
+                                # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
+                                first_output_time_approx = current_message.meta.sent_at - timedelta(milliseconds=current_message.meta.latency_ms)
+                                output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
+                                current_message.meta.total_time_ms = max(0, output_time_ms)
                             break
+
+            # Finalize assistant message so it can be found in pending function calls
+            self._finalize_assistant_message()
+
+            # Check for pending function calls after processing current assistant message
             pending_function_calls = self._find_pending_function_calls()
+            logger.debug(f"Found {len(pending_function_calls)} pending function calls")
             if pending_function_calls:
                 # Convert to ToolCall format for existing handler
                 tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
@@ -257,7 +322,7 @@ class Runner:
                 raise ValueError(msg)
 
             last_message = self.messages[-1]
-            if not (isinstance(last_message, AgentAssistantMessage) or (hasattr(last_message, "role") and getattr(last_message, "role", None) == "assistant")):
+            if not (isinstance(last_message, NewAssistantMessage) or (hasattr(last_message, "role") and getattr(last_message, "role", None) == "assistant")):
                 msg = "Cannot continue running without a valid last message from the assistant."
                 raise ValueError(msg)
 
@@ -278,11 +343,13 @@ class Runner:
 
     def _find_pending_function_calls(self) -> list[AgentFunctionToolCallMessage]:
         """Find function call messages that don't have corresponding outputs yet."""
+        # Convert to legacy format and find pending calls
+        legacy_messages = self.legacy_messages
         function_calls: list[AgentFunctionToolCallMessage] = []
         call_ids = set()
 
         # Collect all function call messages
-        for msg in reversed(self.messages):
+        for msg in reversed(legacy_messages):
             match msg:
                 case AgentFunctionToolCallMessage():
                     function_calls.append(msg)
@@ -442,54 +509,190 @@ class Runner:
         return None
 
     def append_message(self, message: FlexibleRunnerMessage) -> None:
-        if isinstance(message, RunnerMessage):
+        if isinstance(message, NewMessage):
+            # Already in new format
             self.messages.append(message)
+        elif isinstance(message, RunnerMessage):
+            # Special handling for AgentFunctionCallOutput
+            if isinstance(message, AgentFunctionCallOutput):
+                # Try to add this to the last assistant message
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    tool_result = AssistantToolCallResult(
+                        call_id=message.call_id,
+                        output=message.output,
+                        execution_time_ms=message.meta.execution_time_ms,
+                    )
+                    self.messages[-1].content.append(tool_result)
+                    return
+                # If no assistant message to attach to, create a new assistant message
+                else:
+                    assistant_message = NewAssistantMessage(
+                        content=[
+                            AssistantToolCallResult(
+                                call_id=message.call_id,
+                                output=message.output,
+                                execution_time_ms=message.meta.execution_time_ms,
+                            )
+                        ]
+                    )
+                    self.messages.append(assistant_message)
+                    return
+            
+            # Special handling for AgentFunctionToolCallMessage
+            elif isinstance(message, AgentFunctionToolCallMessage):
+                # Try to add this to the last assistant message
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    tool_call = AssistantToolCall(
+                        call_id=message.call_id,
+                        name=message.name,
+                        arguments=message.arguments,
+                    )
+                    self.messages[-1].content.append(tool_call)
+                    return
+                # If no assistant message to attach to, create a new assistant message
+                else:
+                    assistant_message = NewAssistantMessage(
+                        content=[
+                            AssistantToolCall(
+                                call_id=message.call_id,
+                                name=message.name,
+                                arguments=message.arguments,
+                            )
+                        ]
+                    )
+                    self.messages.append(assistant_message)
+                    return
+            
+            # Convert from legacy format to new format
+            legacy_messages = [message]
+            new_messages = convert_legacy_to_new(legacy_messages)
+            self.messages.extend(new_messages)
         elif isinstance(message, dict):
-            # Handle different message types
+            # Handle different message types from dict
             message_type = message.get("type")
             role = message.get("role")
 
-            if message_type == "function_call":
-                # Function call message
-                self.messages.append(AgentFunctionToolCallMessage.model_validate(message))
-            elif message_type == "function_call_output":
-                # Function call output message
-                self.messages.append(AgentFunctionCallOutput.model_validate(message))
-            elif role == "assistant" and "tool_calls" in message:
-                # Legacy assistant message with tool_calls - convert to responses format
-                # Add assistant message without tool_calls
-                assistant_msg = AgentAssistantMessage(
-                    role="assistant",
-                    content=message.get("content", ""),
-                )
-                self.messages.append(assistant_msg)
-
-                # Convert tool_calls to function call messages
-                for tool_call in message.get("tool_calls", []):
-                    function_call_msg = AgentFunctionToolCallMessage(
-                        type="function_call",
-                        call_id=tool_call["id"],
-                        name=tool_call["function"]["name"],
-                        arguments=tool_call["function"]["arguments"],
-                    )
-                    self.messages.append(function_call_msg)
-            elif role:
-                # Regular role-based message
-                role_to_message_class = {
-                    "user": AgentUserMessage,
-                    "assistant": AgentAssistantMessage,
-                    "system": AgentSystemMessage,
-                }
-
-                message_class = role_to_message_class.get(role)
-                if message_class:
-                    self.messages.append(message_class.model_validate(message))
+            if role == "user":
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    user_message = NewUserMessage(content=[UserTextContent(text=content)])
+                elif isinstance(content, list):
+                    # Handle complex content array 
+                    content_items = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            item_type = item.get("type")
+                            if item_type == "input_text" or item_type == "text":
+                                content_items.append(UserTextContent(text=item.get("text", "")))
+                            elif item_type == "input_image" or item_type == "image_url":
+                                if item_type == "image_url":
+                                    # Handle completion API format
+                                    image_url = item.get("image_url", {})
+                                    if isinstance(image_url, dict):
+                                        url = image_url.get("url", "")
+                                    else:
+                                        url = str(image_url)
+                                    content_items.append(UserImageContent(image_url=url))
+                                else:
+                                    # Handle response API format
+                                    content_items.append(
+                                        UserImageContent(
+                                            image_url=item.get("image_url"),
+                                            file_id=item.get("file_id"),
+                                            detail=item.get("detail", "auto"),
+                                        )
+                                    )
+                        elif hasattr(item, "type"):
+                            # Handle Pydantic models
+                            if item.type == "input_text":
+                                content_items.append(UserTextContent(text=item.text))
+                            elif item.type == "input_image":
+                                content_items.append(
+                                    UserImageContent(
+                                        image_url=getattr(item, "image_url", None),
+                                        file_id=getattr(item, "file_id", None),
+                                        detail=getattr(item, "detail", "auto"),
+                                    )
+                                )
+                        else:
+                            # Fallback: convert to text
+                            content_items.append(UserTextContent(text=str(item)))
+                    
+                    user_message = NewUserMessage(content=content_items)
                 else:
-                    msg = f"Unsupported message role: {role}"
-                    raise ValueError(msg)
+                    # Handle non-string, non-list content
+                    user_message = NewUserMessage(content=[UserTextContent(text=str(content))])
+                self.messages.append(user_message)
+            elif role == "system":
+                content = message.get("content", "")
+                system_message = NewSystemMessage(content=str(content))
+                self.messages.append(system_message)
+            elif role == "assistant":
+                content = message.get("content", "")
+                content_items = [AssistantTextContent(text=str(content))] if content else []
+
+                # Handle tool calls if present
+                if "tool_calls" in message:
+                    for tool_call in message.get("tool_calls", []):
+                        try:
+                            arguments = json.loads(tool_call["function"]["arguments"]) if isinstance(tool_call["function"]["arguments"], str) else tool_call["function"]["arguments"]
+                        except (json.JSONDecodeError, TypeError):
+                            arguments = tool_call["function"]["arguments"]
+
+                        content_items.append(
+                            AssistantToolCall(
+                                call_id=tool_call["id"],
+                                name=tool_call["function"]["name"],
+                                arguments=arguments,
+                            ),
+                        )
+
+                assistant_message = NewAssistantMessage(content=content_items)
+                self.messages.append(assistant_message)
+            elif message_type == "function_call":
+                # Handle function_call directly like AgentFunctionToolCallMessage
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    tool_call = AssistantToolCall(
+                        call_id=message["call_id"],
+                        name=message["name"],
+                        arguments=message["arguments"],
+                    )
+                    self.messages[-1].content.append(tool_call)
+                else:
+                    assistant_message = NewAssistantMessage(
+                        content=[
+                            AssistantToolCall(
+                                call_id=message["call_id"],
+                                name=message["name"],
+                                arguments=message["arguments"],
+                            )
+                        ]
+                    )
+                    self.messages.append(assistant_message)
+            elif message_type == "function_call_output":
+                # Handle function_call_output directly like AgentFunctionCallOutput
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    tool_result = AssistantToolCallResult(
+                        call_id=message["call_id"],
+                        output=message["output"],
+                    )
+                    self.messages[-1].content.append(tool_result)
+                else:
+                    assistant_message = NewAssistantMessage(
+                        content=[
+                            AssistantToolCallResult(
+                                call_id=message["call_id"],
+                                output=message["output"],
+                            )
+                        ]
+                    )
+                    self.messages.append(assistant_message)
             else:
                 msg = "Message must have a 'role' or 'type' field."
                 raise ValueError(msg)
+        else:
+            msg = f"Unsupported message type: {type(message)}"
+            raise ValueError(msg)
 
     async def _handle_agent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
         """Handle agent transfer when transfer_to_agent tool is called.
@@ -506,7 +709,7 @@ class Runner:
         except (json.JSONDecodeError, KeyError):
             logger.error("Failed to parse transfer_to_agent arguments: %s", tool_call.function.arguments)
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -518,7 +721,7 @@ class Runner:
         if not target_agent_name:
             logger.error("No target agent name provided in transfer_to_agent call")
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -531,7 +734,7 @@ class Runner:
         if not self.agent.handoffs:
             logger.error("Current agent has no handoffs configured")
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -549,7 +752,7 @@ class Runner:
         if not target_agent:
             logger.error("Target agent '%s' not found in handoffs", target_agent_name)
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -566,7 +769,7 @@ class Runner:
             )
 
             # Add the tool call result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -581,7 +784,7 @@ class Runner:
         except Exception as e:
             logger.exception("Failed to execute transfer_to_agent tool call")
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -601,7 +804,7 @@ class Runner:
         if not self.agent.parent:
             logger.error("Current agent has no parent to transfer back to.")
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -618,7 +821,7 @@ class Runner:
             )
 
             # Add the tool call result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,
@@ -633,7 +836,7 @@ class Runner:
         except Exception as e:
             logger.exception("Failed to execute transfer_to_parent tool call")
             # Add error result to messages
-            self.messages.append(
+            self.append_message(
                 AgentFunctionCallOutput(
                     type="function_call_output",
                     call_id=tool_call.id,

@@ -7,7 +7,14 @@ import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AgentAssistantMessage, AgentSystemMessage, AgentUserMessage
+from lite_agent.types import (
+    AgentAssistantMessage, 
+    AgentSystemMessage, 
+    AgentUserMessage,
+    NewUserMessage,
+    NewAssistantMessage,
+    NewSystemMessage,
+)
 
 
 class DummyAgent(Agent):
@@ -31,10 +38,10 @@ class TestAppendMessage:
         self.runner.append_message(user_message)
 
         assert len(self.runner.messages) == 1
-        assert self.runner.messages[0] == user_message
-        assert isinstance(self.runner.messages[0], AgentUserMessage)
+        # Now expects NewUserMessage since append_message converts to new format
+        assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
-        assert self.runner.messages[0].content == "Hello, how are you?"
+        assert self.runner.messages[0].content[0].text == "Hello, how are you?"
 
     def test_append_message_with_assistant_message_object(self):
         """测试使用 AgentAssistantMessage 对象添加消息"""
@@ -43,10 +50,10 @@ class TestAppendMessage:
         self.runner.append_message(assistant_message)
 
         assert len(self.runner.messages) == 1
-        assert self.runner.messages[0] == assistant_message
-        assert isinstance(self.runner.messages[0], AgentAssistantMessage)
+        # Now expects NewAssistantMessage since append_message converts to new format
+        assert isinstance(self.runner.messages[0], NewAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
-        assert self.runner.messages[0].content == "I'm doing well, thank you!"
+        assert self.runner.messages[0].content[0].text == "I'm doing well, thank you!"
 
     def test_append_message_with_system_message_object(self):
         """测试使用 AgentSystemMessage 对象添加消息"""
@@ -55,8 +62,8 @@ class TestAppendMessage:
         self.runner.append_message(system_message)
 
         assert len(self.runner.messages) == 1
-        assert self.runner.messages[0] == system_message
-        assert isinstance(self.runner.messages[0], AgentSystemMessage)
+        # Now expects NewSystemMessage since append_message converts to new format
+        assert isinstance(self.runner.messages[0], NewSystemMessage)
         assert self.runner.messages[0].role == "system"
         assert self.runner.messages[0].content == "You are a helpful assistant."
 
@@ -67,29 +74,33 @@ class TestAppendMessage:
         self.runner.append_message(user_dict)
 
         assert len(self.runner.messages) == 1
-        assert isinstance(self.runner.messages[0], AgentUserMessage)
+        assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
-        assert self.runner.messages[0].content == "Hello from dict!"
+        assert self.runner.messages[0].content[0].text == "Hello from dict!"
 
     def test_append_message_with_assistant_dict(self):
         """测试使用字典格式添加助手消息"""
+        from lite_agent.types import NewAssistantMessage
+        
         assistant_dict = {"role": "assistant", "content": "Hello from assistant dict!"}
 
         self.runner.append_message(assistant_dict)
 
         assert len(self.runner.messages) == 1
-        assert isinstance(self.runner.messages[0], AgentAssistantMessage)
+        assert isinstance(self.runner.messages[0], NewAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
-        assert self.runner.messages[0].content == "Hello from assistant dict!"
+        assert self.runner.messages[0].content[0].text == "Hello from assistant dict!"
 
     def test_append_message_with_system_dict(self):
         """测试使用字典格式添加系统消息"""
+        from lite_agent.types import NewSystemMessage
+        
         system_dict = {"role": "system", "content": "System message from dict"}
 
         self.runner.append_message(system_dict)
 
         assert len(self.runner.messages) == 1
-        assert isinstance(self.runner.messages[0], AgentSystemMessage)
+        assert isinstance(self.runner.messages[0], NewSystemMessage)
         assert self.runner.messages[0].role == "system"
         assert self.runner.messages[0].content == "System message from dict"
 
@@ -102,6 +113,8 @@ class TestAppendMessage:
 
     def test_append_message_multiple_messages(self):
         """测试添加多条消息"""
+        from lite_agent.types import NewUserMessage, NewAssistantMessage, NewSystemMessage
+        
         # 添加用户消息
         user_message = AgentUserMessage(role="user", content="Hello")
         self.runner.append_message(user_message)
@@ -115,15 +128,17 @@ class TestAppendMessage:
         self.runner.append_message(system_message)
 
         assert len(self.runner.messages) == 3
-        assert isinstance(self.runner.messages[0], AgentUserMessage)
+        assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
-        assert isinstance(self.runner.messages[1], AgentAssistantMessage)
+        assert isinstance(self.runner.messages[1], NewAssistantMessage)
         assert self.runner.messages[1].role == "assistant"
-        assert isinstance(self.runner.messages[2], AgentSystemMessage)
+        assert isinstance(self.runner.messages[2], NewSystemMessage)
         assert self.runner.messages[2].role == "system"
 
     def test_append_message_preserves_order(self):
         """测试消息添加顺序保持正确"""
+        from lite_agent.types import NewUserMessage, NewAssistantMessage
+        
         messages = [
             {"role": "user", "content": "First message"},
             {"role": "assistant", "content": "Second message"},
@@ -134,15 +149,17 @@ class TestAppendMessage:
             self.runner.append_message(msg)
 
         assert len(self.runner.messages) == 3
-        assert isinstance(self.runner.messages[0], AgentUserMessage)
-        assert self.runner.messages[0].content == "First message"
-        assert isinstance(self.runner.messages[1], AgentAssistantMessage)
-        assert self.runner.messages[1].content == "Second message"
-        assert isinstance(self.runner.messages[2], AgentUserMessage)
-        assert self.runner.messages[2].content == "Third message"
+        assert isinstance(self.runner.messages[0], NewUserMessage)
+        assert self.runner.messages[0].content[0].text == "First message"
+        assert isinstance(self.runner.messages[1], NewAssistantMessage)
+        assert self.runner.messages[1].content[0].text == "Second message"
+        assert isinstance(self.runner.messages[2], NewUserMessage)
+        assert self.runner.messages[2].content[0].text == "Third message"
 
     def test_append_message_with_complex_assistant_dict(self):
         """测试添加包含工具调用的助手消息字典"""
+        from lite_agent.types import NewAssistantMessage
+        
         assistant_dict = {
             "role": "assistant",
             "content": "I'll help you with that.",
@@ -158,36 +175,44 @@ class TestAppendMessage:
 
         self.runner.append_message(assistant_dict)
 
-        # 在新格式中，应该产生 2 个消息：assistant message + function call message
-        assert len(self.runner.messages) == 2
+        # 在新格式中，应该产生 1 个消息，包含文本和工具调用
+        assert len(self.runner.messages) == 1
 
-        # 第一个消息应该是不含 tool_calls 的 assistant message
-        assert isinstance(self.runner.messages[0], AgentAssistantMessage)
+        # 消息应该是包含文本和工具调用的 NewAssistantMessage
+        assert isinstance(self.runner.messages[0], NewAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
-        assert self.runner.messages[0].content == "I'll help you with that."
-
-        # 第二个消息应该是 function call message
-        from lite_agent.types import AgentFunctionToolCallMessage
-
-        assert isinstance(self.runner.messages[1], AgentFunctionToolCallMessage)
-        assert self.runner.messages[1].type == "function_call"
-        assert self.runner.messages[1].call_id == "call_123"
-        assert self.runner.messages[1].name == "get_weather"
-        assert self.runner.messages[1].arguments == '{"city": "New York"}'
+        
+        # 检查内容项
+        content = self.runner.messages[0].content
+        assert len(content) == 2  # 文本 + 工具调用
+        
+        # 第一个内容应该是文本
+        assert content[0].type == "text"
+        assert content[0].text == "I'll help you with that."
+        
+        # 第二个内容应该是工具调用
+        assert content[1].type == "tool_call"
+        assert content[1].call_id == "call_123"
+        assert content[1].name == "get_weather"
+        assert content[1].arguments == {"city": "New York"}
 
     def test_append_message_empty_content(self):
         """测试添加空内容消息"""
+        from lite_agent.types import NewUserMessage
+        
         user_dict = {"role": "user", "content": ""}
 
         self.runner.append_message(user_dict)
 
         assert len(self.runner.messages) == 1
-        assert isinstance(self.runner.messages[0], AgentUserMessage)
+        assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
-        assert self.runner.messages[0].content == ""
+        assert self.runner.messages[0].content[0].text == ""
 
     def test_append_message_with_extra_fields_in_dict(self):
         """测试字典包含额外字段时的处理"""
+        from lite_agent.types import NewUserMessage
+        
         user_dict = {
             "role": "user",
             "content": "Hello",
@@ -198,9 +223,9 @@ class TestAppendMessage:
         self.runner.append_message(user_dict)
 
         assert len(self.runner.messages) == 1
-        assert isinstance(self.runner.messages[0], AgentUserMessage)
+        assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
-        assert self.runner.messages[0].content == "Hello"
+        assert self.runner.messages[0].content[0].text == "Hello"
         # 额外字段应该被忽略（Pydantic 会过滤未定义的字段）
 
     def test_runner_messages_initialization(self):

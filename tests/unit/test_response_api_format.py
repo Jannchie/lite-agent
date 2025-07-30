@@ -86,15 +86,15 @@ class TestResponseAPIFormat:
         assert isinstance(message.content, list)  # type: ignore
         assert len(message.content) == 2  # type: ignore
 
-        # 检查第一个内容项 (text)
+        # 检查第一个内容项 (text) - 现在使用新格式的类型名称
         if hasattr(message, "content"):
             text_item = message.content[0]  # type: ignore
-            assert text_item.type == "input_text"
+            assert text_item.type == "text"
             assert text_item.text == "What's in this image?"
 
-            # 检查第二个内容项 (image)
+            # 检查第二个内容项 (image) - 现在使用新格式的类型名称
             image_item = message.content[1]  # type: ignore
-            assert image_item.type == "input_image"
+            assert image_item.type == "image"
             assert image_item.detail == "high"
             assert image_item.image_url == "https://example.com/test.jpg"
 
@@ -127,14 +127,14 @@ class TestResponseAPIFormat:
         assert isinstance(message.content, list)  # type: ignore
         assert len(message.content) == 2  # type: ignore
 
-        # 检查内容被正确转换为 Pydantic 对象
+        # 检查内容被正确转换为 Pydantic 对象 - 现在使用新格式的类型名称
         if hasattr(message, "content"):
             text_item = message.content[0]  # type: ignore
-            assert text_item.type == "input_text"
+            assert text_item.type == "text"
             assert text_item.text == "What's in this image?"
 
             image_item = message.content[1]  # type: ignore
-            assert image_item.type == "input_image"
+            assert image_item.type == "image"
             assert image_item.detail == "high"
             assert image_item.image_url == "https://example.com/test.jpg"
 
@@ -159,8 +159,8 @@ class TestResponseAPIFormat:
             },
         )
 
-        # 转换为 Completion API 格式
-        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.messages)
+        # 转换为 Completion API 格式 - 需要使用 legacy_messages
+        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
 
         assert len(converted_messages) == 1
         converted_msg = converted_messages[0]
@@ -199,7 +199,7 @@ class TestResponseAPIFormat:
             },
         )
 
-        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.messages)
+        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
 
         assert len(converted_messages) == 1
         converted_msg = converted_messages[0]
@@ -238,7 +238,7 @@ class TestResponseAPIFormat:
 
         # 应该抛出 ValueError 异常
         with pytest.raises(ValueError, match="File ID input is not supported for Completion API"):
-            self.agent._convert_responses_to_completions_format(self.runner.messages)
+            self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
 
     def test_conversion_with_missing_image_data_raises_error(self):
         """测试既没有 image_url 也没有 file_id时会抛出异常"""
@@ -278,13 +278,12 @@ class TestResponseAPIFormat:
         assert len(self.runner.messages) == 2
 
         # 检查两种格式都被正确处理
-        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.messages)
+        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
         assert len(converted_messages) == 2
 
-        # 新格式消息的转换
-        assert isinstance(converted_messages[0]["content"], list)
-        assert converted_messages[0]["content"][0]["type"] == "text"
-        assert converted_messages[0]["content"][0]["text"] == "New format message"
+        # 新格式消息的转换 - 单一文本内容被优化为字符串
+        assert isinstance(converted_messages[0]["content"], str)
+        assert converted_messages[0]["content"] == "New format message"
 
         # 传统格式消息保持不变
         assert isinstance(converted_messages[1]["content"], str)

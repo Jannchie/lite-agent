@@ -40,7 +40,7 @@ async def main():
     async for chunk in resp:
         logger.info(chunk)
     display_messages(runner.messages)
-
+    print(runner.messages)
 
 if __name__ == "__main__":
     asyncio.run(main())

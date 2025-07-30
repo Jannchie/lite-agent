@@ -78,7 +78,7 @@ class TestSetChatHistory:
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 4
+        assert len(self.runner.messages) == 2  # In new format: user message + aggregated assistant message
         assert self.runner.agent.name == "WeatherAgent"
 
     def test_set_chat_history_with_transfer_to_parent(self):
@@ -115,7 +115,7 @@ class TestSetChatHistory:
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 6
+        assert len(self.runner.messages) == 3  # In new format: user message + 2 separate assistant messages
         assert self.runner.agent.name == "ParentAgent"
 
     def test_set_chat_history_complex_transfers(self):
@@ -167,7 +167,7 @@ class TestSetChatHistory:
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 9
+        assert len(self.runner.messages) == 4  # In new format: user message + 3 separate assistant messages
         assert self.runner.agent.name == "TemperatureAgent"
 
     def test_set_chat_history_with_agent_objects(self):
@@ -193,7 +193,7 @@ class TestSetChatHistory:
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 3
+        assert len(self.runner.messages) == 2  # In new format: user message + aggregated assistant message
         assert self.runner.agent.name == "WeatherAgent"
 
     def test_set_chat_history_invalid_agent_name(self):
@@ -216,7 +216,7 @@ class TestSetChatHistory:
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 3
+        assert len(self.runner.messages) == 2  # In new format: user message + aggregated assistant message
         assert self.runner.agent.name == "ParentAgent"  # Should stay on parent
 
     def test_set_chat_history_malformed_arguments(self):
@@ -239,7 +239,7 @@ class TestSetChatHistory:
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 3
+        assert len(self.runner.messages) == 2  # In new format: user message + aggregated assistant message
         assert self.runner.agent.name == "ParentAgent"  # Should stay on parent
 
     def test_set_chat_history_transfer_to_parent_without_parent(self):
@@ -270,7 +270,7 @@ class TestSetChatHistory:
 
         runner.set_chat_history(messages, root_agent=standalone_agent)
 
-        assert len(runner.messages) == 3
+        assert len(runner.messages) == 2  # In new format: user message + aggregated assistant message
         assert runner.agent.name == "StandaloneAgent"  # Should stay on standalone
 
     def test_set_chat_history_clears_previous_messages(self):
@@ -289,9 +289,9 @@ class TestSetChatHistory:
 
         assert len(self.runner.messages) == 2
         assert hasattr(self.runner.messages[0], "content")
-        assert self.runner.messages[0].content == "New message"  # type: ignore
+        assert self.runner.messages[0].content[0].text == "New message"  # type: ignore
         assert hasattr(self.runner.messages[1], "content")
-        assert self.runner.messages[1].content == "New response"  # type: ignore
+        assert self.runner.messages[1].content[0].text == "New response"  # type: ignore
 
     def test_set_chat_history_without_root_agent(self):
         """Test set_chat_history without specifying root_agent."""
@@ -331,7 +331,7 @@ class TestSetChatHistory:
             output="Test output",
         )
         self.runner.append_message(output_msg)
-        assert len(self.runner.messages) == 3
+        assert len(self.runner.messages) == 2  # Tool result is added to existing assistant message
 
     def test_find_agent_by_name(self):
         """Test the _find_agent_by_name helper method."""

@@ -8,12 +8,12 @@ import pytest
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
 from lite_agent.types import (
-    AgentAssistantMessage, 
-    AgentSystemMessage, 
+    AgentAssistantMessage,
+    AgentSystemMessage,
     AgentUserMessage,
-    NewUserMessage,
     NewAssistantMessage,
     NewSystemMessage,
+    NewUserMessage,
 )
 
 
@@ -81,7 +81,7 @@ class TestAppendMessage:
     def test_append_message_with_assistant_dict(self):
         """测试使用字典格式添加助手消息"""
         from lite_agent.types import NewAssistantMessage
-        
+
         assistant_dict = {"role": "assistant", "content": "Hello from assistant dict!"}
 
         self.runner.append_message(assistant_dict)
@@ -94,7 +94,7 @@ class TestAppendMessage:
     def test_append_message_with_system_dict(self):
         """测试使用字典格式添加系统消息"""
         from lite_agent.types import NewSystemMessage
-        
+
         system_dict = {"role": "system", "content": "System message from dict"}
 
         self.runner.append_message(system_dict)
@@ -113,8 +113,8 @@ class TestAppendMessage:
 
     def test_append_message_multiple_messages(self):
         """测试添加多条消息"""
-        from lite_agent.types import NewUserMessage, NewAssistantMessage, NewSystemMessage
-        
+        from lite_agent.types import NewAssistantMessage, NewSystemMessage, NewUserMessage
+
         # 添加用户消息
         user_message = AgentUserMessage(role="user", content="Hello")
         self.runner.append_message(user_message)
@@ -137,8 +137,8 @@ class TestAppendMessage:
 
     def test_append_message_preserves_order(self):
         """测试消息添加顺序保持正确"""
-        from lite_agent.types import NewUserMessage, NewAssistantMessage
-        
+        from lite_agent.types import NewAssistantMessage, NewUserMessage
+
         messages = [
             {"role": "user", "content": "First message"},
             {"role": "assistant", "content": "Second message"},
@@ -159,7 +159,7 @@ class TestAppendMessage:
     def test_append_message_with_complex_assistant_dict(self):
         """测试添加包含工具调用的助手消息字典"""
         from lite_agent.types import NewAssistantMessage
-        
+
         assistant_dict = {
             "role": "assistant",
             "content": "I'll help you with that.",
@@ -181,15 +181,15 @@ class TestAppendMessage:
         # 消息应该是包含文本和工具调用的 NewAssistantMessage
         assert isinstance(self.runner.messages[0], NewAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
-        
+
         # 检查内容项
         content = self.runner.messages[0].content
         assert len(content) == 2  # 文本 + 工具调用
-        
+
         # 第一个内容应该是文本
         assert content[0].type == "text"
         assert content[0].text == "I'll help you with that."
-        
+
         # 第二个内容应该是工具调用
         assert content[1].type == "tool_call"
         assert content[1].call_id == "call_123"
@@ -199,7 +199,7 @@ class TestAppendMessage:
     def test_append_message_empty_content(self):
         """测试添加空内容消息"""
         from lite_agent.types import NewUserMessage
-        
+
         user_dict = {"role": "user", "content": ""}
 
         self.runner.append_message(user_dict)
@@ -212,7 +212,7 @@ class TestAppendMessage:
     def test_append_message_with_extra_fields_in_dict(self):
         """测试字典包含额外字段时的处理"""
         from lite_agent.types import NewUserMessage
-        
+
         user_dict = {
             "role": "user",
             "content": "Hello",

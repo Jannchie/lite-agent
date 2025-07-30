@@ -42,7 +42,7 @@ class CompletionEventProcessor:
         self._usage_time: datetime | None = None
         self._usage_data: dict[str, int] = {}
 
-    async def process_chunk(  # noqa: C901, PLR0912, PLR0915
+    async def process_chunk(
         self,
         chunk: ModelResponseStream,
         record_file: AsyncTextIOWrapper | None = None,

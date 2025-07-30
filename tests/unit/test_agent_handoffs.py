@@ -7,7 +7,7 @@ import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AgentFunctionCallOutput, NewAssistantMessage, ToolCall, ToolCallFunction
+from lite_agent.types import NewAssistantMessage, ToolCall, ToolCallFunction
 
 
 class TestAgentHandoffs:
@@ -456,7 +456,7 @@ class TestAgentHandoffs:
         assert runner.agent.name == "ParentAgent"
         assert runner.agent == parent_agent
 
-        # Should have 1 assistant message with 2 function call outputs  
+        # Should have 1 assistant message with 2 function call outputs
         assert len(runner.messages) == 1
         output_msg = runner.messages[0]
         assert isinstance(output_msg, NewAssistantMessage)

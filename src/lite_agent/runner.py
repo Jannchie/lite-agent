@@ -91,7 +91,7 @@ class Runner:
         """Normalize record_to parameter to Path object if provided."""
         return Path(record_to) if record_to else None
 
-    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401, C901
+    async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
         """Handle tool calls and yield appropriate chunks."""
         if not tool_calls:
             return
@@ -175,7 +175,7 @@ class Runner:
             self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: Any | None = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: PLR0912, ANN401, C901
+    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: Any | None = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -525,21 +525,20 @@ class Runner:
                     self.messages[-1].content.append(tool_result)
                     return
                 # If no assistant message to attach to, create a new assistant message
-                else:
-                    assistant_message = NewAssistantMessage(
-                        content=[
-                            AssistantToolCallResult(
-                                call_id=message.call_id,
-                                output=message.output,
-                                execution_time_ms=message.meta.execution_time_ms,
-                            )
-                        ]
-                    )
-                    self.messages.append(assistant_message)
-                    return
-            
+                assistant_message = NewAssistantMessage(
+                    content=[
+                        AssistantToolCallResult(
+                            call_id=message.call_id,
+                            output=message.output,
+                            execution_time_ms=message.meta.execution_time_ms,
+                        ),
+                    ],
+                )
+                self.messages.append(assistant_message)
+                return
+
             # Special handling for AgentFunctionToolCallMessage
-            elif isinstance(message, AgentFunctionToolCallMessage):
+            if isinstance(message, AgentFunctionToolCallMessage):
                 # Try to add this to the last assistant message
                 if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
                     tool_call = AssistantToolCall(
@@ -550,19 +549,18 @@ class Runner:
                     self.messages[-1].content.append(tool_call)
                     return
                 # If no assistant message to attach to, create a new assistant message
-                else:
-                    assistant_message = NewAssistantMessage(
-                        content=[
-                            AssistantToolCall(
-                                call_id=message.call_id,
-                                name=message.name,
-                                arguments=message.arguments,
-                            )
-                        ]
-                    )
-                    self.messages.append(assistant_message)
-                    return
-            
+                assistant_message = NewAssistantMessage(
+                    content=[
+                        AssistantToolCall(
+                            call_id=message.call_id,
+                            name=message.name,
+                            arguments=message.arguments,
+                        ),
+                    ],
+                )
+                self.messages.append(assistant_message)
+                return
+
             # Convert from legacy format to new format
             legacy_messages = [message]
             new_messages = convert_legacy_to_new(legacy_messages)
@@ -577,21 +575,18 @@ class Runner:
                 if isinstance(content, str):
                     user_message = NewUserMessage(content=[UserTextContent(text=content)])
                 elif isinstance(content, list):
-                    # Handle complex content array 
+                    # Handle complex content array
                     content_items = []
                     for item in content:
                         if isinstance(item, dict):
                             item_type = item.get("type")
-                            if item_type == "input_text" or item_type == "text":
+                            if item_type in {"input_text", "text"}:
                                 content_items.append(UserTextContent(text=item.get("text", "")))
-                            elif item_type == "input_image" or item_type == "image_url":
+                            elif item_type in {"input_image", "image_url"}:
                                 if item_type == "image_url":
                                     # Handle completion API format
                                     image_url = item.get("image_url", {})
-                                    if isinstance(image_url, dict):
-                                        url = image_url.get("url", "")
-                                    else:
-                                        url = str(image_url)
+                                    url = image_url.get("url", "") if isinstance(image_url, dict) else str(image_url)
                                     content_items.append(UserImageContent(image_url=url))
                                 else:
                                     # Handle response API format
@@ -600,7 +595,7 @@ class Runner:
                                             image_url=item.get("image_url"),
                                             file_id=item.get("file_id"),
                                             detail=item.get("detail", "auto"),
-                                        )
+                                        ),
                                     )
                         elif hasattr(item, "type"):
                             # Handle Pydantic models
@@ -612,12 +607,12 @@ class Runner:
                                         image_url=getattr(item, "image_url", None),
                                         file_id=getattr(item, "file_id", None),
                                         detail=getattr(item, "detail", "auto"),
-                                    )
+                                    ),
                                 )
                         else:
                             # Fallback: convert to text
                             content_items.append(UserTextContent(text=str(item)))
-                    
+
                     user_message = NewUserMessage(content=content_items)
                 else:
                     # Handle non-string, non-list content
@@ -665,8 +660,8 @@ class Runner:
                                 call_id=message["call_id"],
                                 name=message["name"],
                                 arguments=message["arguments"],
-                            )
-                        ]
+                            ),
+                        ],
                     )
                     self.messages.append(assistant_message)
             elif message_type == "function_call_output":
@@ -683,8 +678,8 @@ class Runner:
                             AssistantToolCallResult(
                                 call_id=message["call_id"],
                                 output=message["output"],
-                            )
-                        ]
+                            ),
+                        ],
                     )
                     self.messages.append(assistant_message)
             else:
@@ -692,7 +687,7 @@ class Runner:
                 raise ValueError(msg)
         else:
             msg = f"Unsupported message type: {type(message)}"
-            raise ValueError(msg)
+            raise TypeError(msg)
 
     async def _handle_agent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
         """Handle agent transfer when transfer_to_agent tool is called.

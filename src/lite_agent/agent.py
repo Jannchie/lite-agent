@@ -364,7 +364,7 @@ class Agent:
 
         return converted_messages
 
-    def _convert_user_content_to_completions_format(self, content: list) -> list:  # noqa: C901
+    def _convert_user_content_to_completions_format(self, content: list) -> list:
         """Convert user message content from Response API format to Completion API format."""
         # Handle the case where content might not actually be a list due to test mocking
         if type(content) is not list:  # Use type() instead of isinstance() to avoid test mocking issues

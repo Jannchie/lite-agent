@@ -39,7 +39,7 @@ class ResponseEventProcessor:
         self._first_output_time: datetime | None = None
         self._output_complete_time: datetime | None = None
         self._usage_time: datetime | None = None
-        self._usage_data: dict[str, int] = {}
+        self._usage_data: dict[str, Any] = {}
 
     async def process_chunk(
         self,
@@ -60,7 +60,7 @@ class ResponseEventProcessor:
         for event in events:
             yield event
 
-    def handle_event(self, event: ResponsesAPIStreamingResponse) -> list[AgentChunk]:  # noqa: C901, PLR0912, PLR0915, PLR0911
+    def handle_event(self, event: ResponsesAPIStreamingResponse) -> list[AgentChunk]:  # noqa: PLR0911
         """Handle individual response events"""
         if event.type in (
             ResponsesAPIStreamEvents.RESPONSE_CREATED,

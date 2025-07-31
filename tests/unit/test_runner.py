@@ -6,7 +6,7 @@ import pytest
 from lite_agent.agent import Agent
 from lite_agent.processors.completion_event_processor import AssistantMessageEvent
 from lite_agent.runner import AgentChunk, Runner
-from lite_agent.types import AgentAssistantMessage, AgentUserMessage
+from lite_agent.types import AgentAssistantMessage, AgentUserMessage, UserTextContent
 
 
 class DummyAgent(Agent):
@@ -80,6 +80,7 @@ async def test_runner_append_message():
     assert isinstance(runner.messages[0], NewUserMessage)
     assert runner.messages[0].role == "user"
     assert len(runner.messages[0].content) == 1
+    assert isinstance(runner.messages[0].content[0], UserTextContent)
     assert runner.messages[0].content[0].text == "Hello"
 
     # Test appending message object from dict
@@ -87,6 +88,7 @@ async def test_runner_append_message():
     runner.append_message(user_msg_dict)
     assert len(runner.messages) == 2
     assert isinstance(runner.messages[1], NewUserMessage)
+    assert isinstance(runner.messages[1].content[0], UserTextContent)
     assert runner.messages[1].content[0].text == "How are you?"
 
 

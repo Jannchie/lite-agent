@@ -58,7 +58,7 @@ class LiteLLMClient(BaseLLMClient):
 
         return await litellm.aresponses(
             model=self.model,
-            input=messages,
+            input=messages,  # type: ignore[arg-type]
             tools=tools,
             tool_choice=tool_choice,
             api_version=self.api_version,
@@ -66,4 +66,4 @@ class LiteLLMClient(BaseLLMClient):
             api_base=self.api_base,
             stream=True,
             store=False,
-        )  # type: ignore
+        )

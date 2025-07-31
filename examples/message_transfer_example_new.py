@@ -31,7 +31,7 @@ def example_message_transfer(messages: RunnerMessages) -> RunnerMessages:
     for message in messages:
         if isinstance(message, dict):
             # Handle dict format messages
-            if message.get("role") == "user":
+            if message.get("role") == "user" and "content" in message:
                 # Add prefix to user messages
                 content = message.get("content", "")
                 processed_message = message.copy()
@@ -77,7 +77,7 @@ def privacy_filter_transfer(messages: RunnerMessages) -> RunnerMessages:
     for message in messages:
         if isinstance(message, dict):
             content = message.get("content", "")
-            if isinstance(content, str):
+            if isinstance(content, str) and "content" in message:
                 processed_message = message.copy()
                 processed_message["content"] = filter_content(content)
                 processed_messages.append(processed_message)
@@ -163,7 +163,7 @@ async def main():
     print("\nComplex conversation history:")
     consolidated = consolidate_history_transfer(complex_messages)
     print("Consolidated result:")
-    if consolidated and isinstance(consolidated[0], dict):
+    if consolidated and isinstance(consolidated[0], dict) and "content" in consolidated[0]:
         print(consolidated[0]["content"])
 
 

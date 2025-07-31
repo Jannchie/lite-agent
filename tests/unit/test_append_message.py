@@ -11,9 +11,11 @@ from lite_agent.types import (
     AgentAssistantMessage,
     AgentSystemMessage,
     AgentUserMessage,
+    AssistantTextContent,
     NewAssistantMessage,
     NewSystemMessage,
     NewUserMessage,
+    UserTextContent,
 )
 
 
@@ -41,6 +43,7 @@ class TestAppendMessage:
         # Now expects NewUserMessage since append_message converts to new format
         assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
+        assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == "Hello, how are you?"
 
     def test_append_message_with_assistant_message_object(self):
@@ -53,6 +56,7 @@ class TestAppendMessage:
         # Now expects NewAssistantMessage since append_message converts to new format
         assert isinstance(self.runner.messages[0], NewAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
+        assert isinstance(self.runner.messages[0].content[0], AssistantTextContent)
         assert self.runner.messages[0].content[0].text == "I'm doing well, thank you!"
 
     def test_append_message_with_system_message_object(self):
@@ -76,6 +80,7 @@ class TestAppendMessage:
         assert len(self.runner.messages) == 1
         assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
+        assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == "Hello from dict!"
 
     def test_append_message_with_assistant_dict(self):
@@ -89,6 +94,7 @@ class TestAppendMessage:
         assert len(self.runner.messages) == 1
         assert isinstance(self.runner.messages[0], NewAssistantMessage)
         assert self.runner.messages[0].role == "assistant"
+        assert isinstance(self.runner.messages[0].content[0], AssistantTextContent)
         assert self.runner.messages[0].content[0].text == "Hello from assistant dict!"
 
     def test_append_message_with_system_dict(self):
@@ -150,10 +156,13 @@ class TestAppendMessage:
 
         assert len(self.runner.messages) == 3
         assert isinstance(self.runner.messages[0], NewUserMessage)
+        assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == "First message"
         assert isinstance(self.runner.messages[1], NewAssistantMessage)
+        assert isinstance(self.runner.messages[1].content[0], AssistantTextContent)
         assert self.runner.messages[1].content[0].text == "Second message"
         assert isinstance(self.runner.messages[2], NewUserMessage)
+        assert isinstance(self.runner.messages[2].content[0], UserTextContent)
         assert self.runner.messages[2].content[0].text == "Third message"
 
     def test_append_message_with_complex_assistant_dict(self):
@@ -188,6 +197,7 @@ class TestAppendMessage:
 
         # 第一个内容应该是文本
         assert content[0].type == "text"
+        assert isinstance(content[0], AssistantTextContent)
         assert content[0].text == "I'll help you with that."
 
         # 第二个内容应该是工具调用
@@ -207,6 +217,7 @@ class TestAppendMessage:
         assert len(self.runner.messages) == 1
         assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
+        assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == ""
 
     def test_append_message_with_extra_fields_in_dict(self):
@@ -225,6 +236,7 @@ class TestAppendMessage:
         assert len(self.runner.messages) == 1
         assert isinstance(self.runner.messages[0], NewUserMessage)
         assert self.runner.messages[0].role == "user"
+        assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == "Hello"
         # 额外字段应该被忽略（Pydantic 会过滤未定义的字段）
 

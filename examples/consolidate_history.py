@@ -26,7 +26,7 @@ def test_consolidate_history():
     print("Consolidated messages count:", len(result))
     print("\nConsolidated content:")
     print("=" * 50)
-    if result and isinstance(result[0], dict):
+    if result and isinstance(result[0], dict) and "content" in result[0]:
         print(result[0]["content"])
     print("=" * 50)
 
@@ -38,7 +38,7 @@ def test_consolidate_history():
     single_message = [{"role": "user", "content": "Just a simple test"}]
     single_result = consolidate_history_transfer(single_message)
     print(f"\nSingle message result count: {len(single_result)}")
-    if single_result and isinstance(single_result[0], dict):
+    if single_result and isinstance(single_result[0], dict) and "content" in single_result[0]:
         print("Single message consolidated content:")
         print(single_result[0]["content"])
 

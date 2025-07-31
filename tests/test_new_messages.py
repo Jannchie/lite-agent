@@ -11,6 +11,7 @@ from lite_agent.types import (
     LLMResponseMeta,
 )
 from lite_agent.types.messages import (
+    AssistantMessageContent,
     AssistantMessageMeta,
     AssistantTextContent,
     AssistantToolCall,
@@ -21,6 +22,7 @@ from lite_agent.types.messages import (
     NewSystemMessage,
     NewUserMessage,
     UserImageContent,
+    UserMessageContent,
     UserTextContent,
     convert_legacy_to_new,
     convert_new_to_legacy,
@@ -29,7 +31,7 @@ from lite_agent.types.messages import (
 
 def test_user_message_creation():
     """Test creating a new user message with text content."""
-    content = [UserTextContent(text="Hello, world!")]
+    content: list[UserMessageContent] = [UserTextContent(text="Hello, world!")]
     message = NewUserMessage(content=content)
 
     assert message.role == "user"
@@ -64,7 +66,7 @@ def test_system_message_creation():
 
 def test_assistant_message_with_text():
     """Test creating an assistant message with text content."""
-    content = [AssistantTextContent(text="I can help you with that.")]
+    content: list[AssistantMessageContent] = [AssistantTextContent(text="I can help you with that.")]
     message = NewAssistantMessage(content=content)
 
     assert message.role == "assistant"
@@ -110,10 +112,11 @@ def test_assistant_message_meta_with_usage():
         latency_ms=200,
     )
 
-    content = [AssistantTextContent(text="Response")]
+    content: list[AssistantMessageContent] = [AssistantTextContent(text="Response")]
     message = NewAssistantMessage(content=content, meta=meta)
 
     assert message.meta.model == "gpt-4"
+    assert message.meta.usage is not None
     assert message.meta.usage.input_tokens == 50
     assert message.meta.usage.output_tokens == 25
     assert message.meta.usage.total_tokens == 75
@@ -124,7 +127,7 @@ def test_assistant_message_meta_with_usage():
 def test_to_llm_dict_user_message():
     """Test converting user message to LLM dict format."""
     # Single text content
-    content = [UserTextContent(text="Hello")]
+    content: list[UserMessageContent] = [UserTextContent(text="Hello")]
     message = NewUserMessage(content=content)
     llm_dict = message.to_llm_dict()
 
@@ -176,6 +179,7 @@ def test_convert_legacy_user_message_to_new():
     assert len(new_messages) == 1
     assert isinstance(new_messages[0], NewUserMessage)
     assert len(new_messages[0].content) == 1
+    assert isinstance(new_messages[0].content[0], UserTextContent)
     assert new_messages[0].content[0].text == "Hello, world!"
 
 
@@ -219,6 +223,7 @@ def test_convert_legacy_assistant_message_with_tools():
     assert content[2].type == "tool_call_result"
 
     # Check metadata
+    assert new_messages[0].meta.usage is not None
     assert new_messages[0].meta.usage.input_tokens == 20
     assert new_messages[0].meta.usage.output_tokens == 10
     assert new_messages[0].meta.latency_ms == 150

@@ -4,7 +4,7 @@ import logging
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
-from lite_agent.chat_display import display_chat_history
+from lite_agent.chat_display import display_messages
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -40,9 +40,7 @@ async def main():
     )
     async for chunk in resp:
         logger.info(chunk)
-    display_chat_history(
-        runner.messages,
-    )
+    display_messages(runner.messages)
 
 
 if __name__ == "__main__":

@@ -188,8 +188,13 @@ class Runner:
 
         def is_finish() -> bool:
             if completion_condition == "call":
-                function_calls = self._find_pending_function_calls()
-                return any(getattr(fc, "name", None) == "wait_for_user" for fc in function_calls)
+                # Check if wait_for_user was called in the last assistant message
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    for content_item in self.messages[-1].content:
+                        if (content_item.type == "tool_call_result" and
+                            self._get_tool_call_name_by_id(content_item.call_id) == "wait_for_user"):
+                            return True
+                return False
             return finish_reason == "stop"
 
         while not is_finish() and steps < max_steps:
@@ -371,6 +376,16 @@ class Runner:
 
         # Return tool calls that don't have corresponding results
         return [call for call_id, call in tool_calls.items() if call_id not in tool_results]
+
+    def _get_tool_call_name_by_id(self, call_id: str) -> str | None:
+        """Get the tool name for a given call_id from the last assistant message."""
+        if not self.messages or not isinstance(self.messages[-1], NewAssistantMessage):
+            return None
+
+        for content_item in self.messages[-1].content:
+            if content_item.type == "tool_call" and content_item.call_id == call_id:
+                return content_item.name
+        return None
 
     def _convert_function_calls_to_tool_calls(self, function_calls: list[AgentFunctionToolCallMessage]) -> list[ToolCall]:
         """Convert function call messages to ToolCall objects for compatibility."""

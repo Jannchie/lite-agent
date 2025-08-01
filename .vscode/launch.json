@@ -8,7 +8,7 @@
             "name": "Python main",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/src/easy_agent/__main__.py",
+            "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": false
         }

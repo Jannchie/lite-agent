@@ -196,15 +196,11 @@ class Runner:
             logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
             # Convert to legacy format only when needed for LLM communication
             # This allows us to keep the new format internally but ensures compatibility
-            logger.debug(f"Converting {len(self.messages)} new format messages to legacy for LLM:")
-            legacy_messages = self.legacy_messages
-            for i, msg in enumerate(legacy_messages):
-                logger.debug(f"  {i}: {msg.__class__.__name__} - {getattr(msg, 'role', getattr(msg, 'type', 'unknown'))}")
             match self.api:
                 case "completion":
-                    resp = await self.agent.completion(legacy_messages, record_to_file=record_to)
+                    resp = await self.agent.completion(self.messages, record_to_file=record_to)
                 case "responses":
-                    resp = await self.agent.responses(legacy_messages, record_to_file=record_to)
+                    resp = await self.agent.responses(self.messages, record_to_file=record_to)
                 case _:
                     msg = f"Unknown API type: {self.api}"
                     raise ValueError(msg)

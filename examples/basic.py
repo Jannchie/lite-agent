@@ -42,5 +42,6 @@ async def main():
     display_messages(runner.messages)
     print(runner.messages)
 
+
 if __name__ == "__main__":
     asyncio.run(main())

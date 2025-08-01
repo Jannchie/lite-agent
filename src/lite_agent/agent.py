@@ -12,6 +12,7 @@ from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
 from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, NewMessages, RunnerMessages, ToolCall
+from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
@@ -30,7 +31,7 @@ class Agent:
         instructions: str,
         tools: list[Callable] | None = None,
         handoffs: list["Agent"] | None = None,
-        message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
+        message_transfer: Callable[[NewMessages], NewMessages] | None = None,
         completion_condition: str = "stop",
     ) -> None:
         self.name = name
@@ -163,7 +164,7 @@ class Agent:
             # Regenerate transfer tools to include the new agent
             self._add_transfer_tools(self.handoffs)
 
-    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict]:
+    def prepare_completion_messages(self, messages: NewMessages) -> list[dict]:
         """Prepare messages for completions API (with conversion)."""
         converted_messages = self._convert_responses_to_completions_format(messages)
         instructions = self.instructions
@@ -181,7 +182,7 @@ class Agent:
             *converted_messages,
         ]
 
-    def prepare_responses_messages(self, messages: RunnerMessages) -> list[dict[str, Any]]:
+    def prepare_responses_messages(self, messages: NewMessages) -> list[dict[str, Any]]:
         """Prepare messages for responses API (no conversion, just add system message if needed)."""
         instructions = self.instructions
         if self.handoffs:
@@ -190,63 +191,82 @@ class Agent:
             instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
         if self.completion_condition == "call":
             instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        return [
-            AgentSystemMessage(
-                role="system",
-                content=f"You are {self.name}. {instructions}",
-            ).to_llm_dict(),
-            *[m.to_llm_dict() if hasattr(m, "to_llm_dict") else m for m in messages],  # type: ignore
+        res: list[dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": f"You are {self.name}. {instructions}",
+            },
         ]
-
-    def prepare_completion_messages_new(self, messages: NewMessages) -> list[dict]:
-        """Prepare new format messages for completions API."""
-        instructions = self.instructions
-        if self.handoffs:
-            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        if self.parent:
-            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        if self.completion_condition == "call":
-            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-
-        # Convert new messages to completion format
-        completion_messages = [message.to_llm_dict() for message in messages]
-
-        return [
-            AgentSystemMessage(
-                role="system",
-                content=f"You are {self.name}. {instructions}",
-            ).to_llm_dict(),
-            *completion_messages,
-        ]
-
-    def prepare_responses_messages_new(self, messages: NewMessages) -> list[dict[str, Any]]:
-        """Prepare new format messages for responses API."""
-        instructions = self.instructions
-        if self.handoffs:
-            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        if self.parent:
-            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        if self.completion_condition == "call":
-            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-
-        # Convert new messages to response format (without tool_calls for Response API)
-        response_messages = []
         for message in messages:
-            if hasattr(message, "to_response_dict"):
-                response_messages.append(message.to_response_dict())
+            if isinstance(message, NewAssistantMessage):
+                for item in message.content:
+                    match item.type:
+                        case "text":
+                            res.append(
+                                {
+                                    "role": "assistant",
+                                    "content": item.text,
+                                },
+                            )
+                        case "tool_call":
+                            res.append(
+                                {
+                                    "type": "function_call",
+                                    "call_id": item.call_id,
+                                    "name": item.name,
+                                    "arguments": item.arguments,
+                                },
+                            )
+                        case "tool_call_result":
+                            res.append(
+                                {
+                                    "type": "function_call_output",
+                                    "call_id": item.call_id,
+                                    "output": item.output,
+                                },
+                            )
+            elif isinstance(message, NewSystemMessage):
+                res.append(
+                    {
+                        "role": "system",
+                        "content": message.content,
+                    },
+                )
             else:
-                # For non-assistant messages, use regular to_llm_dict
-                response_messages.append(message.to_llm_dict())
+                contents = []
+                for item in message.content:
+                    match item.type:
+                        case "text":
+                            contents.append(
+                                {
+                                    "type": "input_text",
+                                    "text": item.text,
+                                },
+                            )
+                        case "image":
+                            contents.append(
+                                {
+                                    "type": "input_image",
+                                    "image_url": item.image_url,
+                                },
+                            )
+                        case "file":
+                            contents.append(
+                                {
+                                    "type": "input_file",
+                                    "file_id": item.file_id,
+                                    "file_name": item.file_name,
+                                },
+                            )
+                res.append(
+                    {
+                        "role": message.role,
+                        "content": contents,
+                    },
+                )
+        return res
 
-        return [
-            AgentSystemMessage(
-                role="system",
-                content=f"You are {self.name}. {instructions}",
-            ).to_llm_dict(),
-            *response_messages,
-        ]
-
-    async def completion(self, messages: RunnerMessages | NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def completion(self, messages: NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
@@ -269,7 +289,7 @@ class Agent:
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
-    async def responses(self, messages: RunnerMessages | NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def responses(self, messages: NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
@@ -470,7 +490,7 @@ class Agent:
 
         return converted_content
 
-    def set_message_transfer(self, message_transfer: Callable[[RunnerMessages], RunnerMessages] | None) -> None:
+    def set_message_transfer(self, message_transfer: Callable[[NewMessages], NewMessages] | None) -> None:
         """Set or update the message transfer callback function.
 
         Args:

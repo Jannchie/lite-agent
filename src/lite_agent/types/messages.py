@@ -159,12 +159,6 @@ class NewUserMessage(BaseModel):
         content = self.content[0].text if len(self.content) == 1 and self.content[0].type == "text" else [item.model_dump() for item in self.content]
         return {"role": self.role, "content": content}
 
-    def to_response_dict(self) -> dict[str, Any]:
-        """Convert to dict for Response API"""
-        # Convert content to simplified format for Response API
-        content = self.content[0].text if len(self.content) == 1 and self.content[0].type == "text" else [item.model_dump() for item in self.content]
-        return {"role": self.role, "content": content}
-
 
 class NewSystemMessage(BaseModel):
     """System message"""
@@ -175,10 +169,6 @@ class NewSystemMessage(BaseModel):
 
     def to_llm_dict(self) -> dict[str, Any]:
         """Convert to dict for LLM API"""
-        return {"role": self.role, "content": self.content}
-
-    def to_response_dict(self) -> dict[str, Any]:
-        """Convert to dict for Response API"""
         return {"role": self.role, "content": self.content}
 
 
@@ -219,16 +209,6 @@ class NewAssistantMessage(BaseModel):
             result["tool_calls"] = tool_calls
 
         return result
-
-    def to_response_dict(self) -> dict[str, Any]:
-        """Convert to dict for Response API (excludes tool_calls)."""
-        # For Response API, only include text content, no tool_calls
-        text_parts = [item.text for item in self.content if item.type == "text"]
-
-        return {
-            "role": self.role,
-            "content": " ".join(text_parts) if text_parts else "",
-        }
 
 
 # Union type for new structured messages

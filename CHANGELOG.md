@@ -1,3 +1,11 @@
+## v0.4.1
+
+[v0.4.0...v0.4.1](https://github.com/Jannchie/lite-agent/compare/v0.4.0...v0.4.1)
+
+### :art: Refactors
+
+- **runner**: replace if-elif with match-case for chunk handling - By [Jannchie](mailto:jannchie@gmail.com) in [e9a8464](https://github.com/Jannchie/lite-agent/commit/e9a8464)
+
 ## v0.4.0
 
 [v0.3.0...v0.4.0](https://github.com/Jannchie/lite-agent/compare/v0.3.0...v0.4.0)

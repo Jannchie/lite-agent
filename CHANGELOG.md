@@ -1,3 +1,61 @@
+## v0.4.0
+
+[v0.3.0...v0.4.0](https://github.com/Jannchie/lite-agent/compare/v0.3.0...v0.4.0)
+
+### :rocket: Breaking Changes
+
+- **agent**: unify message handling using new messages format - By [Jannchie](mailto:jannchie@gmail.com) in [f31769a](https://github.com/Jannchie/lite-agent/commit/f31769a)
+- **chat-display**: remove display_chat_history usage and exports - By [Jannchie](mailto:jannchie@gmail.com) in [fca6ff7](https://github.com/Jannchie/lite-agent/commit/fca6ff7)
+- **chat-display**: rename rich_helpers to chat_display and update related imports - By [Jannchie](mailto:panjianqi@preferred.jp) in [8bbd83b](https://github.com/Jannchie/lite-agent/commit/8bbd83b)
+- **chunks**: rename tool_call and tool_call_result to function_call and function_call_output - By [Jannchie](mailto:jannchie@gmail.com) in [2821478](https://github.com/Jannchie/lite-agent/commit/2821478)
+- **function-call**: rename function_call_id to call_id - By [Jannchie](mailto:jannchie@gmail.com) in [d415fce](https://github.com/Jannchie/lite-agent/commit/d415fce)
+- **messages**: remove legacy function call messages and migrate to new assistant message structure - By [Jannchie](mailto:jannchie@gmail.com) in [c632629](https://github.com/Jannchie/lite-agent/commit/c632629)
+- **messages**: remove conversion helpers and fully switch to new message format - By [Jannchie](mailto:jannchie@gmail.com) in [75e47bf](https://github.com/Jannchie/lite-agent/commit/75e47bf)
+- **messages**: introduce new structured message types and unified message format - By [Jannchie](mailto:jannchie@gmail.com) in [cb8c091](https://github.com/Jannchie/lite-agent/commit/cb8c091)
+- **processors**: rename stream_chunk_processor to completion_event_processor - By [Jannchie](mailto:jannchie@gmail.com) in [80dedb9](https://github.com/Jannchie/lite-agent/commit/80dedb9)
+- **runner**: remove final_message type and streamline tool call handling - By [Jannchie](mailto:jannchie@gmail.com) in [ba91c29](https://github.com/Jannchie/lite-agent/commit/ba91c29)
+- **types**: rename chunk types to event types and update references - By [Jannchie](mailto:jannchie@gmail.com) in [d1354b3](https://github.com/Jannchie/lite-agent/commit/d1354b3)
+- **types**: remove finalmessagechunk type and usage - By [Jannchie](mailto:jannchie@gmail.com) in [6b3281e](https://github.com/Jannchie/lite-agent/commit/6b3281e)
+
+### :sparkles: Features
+
+- **chat-display**: add support for new message format - By [Jannchie](mailto:jannchie@gmail.com) in [a3fd1c6](https://github.com/Jannchie/lite-agent/commit/a3fd1c6)
+- **chat-display**: add meta stats, local time, and message performance info to chat display and message types - By [Jannchie](mailto:jannchie@gmail.com) in [bda3346](https://github.com/Jannchie/lite-agent/commit/bda3346)
+- **responses**: support new message format for response api - By [Jannchie](mailto:jannchie@gmail.com) in [e34a2ef](https://github.com/Jannchie/lite-agent/commit/e34a2ef)
+- **responses**: add response streaming support and client methods - By [Jannchie](mailto:jannchie@gmail.com) in [f484530](https://github.com/Jannchie/lite-agent/commit/f484530)
+- **rich-helpers**: add print_messages for compact output - By [Jannchie](mailto:panjianqi@preferred.jp) in [5a49203](https://github.com/Jannchie/lite-agent/commit/5a49203)
+- **runner**: support interactive tool call confirmation in terminal && improve chunk handling - By [Jannchie](mailto:jannchie@gmail.com) in [7164284](https://github.com/Jannchie/lite-agent/commit/7164284)
+
+### :adhesive_bandage: Fixes
+
+- **agent**: use isinstance for to_llm_dict checks - By [Jannchie](mailto:jannchie@gmail.com) in [e996785](https://github.com/Jannchie/lite-agent/commit/e996785)
+- **examples**: add content checks for dict messages - By [Jannchie](mailto:panjianqi@preferred.jp) in [94afcae](https://github.com/Jannchie/lite-agent/commit/94afcae)
+- **import**: update stream_handler imports && fix response api logic - By [Jannchie](mailto:jannchie@gmail.com) in [be192da](https://github.com/Jannchie/lite-agent/commit/be192da)
+- **input-image**: ensure file_id or image_url present and improve conversion handling - By [Jannchie](mailto:jannchie@gmail.com) in [d0bcdd5](https://github.com/Jannchie/lite-agent/commit/d0bcdd5)
+- **runner**: improve wait_for_user finish detection - By [Jannchie](mailto:jannchie@gmail.com) in [98435b0](https://github.com/Jannchie/lite-agent/commit/98435b0)
+- **runner**: fix final message processing to return responses - By [Jannchie](mailto:jannchie@gmail.com) in [e813f4a](https://github.com/Jannchie/lite-agent/commit/e813f4a)
+- **stream-chunk-processor**: construct usage event with correct usage type - By [Jannchie](mailto:jannchie@gmail.com) in [89b2cbe](https://github.com/Jannchie/lite-agent/commit/89b2cbe)
+- **tests**: improve type hints and patching mocks - By [Jannchie](mailto:jannchie@gmail.com) in [e4dfd64](https://github.com/Jannchie/lite-agent/commit/e4dfd64)
+- **tests**: update patch paths for litellm.acompletion - By [Jannchie](mailto:jannchie@gmail.com) in [897a284](https://github.com/Jannchie/lite-agent/commit/897a284)
+
+### :art: Refactors
+
+- **examples**: replace final_message with assistant_message in includes - By [Jannchie](mailto:jannchie@gmail.com) in [c5431ab](https://github.com/Jannchie/lite-agent/commit/c5431ab)
+- **runner**: simplify message appending logic && tidy code style - By [Jannchie](mailto:jannchie@gmail.com) in [412a8ec](https://github.com/Jannchie/lite-agent/commit/412a8ec)
+- **runner**: replace api handling with match statement && set default api to responses - By [Jannchie](mailto:jannchie@gmail.com) in [75c823a](https://github.com/Jannchie/lite-agent/commit/75c823a)
+- **stream-handlers**: rename litellm_stream_handler to litellm_completion_stream_handler && update imports and tests - By [Jannchie](mailto:jannchie@gmail.com) in [5b7ac92](https://github.com/Jannchie/lite-agent/commit/5b7ac92)
+- **tests**: rename tool_call types to function_call && remove unused usage tests - By [Jannchie](mailto:jannchie@gmail.com) in [1e0992f](https://github.com/Jannchie/lite-agent/commit/1e0992f)
+
+### :memo: Documentation
+
+- add claude guidance documentation - By [Jannchie](mailto:panjianqi@preferred.jp) in [a741494](https://github.com/Jannchie/lite-agent/commit/a741494)
+
+### :wrench: Chores
+
+- **dependencies**: update lock file - By [Jannchie](mailto:jannchie@gmail.com) in [042f6f3](https://github.com/Jannchie/lite-agent/commit/042f6f3)
+- **dev-deps**: add pytest-asyncio to dev dependencies - By [Jannchie](mailto:jannchie@gmail.com) in [57543cd](https://github.com/Jannchie/lite-agent/commit/57543cd)
+- **lint**: remove commented ruff exclude config - By [Jannchie](mailto:jannchie@gmail.com) in [25635dd](https://github.com/Jannchie/lite-agent/commit/25635dd)
+
 ## v0.3.0
 
 [v0.2.0...v0.3.0](https://github.com/Jannchie/lite-agent/compare/v0.2.0...v0.3.0)

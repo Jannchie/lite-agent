@@ -3,7 +3,7 @@ from typing import Literal
 from litellm.types.utils import ModelResponseStream
 from pydantic import BaseModel
 
-from .messages import AgentAssistantMessage
+from .messages import NewAssistantMessage
 
 
 class Usage(BaseModel):
@@ -58,7 +58,7 @@ class AssistantMessageEvent(BaseModel):
     """
 
     type: Literal["assistant_message"] = "assistant_message"
-    message: AgentAssistantMessage
+    message: NewAssistantMessage
 
 
 class FunctionCallEvent(BaseModel):

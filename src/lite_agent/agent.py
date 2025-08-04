@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
-from lite_agent.types import AgentChunk, AgentSystemMessage, FunctionCallEvent, FunctionCallOutputEvent, NewMessages, RunnerMessages, ToolCall
-from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage
+from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall
+from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage, NewUserMessage
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
@@ -31,7 +31,7 @@ class Agent:
         instructions: str,
         tools: list[Callable] | None = None,
         handoffs: list["Agent"] | None = None,
-        message_transfer: Callable[[NewMessages], NewMessages] | None = None,
+        message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
         completion_condition: str = "stop",
     ) -> None:
         self.name = name
@@ -164,7 +164,7 @@ class Agent:
             # Regenerate transfer tools to include the new agent
             self._add_transfer_tools(self.handoffs)
 
-    def prepare_completion_messages(self, messages: NewMessages) -> list[dict]:
+    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict]:
         """Prepare messages for completions API (with conversion)."""
         converted_messages = self._convert_responses_to_completions_format(messages)
         instructions = self.instructions
@@ -175,14 +175,13 @@ class Agent:
         if self.completion_condition == "call":
             instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
         return [
-            AgentSystemMessage(
-                role="system",
+            NewSystemMessage(
                 content=f"You are {self.name}. {instructions}",
             ).to_llm_dict(),
             *converted_messages,
         ]
 
-    def prepare_responses_messages(self, messages: NewMessages) -> list[dict[str, Any]]:
+    def prepare_responses_messages(self, messages: RunnerMessages) -> list[dict[str, Any]]:
         """Prepare messages for responses API (no conversion, just add system message if needed)."""
         instructions = self.instructions
         if self.handoffs:
@@ -232,7 +231,7 @@ class Agent:
                         "content": message.content,
                     },
                 )
-            else:
+            elif isinstance(message, NewUserMessage):
                 contents = []
                 for item in message.content:
                     match item.type:
@@ -264,9 +263,12 @@ class Agent:
                         "content": contents,
                     },
                 )
+            # Handle dict messages (legacy format)
+            elif isinstance(message, dict):
+                res.append(message)
         return res
 
-    async def completion(self, messages: NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
@@ -289,7 +291,7 @@ class Agent:
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
-    async def responses(self, messages: NewMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def responses(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
@@ -454,15 +456,15 @@ class Agent:
                 continue
 
             item_type = item_dict.get("type")
-            if item_type == "input_text":
-                # Convert ResponseInputText to completion API format
+            if item_type in ["input_text", "text"]:
+                # Convert ResponseInputText or new text format to completion API format
                 converted_content.append(
                     {
                         "type": "text",
                         "text": item_dict["text"],
                     },
                 )
-            elif item_type == "input_image":
+            elif item_type in ["input_image", "image"]:
                 # Convert ResponseInputImage to completion API format
                 if item_dict.get("file_id"):
                     msg = "File ID input is not supported for Completion API"
@@ -490,7 +492,7 @@ class Agent:
 
         return converted_content
 
-    def set_message_transfer(self, message_transfer: Callable[[NewMessages], NewMessages] | None) -> None:
+    def set_message_transfer(self, message_transfer: Callable[[RunnerMessages], RunnerMessages] | None) -> None:
         """Set or update the message transfer callback function.
 
         Args:

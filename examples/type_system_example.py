@@ -6,9 +6,10 @@
 """
 
 from lite_agent.types import (
-    AgentUserMessage,
     AssistantMessageDict,
+    NewUserMessage,
     UserMessageDict,
+    UserTextContent,
 )
 
 
@@ -20,9 +21,8 @@ def example_usage():
     print(f"字符串输入: {user_input_str}")
 
     # 2. 使用 BaseModel 实例 (Pydantic 模型)
-    user_message_model = AgentUserMessage(
-        role="user",
-        content="This is a message using BaseModel",
+    user_message_model = NewUserMessage(
+        content=[UserTextContent(text="This is a message using BaseModel")],
     )
     print(f"BaseModel 输入: {user_message_model}")
 

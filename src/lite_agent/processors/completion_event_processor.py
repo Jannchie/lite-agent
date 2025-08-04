@@ -8,16 +8,17 @@ from litellm.types.utils import ChatCompletionDeltaToolCall, ModelResponseStream
 
 from lite_agent.loggers import logger
 from lite_agent.types import (
-    AgentAssistantMessage,
     AgentChunk,
     AssistantMessage,
     AssistantMessageEvent,
+    AssistantMessageMeta,
     CompletionRawEvent,
     ContentDeltaEvent,
     EventUsage,
     FunctionCallDeltaEvent,
     FunctionCallEvent,
-    LLMResponseMeta,
+    MessageUsage,
+    NewAssistantMessage,
     Timing,
     TimingEvent,
     ToolCall,
@@ -78,17 +79,19 @@ class CompletionEventProcessor:
                 if self._first_output_time and self._output_complete_time:
                     output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
 
-                meta = LLMResponseMeta(
-                    sent_at=end_time,
-                    latency_ms=latency_ms,
-                    output_time_ms=output_time_ms,
+                usage = MessageUsage(
                     input_tokens=self._usage_data.get("input_tokens"),
                     output_tokens=self._usage_data.get("output_tokens"),
                 )
+                meta = AssistantMessageMeta(
+                    sent_at=end_time,
+                    latency_ms=latency_ms,
+                    total_time_ms=output_time_ms,
+                    usage=usage,
+                )
                 yield AssistantMessageEvent(
-                    message=AgentAssistantMessage(
-                        role=self.current_message.role,
-                        content=self.current_message.content,
+                    message=NewAssistantMessage(
+                        content=[],
                         meta=meta,
                     ),
                 )
@@ -152,17 +155,19 @@ class CompletionEventProcessor:
                 if self._first_output_time and self._output_complete_time:
                     output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
 
-                meta = LLMResponseMeta(
-                    sent_at=end_time,
-                    latency_ms=latency_ms,
-                    output_time_ms=output_time_ms,
+                usage = MessageUsage(
                     input_tokens=self._usage_data.get("input_tokens"),
                     output_tokens=self._usage_data.get("output_tokens"),
                 )
+                meta = AssistantMessageMeta(
+                    sent_at=end_time,
+                    latency_ms=latency_ms,
+                    total_time_ms=output_time_ms,
+                    usage=usage,
+                )
                 yield AssistantMessageEvent(
-                    message=AgentAssistantMessage(
-                        role=self.current_message.role,
-                        content=self.current_message.content,
+                    message=NewAssistantMessage(
+                        content=[],
                         meta=meta,
                     ),
                 )

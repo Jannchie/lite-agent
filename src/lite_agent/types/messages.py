@@ -4,20 +4,22 @@ from typing import Any, Literal, NotRequired, TypedDict
 
 from pydantic import BaseModel, Field, model_validator
 
-from .tool_calls import ToolCall
+
+# Base metadata type
+class MessageMeta(BaseModel):
+    """Base metadata for all message types"""
+    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class BasicMessageMeta(BaseModel):
+class BasicMessageMeta(MessageMeta):
     """Basic metadata for user messages and function calls"""
 
-    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     execution_time_ms: int | None = None
 
 
-class LLMResponseMeta(BaseModel):
+class LLMResponseMeta(MessageMeta):
     """Metadata for LLM responses, includes performance metrics"""
 
-    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     latency_ms: int | None = None
     output_time_ms: int | None = None
     input_tokens: int | None = None
@@ -25,10 +27,6 @@ class LLMResponseMeta(BaseModel):
 
 
 # New unified metadata types
-class MessageMeta(BaseModel):
-    """Base metadata for all message types"""
-
-    sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class MessageUsage(BaseModel):
@@ -46,6 +44,9 @@ class AssistantMessageMeta(MessageMeta):
     usage: MessageUsage | None = None
     total_time_ms: int | None = None
     latency_ms: int | None = None
+    output_time_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class ResponseInputImageDict(TypedDict):
@@ -252,50 +253,47 @@ class UserMessageContentItemImageURL(BaseModel):
     image_url: UserMessageContentItemImageURLImageURL
 
 
-# Legacy types - keeping for compatibility
-class AssistantMessage(BaseModel):
-    role: Literal["assistant"] = "assistant"
-    id: str
-    index: int | None = None
-    content: str = ""
-    tool_calls: list[ToolCall] | None = None
+# Legacy compatibility wrapper classes
+class AgentUserMessage(NewUserMessage):
+    def __init__(
+        self,
+        content: str | list[UserMessageContent] | None = None,
+        *,
+        role: Literal["user"] = "user",
+        meta: MessageMeta | None = None,
+    ):
+        if isinstance(content, str):
+            content = [UserTextContent(text=content)]
+        elif content is None:
+            content = []
+        super().__init__(
+            role=role,
+            content=content,
+            meta=meta or MessageMeta(),
+        )
 
+class AgentAssistantMessage(NewAssistantMessage):
+    def __init__(
+        self,
+        content: str | list[AssistantMessageContent] | None = None,
+        *,
+        role: Literal["assistant"] = "assistant",
+        meta: AssistantMessageMeta | None = None,
+    ):
+        if isinstance(content, str):
+            content = [AssistantTextContent(text=content)]
+        elif content is None:
+            content = []
+        super().__init__(
+            role=role,
+            content=content,
+            meta=meta or AssistantMessageMeta(),
+        )
 
-class Message(BaseModel):
-    role: str
-    content: str
+AgentSystemMessage = NewSystemMessage
+RunnerMessage = NewMessage
 
-
-class AgentUserMessage(BaseModel):
-    role: Literal["user"] = "user"
-    content: str | Sequence[ResponseInputText | ResponseInputImage | UserMessageContentItemText | UserMessageContentItemImageURL]
-    meta: BasicMessageMeta = Field(default_factory=BasicMessageMeta)
-
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM, excluding meta data"""
-        return {"role": self.role, "content": self.content}
-
-
-class AgentAssistantMessage(BaseModel):
-    role: Literal["assistant"] = "assistant"
-    content: str
-    meta: LLMResponseMeta = Field(default_factory=LLMResponseMeta)
-
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM, excluding meta data"""
-        return {"role": self.role, "content": self.content}
-
-
-class AgentSystemMessage(BaseModel):
-    role: Literal["system"] = "system"
-    content: str
-    meta: BasicMessageMeta = Field(default_factory=BasicMessageMeta)
-
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM, excluding meta data"""
-        return {"role": self.role, "content": self.content}
-
-
+# Deprecated legacy message types - creating minimal compatibility stubs
 class AgentFunctionToolCallMessage(BaseModel):
     type: Literal["function_call"] = "function_call"
     arguments: str
@@ -304,14 +302,8 @@ class AgentFunctionToolCallMessage(BaseModel):
     meta: BasicMessageMeta = Field(default_factory=BasicMessageMeta)
 
     def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM, excluding meta data"""
-        return {
-            "type": self.type,
-            "arguments": self.arguments,
-            "call_id": self.call_id,
-            "name": self.name,
-        }
-
+        """Convert to dict for LLM API"""
+        return self.model_dump()
 
 class AgentFunctionCallOutput(BaseModel):
     type: Literal["function_call_output"] = "function_call_output"
@@ -320,28 +312,33 @@ class AgentFunctionCallOutput(BaseModel):
     meta: BasicMessageMeta = Field(default_factory=BasicMessageMeta)
 
     def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM, excluding meta data"""
-        return {
-            "type": self.type,
-            "call_id": self.call_id,
-            "output": self.output,
-        }
+        """Convert to dict for LLM API"""
+        return self.model_dump()
 
+# Legacy types for processor compatibility
+class AssistantMessage(BaseModel):
+    role: Literal["assistant"] = "assistant"
+    id: str = ""
+    index: int | None = None
+    content: str = ""
+    tool_calls: list[Any] | None = None
 
-RunnerMessage = AgentUserMessage | AgentAssistantMessage | AgentSystemMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput
-AgentMessage = RunnerMessage | AgentSystemMessage
+class Message(BaseModel):
+    role: str
+    content: str
 
 # Enhanced type definitions for better type hints
-# Supports BaseModel instances, TypedDict, and plain dict
-FlexibleRunnerMessage = RunnerMessage | NewMessage | MessageDict | dict[str, Any]
+# Supports new message format, legacy messages, and dict (for backward compatibility)
+FlexibleRunnerMessage = NewMessage | AgentUserMessage | AgentAssistantMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput | dict[str, Any]
 RunnerMessages = Sequence[FlexibleRunnerMessage]
+
 
 # Type alias for user input - supports string, single message, or sequence of messages
 UserInput = str | FlexibleRunnerMessage | RunnerMessages
 
 
-def messages_to_llm_format(messages: Sequence[RunnerMessage]) -> list[dict[str, Any]]:
-    """Convert a sequence of RunnerMessage to LLM format, excluding meta data"""
+def messages_to_llm_format(messages: Sequence[NewMessage]) -> list[dict[str, Any]]:
+    """Convert a sequence of NewMessage to LLM format, excluding meta data"""
     result = []
     for message in messages:
         if hasattr(message, "to_llm_dict"):
@@ -349,192 +346,4 @@ def messages_to_llm_format(messages: Sequence[RunnerMessage]) -> list[dict[str, 
         else:
             # Fallback for messages without to_llm_dict method
             result.append(message.model_dump(exclude={"meta"}))
-    return result
-
-
-# Conversion functions between old and new message formats
-def convert_legacy_to_new(messages: Sequence[RunnerMessage]) -> list[NewMessage]:
-    """Convert legacy message format to new structured format"""
-    result: list[NewMessage] = []
-    i = 0
-
-    while i < len(messages):
-        message = messages[i]
-
-        if isinstance(message, AgentUserMessage):
-            # Convert user message
-            if isinstance(message.content, str):
-                user_content: list[UserMessageContent] = [UserTextContent(text=message.content)]
-            else:
-                user_content: list[UserMessageContent] = []
-                for item in message.content:
-                    if hasattr(item, "text"):
-                        user_content.append(UserTextContent(text=getattr(item, "text", "")))
-                    elif hasattr(item, "image_url"):
-                        image_url_attr = getattr(item, "image_url", None)
-                        if image_url_attr is not None:
-                            image_url = getattr(image_url_attr, "url", str(image_url_attr)) if hasattr(image_url_attr, "url") else str(image_url_attr)
-                            user_content.append(UserImageContent(image_url=image_url))
-                    # Add more conversion logic as needed
-
-            result.append(
-                NewUserMessage(
-                    content=user_content,
-                    meta=MessageMeta(sent_at=message.meta.sent_at),
-                ),
-            )
-
-        elif isinstance(message, AgentSystemMessage):
-            result.append(
-                NewSystemMessage(
-                    content=message.content,
-                    meta=MessageMeta(sent_at=message.meta.sent_at),
-                ),
-            )
-
-        elif isinstance(message, AgentAssistantMessage):
-            # Look ahead for related tool calls and results
-            assistant_content: list[AssistantMessageContent] = []
-
-            # Add text content
-            if message.content:
-                assistant_content.append(AssistantTextContent(text=message.content))
-
-            # Collect tool calls and results that follow
-            j = i + 1
-            while j < len(messages):
-                next_message = messages[j]
-                if isinstance(next_message, AgentFunctionToolCallMessage):
-                    assistant_content.append(
-                        AssistantToolCall(
-                            call_id=next_message.call_id,
-                            name=next_message.name,
-                            arguments=next_message.arguments,
-                        ),
-                    )
-                    j += 1
-                elif isinstance(next_message, AgentFunctionCallOutput):
-                    # Find matching tool call
-                    assistant_content.append(
-                        AssistantToolCallResult(
-                            call_id=next_message.call_id,
-                            output=next_message.output,
-                            execution_time_ms=next_message.meta.execution_time_ms,
-                        ),
-                    )
-                    j += 1
-                else:
-                    break
-
-            # Create assistant message meta with enhanced data
-            assistant_meta = AssistantMessageMeta(sent_at=message.meta.sent_at)
-            if hasattr(message.meta, "latency_ms"):
-                assistant_meta.latency_ms = message.meta.latency_ms
-            if hasattr(message.meta, "input_tokens") and hasattr(message.meta, "output_tokens"):
-                assistant_meta.usage = MessageUsage(
-                    input_tokens=message.meta.input_tokens,
-                    output_tokens=message.meta.output_tokens,
-                    total_tokens=(message.meta.input_tokens or 0) + (message.meta.output_tokens or 0),
-                )
-            if hasattr(message.meta, "output_time_ms"):
-                assistant_meta.total_time_ms = message.meta.output_time_ms
-
-            result.append(
-                NewAssistantMessage(
-                    content=assistant_content,
-                    meta=assistant_meta,
-                ),
-            )
-
-            # Skip the processed tool calls and results
-            i = j - 1
-
-        i += 1
-
-    return result
-
-
-def convert_new_to_legacy(messages: Sequence[NewMessage]) -> list[RunnerMessage]:
-    """Convert new structured format to legacy message format"""
-    result: list[RunnerMessage] = []
-
-    for message in messages:
-        if isinstance(message, NewUserMessage):
-            # Convert to legacy user message
-            if len(message.content) == 1 and message.content[0].type == "text":
-                content = message.content[0].text
-            else:
-                # Convert to legacy multi-content format
-                content = []
-                for item in message.content:
-                    if item.type == "text":
-                        content.append(ResponseInputText(text=item.text))
-                    elif item.type == "image":
-                        content.append(
-                            ResponseInputImage(
-                                image_url=item.image_url,
-                                file_id=item.file_id,
-                                detail=item.detail,
-                            ),
-                        )
-
-            result.append(
-                AgentUserMessage(
-                    content=content,
-                    meta=BasicMessageMeta(sent_at=message.meta.sent_at),
-                ),
-            )
-
-        elif isinstance(message, NewSystemMessage):
-            result.append(
-                AgentSystemMessage(
-                    content=message.content,
-                    meta=BasicMessageMeta(sent_at=message.meta.sent_at),
-                ),
-            )
-
-        elif isinstance(message, NewAssistantMessage):
-            # Extract text content first
-            text_parts = [item.text for item in message.content if item.type == "text"]
-
-            # Create assistant message
-            assistant_meta = LLMResponseMeta(sent_at=message.meta.sent_at)
-            if message.meta.latency_ms:
-                assistant_meta.latency_ms = message.meta.latency_ms
-            if message.meta.total_time_ms:
-                assistant_meta.output_time_ms = message.meta.total_time_ms
-            if message.meta.usage:
-                assistant_meta.input_tokens = message.meta.usage.input_tokens
-                assistant_meta.output_tokens = message.meta.usage.output_tokens
-
-            result.append(
-                AgentAssistantMessage(
-                    content=" ".join(text_parts),
-                    meta=assistant_meta,
-                ),
-            )
-
-            # Add tool calls and results as separate messages
-            for item in message.content:
-                if item.type == "tool_call":
-                    result.append(
-                        AgentFunctionToolCallMessage(
-                            call_id=item.call_id,
-                            name=item.name,
-                            arguments=item.arguments if isinstance(item.arguments, str) else str(item.arguments),
-                            meta=BasicMessageMeta(sent_at=message.meta.sent_at),
-                        ),
-                    )
-                elif item.type == "tool_call_result":
-                    result.append(
-                        AgentFunctionCallOutput(
-                            call_id=item.call_id,
-                            output=item.output,
-                            meta=BasicMessageMeta(
-                                sent_at=message.meta.sent_at,
-                                execution_time_ms=item.execution_time_ms,
-                            ),
-                        ),
-                    )
-
     return result

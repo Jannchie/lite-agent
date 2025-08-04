@@ -1,15 +1,6 @@
 """Tests for the new structured message types."""
 
-from datetime import datetime, timezone
 
-from lite_agent.types import (
-    AgentAssistantMessage,
-    AgentFunctionCallOutput,
-    AgentFunctionToolCallMessage,
-    AgentUserMessage,
-    BasicMessageMeta,
-    LLMResponseMeta,
-)
 from lite_agent.types.messages import (
     AssistantMessageContent,
     AssistantMessageMeta,
@@ -24,8 +15,6 @@ from lite_agent.types.messages import (
     UserImageContent,
     UserMessageContent,
     UserTextContent,
-    convert_legacy_to_new,
-    convert_new_to_legacy,
 )
 
 
@@ -166,137 +155,3 @@ def test_to_llm_dict_assistant_message():
     assert len(llm_dict["tool_calls"]) == 1
     assert llm_dict["tool_calls"][0]["id"] == "call_123"
 
-
-def test_convert_legacy_user_message_to_new():
-    """Test converting legacy user message to new format."""
-    legacy_message = AgentUserMessage(
-        content="Hello, world!",
-        meta=BasicMessageMeta(sent_at=datetime.now(timezone.utc)),
-    )
-
-    new_messages = convert_legacy_to_new([legacy_message])
-
-    assert len(new_messages) == 1
-    assert isinstance(new_messages[0], NewUserMessage)
-    assert len(new_messages[0].content) == 1
-    assert isinstance(new_messages[0].content[0], UserTextContent)
-    assert new_messages[0].content[0].text == "Hello, world!"
-
-
-def test_convert_legacy_assistant_message_with_tools():
-    """Test converting legacy assistant message with tool calls to new format."""
-    now = datetime.now(timezone.utc)
-
-    legacy_messages = [
-        AgentAssistantMessage(
-            content="I'll check the weather.",
-            meta=LLMResponseMeta(
-                sent_at=now,
-                input_tokens=20,
-                output_tokens=10,
-                latency_ms=150,
-            ),
-        ),
-        AgentFunctionToolCallMessage(
-            call_id="call_123",
-            name="get_weather",
-            arguments='{"location": "NYC"}',
-            meta=BasicMessageMeta(sent_at=now),
-        ),
-        AgentFunctionCallOutput(
-            call_id="call_123",
-            output="22°C, Sunny",
-            meta=BasicMessageMeta(sent_at=now, execution_time_ms=100),
-        ),
-    ]
-
-    new_messages = convert_legacy_to_new(legacy_messages)
-
-    assert len(new_messages) == 1
-    assert isinstance(new_messages[0], NewAssistantMessage)
-
-    # Check content structure
-    content = new_messages[0].content
-    assert len(content) == 3
-    assert content[0].type == "text"
-    assert content[1].type == "tool_call"
-    assert content[2].type == "tool_call_result"
-
-    # Check metadata
-    assert new_messages[0].meta.usage is not None
-    assert new_messages[0].meta.usage.input_tokens == 20
-    assert new_messages[0].meta.usage.output_tokens == 10
-    assert new_messages[0].meta.latency_ms == 150
-
-
-def test_convert_new_to_legacy():
-    """Test converting new format back to legacy format."""
-    content = [
-        AssistantTextContent(text="I'll help"),
-        AssistantToolCall(
-            call_id="call_123",
-            name="get_weather",
-            arguments={"location": "NYC"},
-        ),
-        AssistantToolCallResult(
-            call_id="call_123",
-            output="22°C, Sunny",
-            execution_time_ms=100,
-        ),
-    ]
-
-    usage = MessageUsage(input_tokens=20, output_tokens=10, total_tokens=30)
-    meta = AssistantMessageMeta(
-        usage=usage,
-        latency_ms=150,
-        total_time_ms=500,
-    )
-
-    new_message = NewAssistantMessage(content=content, meta=meta)
-    legacy_messages = convert_new_to_legacy([new_message])
-
-    assert len(legacy_messages) == 3
-    assert isinstance(legacy_messages[0], AgentAssistantMessage)
-    assert isinstance(legacy_messages[1], AgentFunctionToolCallMessage)
-    assert isinstance(legacy_messages[2], AgentFunctionCallOutput)
-
-    # Check content preservation
-    assert legacy_messages[0].content == "I'll help"
-    assert legacy_messages[1].call_id == "call_123"
-    assert legacy_messages[2].output == "22°C, Sunny"
-
-    # Check metadata preservation
-    assert legacy_messages[0].meta.input_tokens == 20
-    assert legacy_messages[0].meta.output_tokens == 10
-    assert legacy_messages[0].meta.latency_ms == 150
-
-
-def test_roundtrip_conversion():
-    """Test that converting legacy -> new -> legacy preserves data."""
-    now = datetime.now(timezone.utc)
-
-    original_messages = [
-        AgentUserMessage(content="Hello", meta=BasicMessageMeta(sent_at=now)),
-        AgentAssistantMessage(
-            content="Hi there!",
-            meta=LLMResponseMeta(
-                sent_at=now,
-                input_tokens=5,
-                output_tokens=3,
-                latency_ms=100,
-            ),
-        ),
-    ]
-
-    # Convert to new format and back
-    new_messages = convert_legacy_to_new(original_messages)
-    converted_back = convert_new_to_legacy(new_messages)
-
-    assert len(converted_back) == 2
-    assert isinstance(converted_back[0], AgentUserMessage)
-    assert isinstance(converted_back[1], AgentAssistantMessage)
-
-    assert converted_back[0].content == "Hello"
-    assert converted_back[1].content == "Hi there!"
-    assert converted_back[1].meta.input_tokens == 5
-    assert converted_back[1].meta.output_tokens == 3

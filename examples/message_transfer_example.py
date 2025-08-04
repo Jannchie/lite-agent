@@ -10,10 +10,12 @@ import re
 from lite_agent.agent import Agent
 from lite_agent.message_transfers import consolidate_history_transfer
 from lite_agent.types import (
-    AgentAssistantMessage,
-    AgentSystemMessage,
-    AgentUserMessage,
+    AssistantTextContent,
+    NewAssistantMessage,
+    NewSystemMessage,
+    NewUserMessage,
     RunnerMessages,
+    UserTextContent,
 )
 
 
@@ -40,11 +42,13 @@ def example_message_transfer(messages: RunnerMessages) -> RunnerMessages:
                 processed_messages.append(processed_message)
             else:
                 processed_messages.append(message)
-        elif isinstance(message, AgentUserMessage):
+        elif isinstance(message, NewUserMessage):
             # Handle user message models
             processed_message = message.model_copy()
-            if isinstance(message.content, str):
-                processed_message.content = f"[PROCESSED] {message.content}"
+            # Process text content items
+            for i, content_item in enumerate(processed_message.content):
+                if isinstance(content_item, UserTextContent):
+                    processed_message.content[i] = UserTextContent(text=f"[PROCESSED] {content_item.text}")
             processed_messages.append(processed_message)
         else:
             # Keep other messages unchanged
@@ -83,14 +87,27 @@ def privacy_filter_transfer(messages: RunnerMessages) -> RunnerMessages:
                 processed_messages.append(processed_message)
             else:
                 processed_messages.append(message)
-        elif isinstance(message, (AgentUserMessage, AgentAssistantMessage, AgentSystemMessage)):
-            # Handle message models with content
-            if isinstance(message.content, str):
-                processed_message = message.model_copy()
-                processed_message.content = filter_content(message.content)
-                processed_messages.append(processed_message)
-            else:
-                processed_messages.append(message)
+        elif isinstance(message, NewSystemMessage):
+            # Handle system message with string content
+            processed_message = message.model_copy()
+            processed_message.content = filter_content(message.content)
+            processed_messages.append(processed_message)
+        elif isinstance(message, NewUserMessage):
+            # Handle user message models with content list
+            processed_message = message.model_copy()
+            # Process text content items
+            for i, content_item in enumerate(processed_message.content):
+                if isinstance(content_item, UserTextContent):
+                    processed_message.content[i] = UserTextContent(text=filter_content(content_item.text))
+            processed_messages.append(processed_message)
+        elif isinstance(message, NewAssistantMessage):
+            # Handle assistant message models with content list
+            processed_message = message.model_copy()
+            # Process text content items
+            for i, content_item in enumerate(processed_message.content):
+                if isinstance(content_item, AssistantTextContent):
+                    processed_message.content[i] = AssistantTextContent(text=filter_content(content_item.text))
+            processed_messages.append(processed_message)
         else:
             # Keep other message types unchanged
             processed_messages.append(message)

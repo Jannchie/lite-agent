@@ -15,15 +15,12 @@ from lite_agent.types import (
     AssistantToolCall,
     AssistantToolCallResult,
     BasicMessageMeta,
-    LLMResponseMeta,
     MessageUsage,
     NewAssistantMessage,
     NewSystemMessage,
     NewUserMessage,
     UserImageContent,
     UserTextContent,
-    convert_legacy_to_new,
-    convert_new_to_legacy,
 )
 
 
@@ -117,7 +114,7 @@ def demonstrate_conversion():
         ),
         AgentAssistantMessage(
             content="我来为你查询天气。",
-            meta=LLMResponseMeta(
+            meta=AssistantMessageMeta(
                 sent_at=now,
                 input_tokens=10,
                 output_tokens=8,
@@ -141,21 +138,8 @@ def demonstrate_conversion():
     for msg in legacy_messages:
         print(f"  - {msg.__class__.__name__}")
 
-    # 转换为新格式
-    new_messages = convert_legacy_to_new(legacy_messages)
-
-    print(f"\n转换为新格式后的消息数量: {len(new_messages)}")
-    for msg in new_messages:
-        print(f"  - {msg.__class__.__name__}")
-        if hasattr(msg, "content") and isinstance(msg.content, list):
-            print(f"    内容项: {[item.type for item in msg.content]}")
-
-    # 转换回旧格式
-    converted_back = convert_new_to_legacy(new_messages)
-
-    print(f"\n转换回旧格式后的消息数量: {len(converted_back)}")
-    for msg in converted_back:
-        print(f"  - {msg.__class__.__name__}")
+    # 注意：格式转换功能当前不可用
+    print("\n注意：convert_legacy_to_new 和 convert_new_to_legacy 函数尚未实现")
 
 
 def demonstrate_llm_dict_conversion():

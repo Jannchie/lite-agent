@@ -27,6 +27,7 @@ from lite_agent.types import (
     AgentFunctionToolCallMessage,
     AgentSystemMessage,
     AgentUserMessage,
+    AssistantMessageMeta,
     BasicMessageMeta,
     FlexibleRunnerMessage,
     LLMResponseMeta,
@@ -293,10 +294,10 @@ def _extract_meta_data(message: FlexibleRunnerMessage, total_input: int, total_o
     return None
 
 
-def _process_object_meta(meta: BasicMessageMeta | LLMResponseMeta, total_input: int, total_output: int, total_latency: int, total_output_time: int) -> tuple[int, int, int, int]:
+def _process_object_meta(meta: BasicMessageMeta | LLMResponseMeta | AssistantMessageMeta, total_input: int, total_output: int, total_latency: int, total_output_time: int) -> tuple[int, int, int, int]:
     """处理对象类型的 meta 数据。"""
-    # 只有 LLMResponseMeta 有这些字段
-    if isinstance(meta, LLMResponseMeta):
+    # LLMResponseMeta 和 AssistantMessageMeta 都有这些字段
+    if isinstance(meta, (LLMResponseMeta, AssistantMessageMeta)):
         if hasattr(meta, "input_tokens") and meta.input_tokens is not None:
             total_input += int(meta.input_tokens)
         if hasattr(meta, "output_tokens") and meta.output_tokens is not None:
@@ -523,7 +524,7 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
     )
 
 
-def _extract_message_time(message: FlexibleRunnerMessage) -> datetime | None:
+def _extract_message_time(message: FlexibleRunnerMessage | AgentUserMessage | AgentAssistantMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput | dict) -> datetime | None:
     """从消息中提取时间戳。"""
     # Handle new message format first
     if (isinstance(message, NewMessage) and message.meta and message.meta.sent_at) or (isinstance(message, AgentAssistantMessage) and message.meta and message.meta.sent_at):

@@ -64,7 +64,18 @@ def _process_message_to_xml(message: dict | object) -> list[str]:
         # Handle Pydantic model format messages
         role = getattr(message, "role", "unknown")
         content = getattr(message, "content", "")
-        if isinstance(content, str):
+
+        # Handle new message format where content is a list
+        if isinstance(content, list):
+            # Extract text from content items
+            text_parts = [
+                item.text for item in content
+                if (hasattr(item, "type") and item.type == "text") or hasattr(item, "text")
+            ]
+            content_text = " ".join(text_parts)
+            if content_text:
+                xml_lines.append(f"  <message role='{role}'>{content_text}</message>")
+        elif isinstance(content, str):
             xml_lines.append(f"  <message role='{role}'>{content}</message>")
     elif hasattr(message, "type"):
         # Handle function call messages

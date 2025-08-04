@@ -25,15 +25,12 @@ from lite_agent.types import (
     NewSystemMessage,
     # New structured message types
     NewUserMessage,
-    RunnerMessage,
     ToolCall,
     ToolCallFunction,
     UserImageContent,
     UserInput,
     UserMessageContent,
     UserTextContent,
-    convert_legacy_to_new,
-    convert_new_to_legacy,
 )
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
@@ -55,9 +52,9 @@ class Runner:
         self._current_assistant_message: NewAssistantMessage | None = None
 
     @property
-    def legacy_messages(self) -> list[RunnerMessage]:
-        """Return messages in legacy format for backward compatibility."""
-        return convert_new_to_legacy(self.messages)
+    def legacy_messages(self) -> list[NewMessage]:
+        """Return messages in new format (legacy_messages is now an alias)."""
+        return self.messages
 
     def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
         """Start a new assistant message."""
@@ -220,7 +217,14 @@ class Runner:
                         total_time_ms=getattr(chunk.message.meta, "output_time_ms", None),
                     )
                     # Always start with the text content from assistant message
-                    self._start_assistant_message(chunk.message.content or "", meta)
+                    # Extract text content from the new message format
+                    text_content = ""
+                    if chunk.message.content:
+                        for item in chunk.message.content:
+                            if hasattr(item, "type") and item.type == "text":
+                                text_content = item.text
+                                break
+                    self._start_assistant_message(text_content, meta)
                 if chunk.type == "function_call":
                     # Add tool call to current assistant message
                     # Keep arguments as string for compatibility with funcall library
@@ -535,34 +539,10 @@ class Runner:
         if isinstance(message, NewMessage):
             # Already in new format
             self.messages.append(message)
-        elif isinstance(message, RunnerMessage):
-            # Special handling for AgentFunctionCallOutput
-            if isinstance(message, AgentFunctionCallOutput):
-                # Try to add this to the last assistant message
-                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                    tool_result = AssistantToolCallResult(
-                        call_id=message.call_id,
-                        output=message.output,
-                        execution_time_ms=message.meta.execution_time_ms,
-                    )
-                    self.messages[-1].content.append(tool_result)
-                    return
-                # If no assistant message to attach to, create a new assistant message
-                assistant_message = NewAssistantMessage(
-                    content=[
-                        AssistantToolCallResult(
-                            call_id=message.call_id,
-                            output=message.output,
-                            execution_time_ms=message.meta.execution_time_ms,
-                        ),
-                    ],
-                )
-                self.messages.append(assistant_message)
-                return
-
-            # Special handling for AgentFunctionToolCallMessage
+        elif not isinstance(message, dict) and hasattr(message, "type") and message.type in ["function_call", "function_call_output"]:
+            # Handle legacy function call messages
             if isinstance(message, AgentFunctionToolCallMessage):
-                # Try to add this to the last assistant message
+                # Convert to new format and add to last assistant message
                 if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
                     tool_call = AssistantToolCall(
                         call_id=message.call_id,
@@ -570,24 +550,41 @@ class Runner:
                         arguments=message.arguments,
                     )
                     self.messages[-1].content.append(tool_call)
-                    return
-                # If no assistant message to attach to, create a new assistant message
-                assistant_message = NewAssistantMessage(
-                    content=[
-                        AssistantToolCall(
-                            call_id=message.call_id,
-                            name=message.name,
-                            arguments=message.arguments,
-                        ),
-                    ],
-                )
-                self.messages.append(assistant_message)
+                else:
+                    # Create new assistant message with this tool call
+                    assistant_message = NewAssistantMessage(
+                        content=[
+                            AssistantToolCall(
+                                call_id=message.call_id,
+                                name=message.name,
+                                arguments=message.arguments,
+                            ),
+                        ],
+                    )
+                    self.messages.append(assistant_message)
                 return
-
-            # Convert from legacy format to new format
-            legacy_messages = [message]
-            new_messages = convert_legacy_to_new(legacy_messages)
-            self.messages.extend(new_messages)
+            if isinstance(message, AgentFunctionCallOutput):
+                # Convert to new format and add to last assistant message
+                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                    tool_result = AssistantToolCallResult(
+                        call_id=message.call_id,
+                        output=message.output,
+                        execution_time_ms=getattr(message.meta, "execution_time_ms", None),
+                    )
+                    self.messages[-1].content.append(tool_result)
+                else:
+                    # Create new assistant message with this tool result
+                    assistant_message = NewAssistantMessage(
+                        content=[
+                            AssistantToolCallResult(
+                                call_id=message.call_id,
+                                output=message.output,
+                                execution_time_ms=getattr(message.meta, "execution_time_ms", None),
+                            ),
+                        ],
+                    )
+                    self.messages.append(assistant_message)
+                return
         elif isinstance(message, dict):
             # Handle different message types from dict
             message_type = message.get("type")

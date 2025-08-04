@@ -16,13 +16,13 @@ from litellm.types.llms.openai import (
 )
 
 from lite_agent.types import (
-    AgentAssistantMessage,
     AgentChunk,
     AssistantMessageEvent,
+    AssistantMessageMeta,
     ContentDeltaEvent,
     EventUsage,
     FunctionCallEvent,
-    LLMResponseMeta,
+    NewAssistantMessage,
     ResponseRawEvent,
     Timing,
     TimingEvent,
@@ -110,7 +110,6 @@ class ResponseEventProcessor:
 
                 content = item.get("content", [])
                 if content and isinstance(content, list) and len(content) > 0:
-                    text_content = content[0].get("text", "")
                     end_time = datetime.now(timezone.utc)
                     latency_ms = None
                     output_time_ms = None
@@ -121,7 +120,7 @@ class ResponseEventProcessor:
                     if self._first_output_time and self._output_complete_time:
                         output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
 
-                    meta = LLMResponseMeta(
+                    meta = AssistantMessageMeta(
                         sent_at=end_time,
                         latency_ms=latency_ms,
                         output_time_ms=output_time_ms,
@@ -130,7 +129,7 @@ class ResponseEventProcessor:
                     )
                     return [
                         AssistantMessageEvent(
-                            message=AgentAssistantMessage(content=text_content, meta=meta),
+                            message=NewAssistantMessage(content=[], meta=meta),
                         ),
                     ]
 

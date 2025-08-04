@@ -17,13 +17,14 @@ from .events import (
     Usage as EventUsage,
 )
 from .messages import (
+    # Legacy compatibility aliases (temporary)
     AgentAssistantMessage,
     AgentFunctionCallOutput,
     AgentFunctionToolCallMessage,
-    AgentMessage,
     AgentSystemMessage,
     AgentUserMessage,
     AssistantMessage,
+    # New types
     AssistantMessageContent,
     AssistantMessageDict,
     AssistantMessageMeta,
@@ -61,9 +62,7 @@ from .messages import (
     UserMessageContentItemText,
     UserMessageDict,
     UserTextContent,
-    # Conversion functions
-    convert_legacy_to_new,
-    convert_new_to_legacy,
+    # Utility functions
     messages_to_llm_format,
 )
 from .tool_calls import ToolCall, ToolCallFunction
@@ -74,7 +73,6 @@ __all__ = [
     "AgentChunkType",
     "AgentFunctionCallOutput",
     "AgentFunctionToolCallMessage",
-    "AgentMessage",
     "AgentSystemMessage",
     "AgentUserMessage",
     "AssistantMessage",
@@ -98,14 +96,12 @@ __all__ = [
     "LLMResponseMeta",
     "Message",
     "MessageDict",
-    # New metadata types
     "MessageMeta",
     "MessageUsage",
     "NewAssistantMessage",
     "NewMessage",
     "NewMessages",
     "NewSystemMessage",
-    # New structured message types
     "NewUserMessage",
     "ResponseInputImage",
     "ResponseInputText",
@@ -121,15 +117,11 @@ __all__ = [
     "UserFileContent",
     "UserImageContent",
     "UserInput",
-    # New content types
     "UserMessageContent",
     "UserMessageContentItemImageURL",
     "UserMessageContentItemImageURLImageURL",
     "UserMessageContentItemText",
     "UserMessageDict",
     "UserTextContent",
-    # Conversion functions
-    "convert_legacy_to_new",
-    "convert_new_to_legacy",
     "messages_to_llm_format",
 ]

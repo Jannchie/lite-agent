@@ -3,13 +3,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from lite_agent.agent import Agent
-from lite_agent.types import AgentUserMessage, RunnerMessage, ToolCall, ToolCallFunction
+from lite_agent.types import AgentUserMessage, RunnerMessage, ToolCall, ToolCallFunction, UserTextContent
 
 
 @pytest.mark.asyncio
 async def test_prepare_completion_messages():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
-    messages: list[RunnerMessage] = [AgentUserMessage(role="user", content="hi")]
+    messages: list[RunnerMessage] = [AgentUserMessage(content=[UserTextContent(text="hi")])]
     result = agent.prepare_completion_messages(messages)
     assert result[0]["role"] == "system"
     assert "TestBot" in result[0]["content"]
@@ -31,7 +31,7 @@ async def test_stream_async_success():
             yield "GENERATOR"
 
         with patch("lite_agent.agent.litellm_completion_stream_handler", new=fake_async_gen), patch("lite_agent.agent.isinstance", new=lambda _obj, _typ: True):
-            result = await agent.completion([AgentUserMessage(role="user", content="hi")])
+            result = await agent.completion([AgentUserMessage(content=[UserTextContent(text="hi")])])
             assert hasattr(result, "__aiter__")
             items = []
             async for item in result:

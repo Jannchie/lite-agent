@@ -296,7 +296,7 @@ class TestResponseEventProcessor:
         processor._messages.append(
             {
                 "content": [{"text": "Hello", "type": "text"}],
-            }
+            },
         )
 
         # 创建 OutputTextDeltaEvent
@@ -380,7 +380,7 @@ class TestResponseEventProcessor:
             {
                 "type": "function_call",
                 "arguments": "{",
-            }
+            },
         )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDeltaEvent
@@ -402,7 +402,7 @@ class TestResponseEventProcessor:
         processor._messages.append(
             {
                 "type": "function_call",
-            }
+            },
         )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDeltaEvent
@@ -426,7 +426,7 @@ class TestResponseEventProcessor:
             {
                 "type": "function_call",
                 "arguments": "partial",
-            }
+            },
         )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDoneEvent
@@ -619,6 +619,7 @@ class TestResponseEventProcessor:
 
         # 验证时间计算
         timing_event = result[1]  # 第二个是 TimingEvent
+        assert isinstance(timing_event, TimingEvent)
         assert timing_event.timing.latency_ms == 1000  # 1秒 = 1000毫秒
         assert timing_event.timing.output_time_ms == 2000  # 2秒 = 2000毫秒
 

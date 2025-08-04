@@ -6,6 +6,7 @@ from lite_agent.agent import Agent
 from lite_agent.types import (
     AgentAssistantMessage,
     AgentUserMessage,
+    FlexibleRunnerMessage,
     NewSystemMessage,
     NewUserMessage,
     RunnerMessage,
@@ -43,7 +44,7 @@ class TestAgentAdditional:
         agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.")
 
         # 包含函数调用的消息
-        messages: list[RunnerMessage] = [
+        messages: list[FlexibleRunnerMessage] = [
             AgentUserMessage(content=[UserTextContent(text="Hello")]),
             AgentAssistantMessage(content=[]),
             {

@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
+import litellm
 import pytest
+from litellm.types.llms.openai import ResponsesAPIStreamingResponse
 
 from lite_agent.stream_handlers.litellm import (
     ensure_record_file,
@@ -54,12 +56,15 @@ class TestStreamHandlersAdditional:
         # Create a mock chunk that's not a BaseModel
         unexpected_chunk = "not a basemodel"
 
-        async def mock_resp() -> AsyncGenerator[str, None]:
+        async def mock_async_iter() -> AsyncGenerator[str, None]:
             yield unexpected_chunk
+
+        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
+        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
 
         with patch("lite_agent.stream_handlers.litellm.logger") as mock_logger:
             chunks = []
-            async for chunk in litellm_completion_stream_handler(mock_resp()):
+            async for chunk in litellm_completion_stream_handler(mock_resp):
                 chunks.append(chunk)
 
             # Should log warning about unexpected chunk type
@@ -76,8 +81,11 @@ class TestStreamHandlersAdditional:
 
         chunk = MockChunk()
 
-        async def mock_resp() -> AsyncGenerator[MockChunk, None]:
+        async def mock_async_iter() -> AsyncGenerator[Any, None]:
             yield chunk
+
+        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
+        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
 
         with tempfile.TemporaryDirectory() as temp_dir:
             record_path = Path(temp_dir)
@@ -90,7 +98,7 @@ class TestStreamHandlersAdditional:
                     mock_processor_instance = Mock()
 
                     # Create proper async generator mock
-                    async def mock_process_chunk(chunk, record_file) -> AsyncGenerator[None, None]:
+                    async def mock_process_chunk(_chunk: object, _record_file: object) -> AsyncGenerator[None, None]:
                         return
                         yield  # unreachable but makes it an async generator
 
@@ -98,17 +106,16 @@ class TestStreamHandlersAdditional:
                     mock_processor.return_value = mock_processor_instance
 
                     chunks = []
-                    async for chunk in litellm_completion_stream_handler(mock_resp(), record_to=record_path):
+                    async for chunk in litellm_completion_stream_handler(mock_resp, record_to=record_path):
                         chunks.append(chunk)
 
     @pytest.mark.asyncio
     async def test_litellm_response_stream_handler_unexpected_chunk(self):
         """Test litellm_response_stream_handler with unexpected chunk type"""
-        # Create a mock chunk that's not a BaseModel
-        unexpected_chunk = "not a basemodel"
-
-        async def mock_resp() -> AsyncGenerator[str, None]:
-            yield unexpected_chunk
+        # Create a mock chunk that's not a proper ResponsesAPIStreamingResponse
+        async def mock_resp() -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
+            # Use type: ignore to bypass type checking for testing purposes
+            yield "not a basemodel"  # type: ignore[misc]
 
         with patch("lite_agent.stream_handlers.litellm.logger") as mock_logger:
             chunks = []
@@ -129,8 +136,9 @@ class TestStreamHandlersAdditional:
 
         response = MockResponse()
 
-        async def mock_resp() -> AsyncGenerator[MockResponse, None]:
-            yield response
+        async def mock_resp() -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
+            # Use type: ignore to bypass type checking for testing purposes
+            yield response  # type: ignore[misc]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             record_path = Path(temp_dir)
@@ -143,7 +151,7 @@ class TestStreamHandlersAdditional:
                     mock_processor_instance = Mock()
 
                     # Create proper async generator mock
-                    async def mock_process_chunk(chunk, record_file) -> AsyncGenerator[None, None]:
+                    async def mock_process_chunk(_chunk: object, _record_file: object) -> AsyncGenerator[None, None]:
                         return
                         yield  # unreachable but makes it an async generator
 
@@ -164,8 +172,11 @@ class TestStreamHandlersAdditional:
 
         chunk = MockChunk()
 
-        async def mock_resp() -> AsyncGenerator[MockChunk, None]:
+        async def mock_async_iter() -> AsyncGenerator[Any, None]:
             yield chunk
+
+        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
+        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
 
         with tempfile.TemporaryDirectory() as temp_dir:
             record_path = Path(temp_dir) / "test.jsonl"
@@ -178,7 +189,7 @@ class TestStreamHandlersAdditional:
                     mock_processor_instance = Mock()
 
                     # Mock the async generator
-                    async def mock_process_chunk(chunk, record_file) -> AsyncGenerator[None, None]:
+                    async def mock_process_chunk(_chunk: object, record_file: Any) -> AsyncGenerator[None, None]:  # noqa: ANN401
                         if record_file:
                             await record_file.write('{"test": "data"}\n')
                         return
@@ -188,7 +199,7 @@ class TestStreamHandlersAdditional:
                     mock_processor.return_value = mock_processor_instance
 
                     chunks = []
-                    async for chunk in litellm_completion_stream_handler(mock_resp(), record_to=record_path.parent):
+                    async for chunk in litellm_completion_stream_handler(mock_resp, record_to=record_path.parent):
                         chunks.append(chunk)
 
     @pytest.mark.asyncio
@@ -198,13 +209,16 @@ class TestStreamHandlersAdditional:
         class TestError(Exception):
             pass
 
-        async def failing_resp() -> AsyncGenerator[Any, None]:
+        async def failing_async_iter() -> AsyncGenerator[Any, None]:
             test_exception_msg = "Test exception"
             raise TestError(test_exception_msg)
             yield  # Make it an async generator
 
+        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
+        mock_resp.__aiter__ = Mock(return_value=failing_async_iter())
+
         with pytest.raises(TestError, match="Test exception"):
-            async for _chunk in litellm_completion_stream_handler(failing_resp()):
+            async for _chunk in litellm_completion_stream_handler(mock_resp):
                 pass
 
     @pytest.mark.asyncio
@@ -215,8 +229,11 @@ class TestStreamHandlersAdditional:
         class MockChunk(BaseModel):
             id: str = "test"
 
-        async def mock_resp() -> AsyncGenerator[MockChunk, None]:
+        async def mock_async_iter() -> AsyncGenerator[Any, None]:
             yield MockChunk()
+
+        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
+        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
 
         with tempfile.TemporaryDirectory() as temp_dir:
             record_path = Path(temp_dir)
@@ -230,7 +247,7 @@ class TestStreamHandlersAdditional:
                     mock_processor_instance = Mock()
 
                     # Create a proper async generator mock
-                    async def mock_process_chunk(chunk, record_file) -> AsyncGenerator[None, None]:
+                    async def mock_process_chunk(_chunk: object, _record_file: object) -> AsyncGenerator[None, None]:
                         return
                         yield  # unreachable but makes it an async generator
 
@@ -238,7 +255,7 @@ class TestStreamHandlersAdditional:
                     mock_processor.return_value = mock_processor_instance
 
                     chunks = []
-                    async for chunk in litellm_completion_stream_handler(mock_resp(), record_to=record_path):
+                    async for chunk in litellm_completion_stream_handler(mock_resp, record_to=record_path):
                         chunks.append(chunk)
 
                     # Verify file was closed

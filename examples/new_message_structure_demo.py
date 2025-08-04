@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 
 from lite_agent.types import (
     AgentAssistantMessage,
-    AgentFunctionCallOutput,
-    AgentFunctionToolCallMessage,
     AgentUserMessage,
     AssistantMessageMeta,
     AssistantTextContent,
@@ -21,6 +19,7 @@ from lite_agent.types import (
     NewUserMessage,
     UserImageContent,
     UserTextContent,
+    assistant_message_to_llm_dict,
 )
 
 
@@ -121,16 +120,21 @@ def demonstrate_conversion():
                 latency_ms=100,
             ),
         ),
-        AgentFunctionToolCallMessage(
-            call_id="call_456",
-            name="get_weather",
-            arguments='{"location": "北京"}',
-            meta=BasicMessageMeta(sent_at=now),
-        ),
-        AgentFunctionCallOutput(
-            call_id="call_456",
-            output="北京今天气温18°C，多云。",
-            meta=BasicMessageMeta(sent_at=now, execution_time_ms=200),
+        # Assistant message with tool call and result in new format
+        NewAssistantMessage(
+            content=[
+                AssistantToolCall(
+                    call_id="call_456",
+                    name="get_weather",
+                    arguments='{"location": "北京"}',
+                ),
+                AssistantToolCallResult(
+                    call_id="call_456",
+                    output="北京今天气温18°C，多云。",
+                    execution_time_ms=200,
+                ),
+            ],
+            meta=AssistantMessageMeta(sent_at=now),
         ),
     ]
 
@@ -159,7 +163,7 @@ def demonstrate_llm_dict_conversion():
     )
 
     # 转换为LLM API格式
-    llm_dict = assistant_message.to_llm_dict()
+    llm_dict = assistant_message_to_llm_dict(assistant_message)
 
     print("转换为LLM API格式:")
     print(f"  角色: {llm_dict['role']}")

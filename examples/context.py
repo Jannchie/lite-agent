@@ -2,9 +2,10 @@ import asyncio
 import logging
 
 from funcall import Context
+from pydantic import BaseModel
 from rich.logging import RichHandler
 
-from lite_agent.agent import Agent, BaseModel
+from lite_agent.agent import Agent
 from lite_agent.runner import Runner
 
 

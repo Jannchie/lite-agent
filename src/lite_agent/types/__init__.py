@@ -19,8 +19,6 @@ from .events import (
 from .messages import (
     # Legacy compatibility aliases (temporary)
     AgentAssistantMessage,
-    AgentFunctionCallOutput,
-    AgentFunctionToolCallMessage,
     AgentSystemMessage,
     AgentUserMessage,
     AssistantMessage,
@@ -36,7 +34,6 @@ from .messages import (
     FunctionCallDict,
     FunctionCallOutputDict,
     LLMResponseMeta,
-    Message,
     MessageDict,
     # New metadata types
     MessageMeta,
@@ -63,7 +60,11 @@ from .messages import (
     UserMessageDict,
     UserTextContent,
     # Utility functions
+    assistant_message_to_llm_dict,
+    message_to_llm_dict,
     messages_to_llm_format,
+    system_message_to_llm_dict,
+    user_message_to_llm_dict,
 )
 from .tool_calls import ToolCall, ToolCallFunction
 
@@ -71,8 +72,6 @@ __all__ = [
     "AgentAssistantMessage",
     "AgentChunk",
     "AgentChunkType",
-    "AgentFunctionCallOutput",
-    "AgentFunctionToolCallMessage",
     "AgentSystemMessage",
     "AgentUserMessage",
     "AssistantMessage",
@@ -94,7 +93,6 @@ __all__ = [
     "FunctionCallOutputDict",
     "FunctionCallOutputEvent",
     "LLMResponseMeta",
-    "Message",
     "MessageDict",
     "MessageMeta",
     "MessageUsage",
@@ -123,5 +121,9 @@ __all__ = [
     "UserMessageContentItemText",
     "UserMessageDict",
     "UserTextContent",
+    "assistant_message_to_llm_dict",
+    "message_to_llm_dict",
     "messages_to_llm_format",
+    "system_message_to_llm_dict",
+    "user_message_to_llm_dict",
 ]

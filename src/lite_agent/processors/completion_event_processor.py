@@ -12,6 +12,7 @@ from lite_agent.types import (
     AssistantMessage,
     AssistantMessageEvent,
     AssistantMessageMeta,
+    AssistantTextContent,
     CompletionRawEvent,
     ContentDeltaEvent,
     EventUsage,
@@ -89,9 +90,14 @@ class CompletionEventProcessor:
                     total_time_ms=output_time_ms,
                     usage=usage,
                 )
+                # Include accumulated text content in the message
+                content = []
+                if self._current_message and self._current_message.content:
+                    content.append(AssistantTextContent(text=self._current_message.content))
+
                 yield AssistantMessageEvent(
                     message=NewAssistantMessage(
-                        content=[],
+                        content=content,
                         meta=meta,
                     ),
                 )
@@ -165,9 +171,14 @@ class CompletionEventProcessor:
                     total_time_ms=output_time_ms,
                     usage=usage,
                 )
+                # Include accumulated text content in the message
+                content = []
+                if self._current_message and self._current_message.content:
+                    content.append(AssistantTextContent(text=self._current_message.content))
+
                 yield AssistantMessageEvent(
                     message=NewAssistantMessage(
-                        content=[],
+                        content=content,
                         meta=meta,
                     ),
                 )

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 # Base metadata type
 class MessageMeta(BaseModel):
     """Base metadata for all message types"""
+
     sent_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -154,12 +155,6 @@ class NewUserMessage(BaseModel):
     content: list[UserMessageContent]
     meta: MessageMeta = Field(default_factory=MessageMeta)
 
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM API"""
-        # Convert content to simplified format for LLM
-        content = self.content[0].text if len(self.content) == 1 and self.content[0].type == "text" else [item.model_dump() for item in self.content]
-        return {"role": self.role, "content": content}
-
 
 class NewSystemMessage(BaseModel):
     """System message"""
@@ -168,10 +163,6 @@ class NewSystemMessage(BaseModel):
     content: str
     meta: MessageMeta = Field(default_factory=MessageMeta)
 
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM API"""
-        return {"role": self.role, "content": self.content}
-
 
 class NewAssistantMessage(BaseModel):
     """Assistant message with structured content and metadata"""
@@ -179,37 +170,6 @@ class NewAssistantMessage(BaseModel):
     role: Literal["assistant"] = "assistant"
     content: list[AssistantMessageContent]
     meta: AssistantMessageMeta = Field(default_factory=AssistantMessageMeta)
-
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM API"""
-        # Separate text content from tool calls
-        text_parts = []
-        tool_calls = []
-
-        for item in self.content:
-            if item.type == "text":
-                text_parts.append(item.text)
-            elif item.type == "tool_call":
-                tool_calls.append(
-                    {
-                        "id": item.call_id,
-                        "type": "function",
-                        "function": {
-                            "name": item.name,
-                            "arguments": item.arguments if isinstance(item.arguments, str) else str(item.arguments),
-                        },
-                    },
-                )
-
-        result = {
-            "role": self.role,
-            "content": " ".join(text_parts) if text_parts else None,
-        }
-
-        if tool_calls:
-            result["tool_calls"] = tool_calls
-
-        return result
 
 
 # Union type for new structured messages
@@ -272,6 +232,7 @@ class AgentUserMessage(NewUserMessage):
             meta=meta or MessageMeta(),
         )
 
+
 class AgentAssistantMessage(NewAssistantMessage):
     def __init__(
         self,
@@ -290,46 +251,30 @@ class AgentAssistantMessage(NewAssistantMessage):
             meta=meta or AssistantMessageMeta(),
         )
 
+
 AgentSystemMessage = NewSystemMessage
 RunnerMessage = NewMessage
 
-# Deprecated legacy message types - creating minimal compatibility stubs
-class AgentFunctionToolCallMessage(BaseModel):
-    type: Literal["function_call"] = "function_call"
-    arguments: str
-    call_id: str
-    name: str
-    meta: BasicMessageMeta = Field(default_factory=BasicMessageMeta)
 
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM API"""
-        return self.model_dump()
-
-class AgentFunctionCallOutput(BaseModel):
-    type: Literal["function_call_output"] = "function_call_output"
-    call_id: str
-    output: str
-    meta: BasicMessageMeta = Field(default_factory=BasicMessageMeta)
-
-    def to_llm_dict(self) -> dict[str, Any]:
-        """Convert to dict for LLM API"""
-        return self.model_dump()
-
-# Legacy types for processor compatibility
+# Streaming processor types
 class AssistantMessage(BaseModel):
+    """
+    Temporary assistant message used during streaming processing.
+
+    This is a simplified message format used internally by completion event processors
+    to accumulate streaming content before converting to the final NewAssistantMessage format.
+    """
+
     role: Literal["assistant"] = "assistant"
     id: str = ""
     index: int | None = None
     content: str = ""
     tool_calls: list[Any] | None = None
 
-class Message(BaseModel):
-    role: str
-    content: str
 
 # Enhanced type definitions for better type hints
 # Supports new message format, legacy messages, and dict (for backward compatibility)
-FlexibleRunnerMessage = NewMessage | AgentUserMessage | AgentAssistantMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput | dict[str, Any]
+FlexibleRunnerMessage = NewMessage | AgentUserMessage | AgentAssistantMessage | dict[str, Any]
 RunnerMessages = Sequence[FlexibleRunnerMessage]
 
 
@@ -337,13 +282,62 @@ RunnerMessages = Sequence[FlexibleRunnerMessage]
 UserInput = str | FlexibleRunnerMessage | RunnerMessages
 
 
+def user_message_to_llm_dict(message: NewUserMessage) -> dict[str, Any]:
+    """Convert NewUserMessage to dict for LLM API"""
+    # Convert content to simplified format for LLM
+    content = message.content[0].text if len(message.content) == 1 and message.content[0].type == "text" else [item.model_dump() for item in message.content]
+    return {"role": message.role, "content": content}
+
+
+def system_message_to_llm_dict(message: NewSystemMessage) -> dict[str, Any]:
+    """Convert NewSystemMessage to dict for LLM API"""
+    return {"role": message.role, "content": message.content}
+
+
+def assistant_message_to_llm_dict(message: NewAssistantMessage) -> dict[str, Any]:
+    """Convert NewAssistantMessage to dict for LLM API"""
+    # Separate text content from tool calls
+    text_parts = []
+    tool_calls = []
+
+    for item in message.content:
+        if item.type == "text":
+            text_parts.append(item.text)
+        elif item.type == "tool_call":
+            tool_calls.append(
+                {
+                    "id": item.call_id,
+                    "type": "function",
+                    "function": {
+                        "name": item.name,
+                        "arguments": item.arguments if isinstance(item.arguments, str) else str(item.arguments),
+                    },
+                },
+            )
+
+    result = {
+        "role": message.role,
+        "content": " ".join(text_parts) if text_parts else None,
+    }
+
+    if tool_calls:
+        result["tool_calls"] = tool_calls
+
+    return result
+
+
+def message_to_llm_dict(message: NewMessage) -> dict[str, Any]:
+    """Convert any NewMessage to dict for LLM API"""
+    if isinstance(message, NewUserMessage):
+        return user_message_to_llm_dict(message)
+    if isinstance(message, NewSystemMessage):
+        return system_message_to_llm_dict(message)
+    if isinstance(message, NewAssistantMessage):
+        return assistant_message_to_llm_dict(message)
+    # Fallback
+    return message.model_dump(exclude={"meta"})
+
+
 def messages_to_llm_format(messages: Sequence[NewMessage]) -> list[dict[str, Any]]:
     """Convert a sequence of NewMessage to LLM format, excluding meta data"""
-    result = []
-    for message in messages:
-        if hasattr(message, "to_llm_dict"):
-            result.append(message.to_llm_dict())
-        else:
-            # Fallback for messages without to_llm_dict method
-            result.append(message.model_dump(exclude={"meta"}))
-    return result
+    return [message_to_llm_dict(message) for message in messages]

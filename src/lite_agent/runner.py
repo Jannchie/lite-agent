@@ -10,8 +10,6 @@ from lite_agent.loggers import logger
 from lite_agent.types import (
     AgentChunk,
     AgentChunkType,
-    AgentFunctionCallOutput,
-    AgentFunctionToolCallMessage,
     AssistantMessageContent,
     AssistantMessageMeta,
     AssistantTextContent,
@@ -76,11 +74,42 @@ class Runner:
         if self._current_assistant_message is not None:
             self._current_assistant_message.content.append(content_item)
 
+    def _add_text_content_to_current_assistant_message(self, delta: str) -> None:
+        """Add text delta to the current assistant message's text content."""
+        if self._current_assistant_message is None:
+            self._start_assistant_message()
+
+        if self._current_assistant_message is not None:
+            # Find the first text content item and append the delta
+            for content_item in self._current_assistant_message.content:
+                if content_item.type == "text":
+                    content_item.text += delta
+                    return
+            # If no text content found, add new text content
+            new_content = AssistantTextContent(text=delta)
+            self._current_assistant_message.content.append(new_content)
+
     def _finalize_assistant_message(self) -> None:
         """Finalize the current assistant message and add it to messages."""
         if self._current_assistant_message is not None:
             self.messages.append(self._current_assistant_message)
             self._current_assistant_message = None
+
+    def _add_tool_call_result(self, call_id: str, output: str, execution_time_ms: int | None = None) -> None:
+        """Add a tool call result to the last assistant message, or create a new one if needed."""
+        result = AssistantToolCallResult(
+            call_id=call_id,
+            output=output,
+            execution_time_ms=execution_time_ms,
+        )
+
+        if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+            # Add to existing assistant message
+            self.messages[-1].content.append(result)
+        else:
+            # Create new assistant message with just the tool result
+            assistant_message = NewAssistantMessage(content=[result])
+            self.messages.append(assistant_message)
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""
@@ -105,12 +134,9 @@ class Runner:
                     await self._handle_agent_transfer(tool_call, includes)
                 else:
                     # Add response for additional transfer calls without executing them
-                    self.append_message(
-                        AgentFunctionCallOutput(
-                            type="function_call_output",
-                            call_id=tool_call.id,
-                            output="Transfer already executed by previous call",
-                        ),
+                    self._add_tool_call_result(
+                        call_id=tool_call.id,
+                        output="Transfer already executed by previous call",
                     )
             return  # Stop processing other tool calls after transfer
 
@@ -123,12 +149,9 @@ class Runner:
                     await self._handle_parent_transfer(tool_call, includes)
                 else:
                     # Add response for additional transfer calls without executing them
-                    self.append_message(
-                        AgentFunctionCallOutput(
-                            type="function_call_output",
-                            call_id=tool_call.id,
-                            output="Transfer already executed by previous call",
-                        ),
+                    self._add_tool_call_result(
+                        call_id=tool_call.id,
+                        output="Transfer already executed by previous call",
                     )
             return  # Stop processing other tool calls after transfer
 
@@ -188,8 +211,7 @@ class Runner:
                 # Check if wait_for_user was called in the last assistant message
                 if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
                     for content_item in self.messages[-1].content:
-                        if (content_item.type == "tool_call_result" and
-                            self._get_tool_call_name_by_id(content_item.call_id) == "wait_for_user"):
+                        if content_item.type == "tool_call_result" and self._get_tool_call_name_by_id(content_item.call_id) == "wait_for_user":
                             return True
                 return False
             return finish_reason == "stop"
@@ -216,15 +238,21 @@ class Runner:
                         latency_ms=getattr(chunk.message.meta, "latency_ms", None),
                         total_time_ms=getattr(chunk.message.meta, "output_time_ms", None),
                     )
-                    # Always start with the text content from assistant message
-                    # Extract text content from the new message format
-                    text_content = ""
-                    if chunk.message.content:
-                        for item in chunk.message.content:
-                            if hasattr(item, "type") and item.type == "text":
-                                text_content = item.text
-                                break
-                    self._start_assistant_message(text_content, meta)
+                    # If we already have a current assistant message, just update its metadata
+                    if self._current_assistant_message is not None:
+                        self._current_assistant_message.meta = meta
+                    else:
+                        # Extract text content from the new message format
+                        text_content = ""
+                        if chunk.message.content:
+                            for item in chunk.message.content:
+                                if hasattr(item, "type") and item.type == "text":
+                                    text_content = item.text
+                                    break
+                        self._start_assistant_message(text_content, meta)
+                if chunk.type == "content_delta":
+                    # Accumulate text content to current assistant message
+                    self._add_text_content_to_current_assistant_message(chunk.delta)
                 if chunk.type == "function_call":
                     # Add tool call to current assistant message
                     # Keep arguments as string for compatibility with funcall library
@@ -261,12 +289,12 @@ class Runner:
             # Finalize assistant message so it can be found in pending function calls
             self._finalize_assistant_message()
 
-            # Check for pending function calls after processing current assistant message
-            pending_function_calls = self._find_pending_function_calls()
-            logger.debug(f"Found {len(pending_function_calls)} pending function calls")
-            if pending_function_calls:
+            # Check for pending tool calls after processing current assistant message
+            pending_tool_calls = self._find_pending_tool_calls()
+            logger.debug(f"Found {len(pending_tool_calls)} pending tool calls")
+            if pending_tool_calls:
                 # Convert to ToolCall format for existing handler
-                tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+                tool_calls = self._convert_tool_calls_to_tool_calls(pending_tool_calls)
                 require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
                 if require_confirm_tools:
                     return
@@ -278,10 +306,10 @@ class Runner:
             steps += 1
 
     async def has_require_confirm_tools(self):
-        pending_function_calls = self._find_pending_function_calls()
-        if not pending_function_calls:
+        pending_tool_calls = self._find_pending_tool_calls()
+        if not pending_tool_calls:
             return False
-        tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+        tool_calls = self._convert_tool_calls_to_tool_calls(pending_tool_calls)
         require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
         return bool(require_confirm_tools)
 
@@ -313,11 +341,11 @@ class Runner:
         """Continue running the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
 
-        # Find pending function calls in responses format
-        pending_function_calls = self._find_pending_function_calls()
-        if pending_function_calls:
+        # Find pending tool calls in responses format
+        pending_tool_calls = self._find_pending_tool_calls()
+        if pending_tool_calls:
             # Convert to ToolCall format for existing handler
-            tool_calls = self._convert_function_calls_to_tool_calls(pending_function_calls)
+            tool_calls = self._convert_tool_calls_to_tool_calls(pending_tool_calls)
             async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
                 yield tool_chunk
             async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to)):
@@ -349,18 +377,18 @@ class Runner:
         resp = self.run(user_input, max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
-    def _find_pending_function_calls(self) -> list[AgentFunctionToolCallMessage]:
-        """Find function call messages that don't have corresponding outputs yet."""
+    def _find_pending_tool_calls(self) -> list[AssistantToolCall]:
+        """Find tool calls that don't have corresponding results yet."""
         # Find pending calls directly in new format messages
-        function_calls: list[AgentFunctionToolCallMessage] = []
+        pending_calls: list[AssistantToolCall] = []
 
         # Look at the last assistant message for pending tool calls
         if not self.messages:
-            return function_calls
+            return pending_calls
 
         last_message = self.messages[-1]
         if not isinstance(last_message, NewAssistantMessage):
-            return function_calls
+            return pending_calls
 
         # Collect tool calls and results from the last assistant message
         tool_calls = {}
@@ -368,13 +396,7 @@ class Runner:
 
         for content_item in last_message.content:
             if content_item.type == "tool_call":
-                # Convert to legacy format for compatibility
-                legacy_call = AgentFunctionToolCallMessage(
-                    call_id=content_item.call_id,
-                    name=content_item.name,
-                    arguments=content_item.arguments if isinstance(content_item.arguments, str) else str(content_item.arguments),
-                )
-                tool_calls[content_item.call_id] = legacy_call
+                tool_calls[content_item.call_id] = content_item
             elif content_item.type == "tool_call_result":
                 tool_results.add(content_item.call_id)
 
@@ -391,22 +413,22 @@ class Runner:
                 return content_item.name
         return None
 
-    def _convert_function_calls_to_tool_calls(self, function_calls: list[AgentFunctionToolCallMessage]) -> list[ToolCall]:
-        """Convert function call messages to ToolCall objects for compatibility."""
+    def _convert_tool_calls_to_tool_calls(self, tool_calls: list[AssistantToolCall]) -> list[ToolCall]:
+        """Convert AssistantToolCall objects to ToolCall objects for compatibility."""
 
-        tool_calls = []
-        for fc in function_calls:
+        result_tool_calls = []
+        for tc in tool_calls:
             tool_call = ToolCall(
-                id=fc.call_id,
+                id=tc.call_id,
                 type="function",
                 function=ToolCallFunction(
-                    name=fc.name,
-                    arguments=fc.arguments,
+                    name=tc.name,
+                    arguments=tc.arguments if isinstance(tc.arguments, str) else str(tc.arguments),
                 ),
-                index=len(tool_calls),
+                index=len(result_tool_calls),
             )
-            tool_calls.append(tool_call)
-        return tool_calls
+            result_tool_calls.append(tool_call)
+        return result_tool_calls
 
     def set_chat_history(self, messages: Sequence[FlexibleRunnerMessage], root_agent: Agent | None = None) -> None:
         """Set the entire chat history and track the current agent based on function calls.
@@ -449,10 +471,20 @@ class Runner:
         """
         if isinstance(message, dict):
             return self._track_transfer_from_dict_message(message, current_agent)
+        if isinstance(message, NewAssistantMessage):
+            return self._track_transfer_from_new_assistant_message(message, current_agent)
 
-        if isinstance(message, AgentFunctionToolCallMessage):
-            return self._track_transfer_from_function_call_message(message, current_agent)
+        return current_agent
 
+    def _track_transfer_from_new_assistant_message(self, message: NewAssistantMessage, current_agent: Agent) -> Agent:
+        """Track transfers from NewAssistantMessage objects."""
+        for content_item in message.content:
+            if content_item.type == "tool_call":
+                if content_item.name == "transfer_to_agent":
+                    arguments = content_item.arguments if isinstance(content_item.arguments, str) else str(content_item.arguments)
+                    return self._handle_transfer_to_agent_tracking(arguments, current_agent)
+                if content_item.name == "transfer_to_parent":
+                    return self._handle_transfer_to_parent_tracking(current_agent)
         return current_agent
 
     def _track_transfer_from_dict_message(self, message: dict[str, Any] | MessageDict, current_agent: Agent) -> Agent:
@@ -466,16 +498,6 @@ class Runner:
             return self._handle_transfer_to_agent_tracking(message.get("arguments", ""), current_agent)
 
         if function_name == "transfer_to_parent":
-            return self._handle_transfer_to_parent_tracking(current_agent)
-
-        return current_agent
-
-    def _track_transfer_from_function_call_message(self, message: AgentFunctionToolCallMessage, current_agent: Agent) -> Agent:
-        """Track transfers from AgentFunctionToolCallMessage objects."""
-        if message.name == "transfer_to_agent":
-            return self._handle_transfer_to_agent_tracking(message.arguments, current_agent)
-
-        if message.name == "transfer_to_parent":
             return self._handle_transfer_to_parent_tracking(current_agent)
 
         return current_agent
@@ -539,52 +561,6 @@ class Runner:
         if isinstance(message, NewMessage):
             # Already in new format
             self.messages.append(message)
-        elif not isinstance(message, dict) and hasattr(message, "type") and message.type in ["function_call", "function_call_output"]:
-            # Handle legacy function call messages
-            if isinstance(message, AgentFunctionToolCallMessage):
-                # Convert to new format and add to last assistant message
-                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                    tool_call = AssistantToolCall(
-                        call_id=message.call_id,
-                        name=message.name,
-                        arguments=message.arguments,
-                    )
-                    self.messages[-1].content.append(tool_call)
-                else:
-                    # Create new assistant message with this tool call
-                    assistant_message = NewAssistantMessage(
-                        content=[
-                            AssistantToolCall(
-                                call_id=message.call_id,
-                                name=message.name,
-                                arguments=message.arguments,
-                            ),
-                        ],
-                    )
-                    self.messages.append(assistant_message)
-                return
-            if isinstance(message, AgentFunctionCallOutput):
-                # Convert to new format and add to last assistant message
-                if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                    tool_result = AssistantToolCallResult(
-                        call_id=message.call_id,
-                        output=message.output,
-                        execution_time_ms=getattr(message.meta, "execution_time_ms", None),
-                    )
-                    self.messages[-1].content.append(tool_result)
-                else:
-                    # Create new assistant message with this tool result
-                    assistant_message = NewAssistantMessage(
-                        content=[
-                            AssistantToolCallResult(
-                                call_id=message.call_id,
-                                output=message.output,
-                                execution_time_ms=getattr(message.meta, "execution_time_ms", None),
-                            ),
-                        ],
-                    )
-                    self.messages.append(assistant_message)
-                return
         elif isinstance(message, dict):
             # Handle different message types from dict
             message_type = message.get("type")
@@ -730,24 +706,18 @@ class Runner:
         except (json.JSONDecodeError, KeyError):
             logger.error("Failed to parse transfer_to_agent arguments: %s", tool_call.function.arguments)
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output="Failed to parse transfer arguments",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output="Failed to parse transfer arguments",
             )
             return
 
         if not target_agent_name:
             logger.error("No target agent name provided in transfer_to_agent call")
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output="No target agent name provided",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output="No target agent name provided",
             )
             return
 
@@ -755,12 +725,9 @@ class Runner:
         if not self.agent.handoffs:
             logger.error("Current agent has no handoffs configured")
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output="Current agent has no handoffs configured",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output="Current agent has no handoffs configured",
             )
             return
 
@@ -773,12 +740,9 @@ class Runner:
         if not target_agent:
             logger.error("Target agent '%s' not found in handoffs", target_agent_name)
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output=f"Target agent '{target_agent_name}' not found in handoffs",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output=f"Target agent '{target_agent_name}' not found in handoffs",
             )
             return
 
@@ -790,12 +754,9 @@ class Runner:
             )
 
             # Add the tool call result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output=str(result),
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output=str(result),
             )
 
             # Switch to the target agent
@@ -805,12 +766,9 @@ class Runner:
         except Exception as e:
             logger.exception("Failed to execute transfer_to_agent tool call")
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output=f"Transfer failed: {e!s}",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output=f"Transfer failed: {e!s}",
             )
 
     async def _handle_parent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
@@ -825,12 +783,9 @@ class Runner:
         if not self.agent.parent:
             logger.error("Current agent has no parent to transfer back to.")
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output="Current agent has no parent to transfer back to",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output="Current agent has no parent to transfer back to",
             )
             return
 
@@ -842,12 +797,9 @@ class Runner:
             )
 
             # Add the tool call result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output=str(result),
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output=str(result),
             )
 
             # Switch to the parent agent
@@ -857,10 +809,7 @@ class Runner:
         except Exception as e:
             logger.exception("Failed to execute transfer_to_parent tool call")
             # Add error result to messages
-            self.append_message(
-                AgentFunctionCallOutput(
-                    type="function_call_output",
-                    call_id=tool_call.id,
-                    output=f"Transfer to parent failed: {e!s}",
-                ),
+            self._add_tool_call_result(
+                call_id=tool_call.id,
+                output=f"Transfer to parent failed: {e!s}",
             )

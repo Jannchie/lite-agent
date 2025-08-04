@@ -6,12 +6,11 @@ from typing import Any, Optional
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
-from pydantic import BaseModel
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
-from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall
+from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall, message_to_llm_dict, system_message_to_llm_dict
 from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage, NewUserMessage
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -175,9 +174,9 @@ class Agent:
         if self.completion_condition == "call":
             instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
         return [
-            NewSystemMessage(
+            system_message_to_llm_dict(NewSystemMessage(
                 content=f"You are {self.name}. {instructions}",
-            ).to_llm_dict(),
+            )),
             *converted_messages,
         ]
 
@@ -368,7 +367,7 @@ class Agent:
 
         while i < len(messages):
             message = messages[i]
-            message_dict = message.to_llm_dict() if isinstance(message, BaseModel) else message
+            message_dict = message_to_llm_dict(message) if isinstance(message, (NewUserMessage, NewSystemMessage, NewAssistantMessage)) else message
 
             message_type = message_dict.get("type")
             role = message_dict.get("role")
@@ -380,7 +379,7 @@ class Agent:
 
                 while j < len(messages):
                     next_message = messages[j]
-                    next_dict = next_message.to_llm_dict() if isinstance(next_message, BaseModel) else next_message
+                    next_dict = message_to_llm_dict(next_message) if isinstance(next_message, (NewUserMessage, NewSystemMessage, NewAssistantMessage)) else next_message
 
                     if next_dict.get("type") == "function_call":
                         tool_call = {

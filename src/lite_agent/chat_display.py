@@ -23,8 +23,6 @@ from rich.table import Table
 
 from lite_agent.types import (
     AgentAssistantMessage,
-    AgentFunctionCallOutput,
-    AgentFunctionToolCallMessage,
     AgentSystemMessage,
     AgentUserMessage,
     AssistantMessageMeta,
@@ -243,9 +241,9 @@ def _update_message_counts(message: FlexibleRunnerMessage, counts: dict[str, int
         counts["Assistant"] += 1
     elif isinstance(message, AgentSystemMessage) or (isinstance(message, dict) and message.get("role") == "system"):
         counts["System"] += 1
-    elif isinstance(message, AgentFunctionToolCallMessage) or (isinstance(message, dict) and message.get("type") == "function_call"):
+    elif isinstance(message, dict) and message.get("type") == "function_call":
         counts["Function Call"] += 1
-    elif isinstance(message, AgentFunctionCallOutput) or (isinstance(message, dict) and message.get("type") == "function_call_output"):
+    elif isinstance(message, dict) and message.get("type") == "function_call_output":
         counts["Function Output"] += 1
     else:
         counts["Unknown"] += 1
@@ -253,8 +251,7 @@ def _update_message_counts(message: FlexibleRunnerMessage, counts: dict[str, int
 
 def _is_assistant_message(message: FlexibleRunnerMessage) -> bool:
     """判断是否为助手消息。"""
-    return (isinstance(message, (AgentAssistantMessage, NewAssistantMessage)) or
-            (isinstance(message, dict) and message.get("role") == "assistant"))
+    return isinstance(message, (AgentAssistantMessage, NewAssistantMessage)) or (isinstance(message, dict) and message.get("role") == "assistant")
 
 
 def _extract_meta_data(message: FlexibleRunnerMessage, total_input: int, total_output: int, total_latency: int, total_output_time: int) -> tuple[int, int, int, int] | None:
@@ -505,9 +502,13 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
     if show_timestamp:
         # 确保 message 是正确的类型
         valid_types = (
-            AgentUserMessage, AgentAssistantMessage, AgentSystemMessage,
-            AgentFunctionToolCallMessage, AgentFunctionCallOutput,
-            NewUserMessage, NewAssistantMessage, NewSystemMessage, dict,
+            AgentUserMessage,
+            AgentAssistantMessage,
+            AgentSystemMessage,
+            NewUserMessage,
+            NewAssistantMessage,
+            NewSystemMessage,
+            dict,
         )
         message_time = _extract_message_time(message) if isinstance(message, valid_types) else None
         timestamp = _format_timestamp(message_time, local_timezone=local_timezone if isinstance(local_timezone, timezone) else None)
@@ -524,7 +525,7 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
     )
 
 
-def _extract_message_time(message: FlexibleRunnerMessage | AgentUserMessage | AgentAssistantMessage | AgentFunctionToolCallMessage | AgentFunctionCallOutput | dict) -> datetime | None:
+def _extract_message_time(message: FlexibleRunnerMessage | AgentUserMessage | AgentAssistantMessage | dict) -> datetime | None:
     """从消息中提取时间戳。"""
     # Handle new message format first
     if (isinstance(message, NewMessage) and message.meta and message.meta.sent_at) or (isinstance(message, AgentAssistantMessage) and message.meta and message.meta.sent_at):
@@ -552,10 +553,6 @@ def _dispatch_message_display(message: FlexibleRunnerMessage, context: MessageCo
         _display_assistant_message_compact_v2(message, context)
     elif isinstance(message, AgentSystemMessage):
         _display_system_message_compact_v2(message, context)
-    elif isinstance(message, AgentFunctionToolCallMessage):
-        _display_function_call_message_compact_v2(message, context)
-    elif isinstance(message, AgentFunctionCallOutput):
-        _display_function_output_message_compact_v2(message, context)
     elif isinstance(message, dict):
         _display_dict_message_compact_v2(message, context)  # type: ignore[arg-type]
     else:
@@ -594,26 +591,6 @@ def _display_system_message_compact_v2(message: AgentSystemMessage, context: Mes
     """打印系统消息的紧凑格式 (v2)。"""
     content = context.truncate_content(str(message.content), context.max_content_length)
     context.console.print(f"{context.timestamp_str}{context.index_str}[yellow]System:[/yellow]\n{content}")
-
-
-def _display_function_call_message_compact_v2(message: AgentFunctionToolCallMessage, context: MessageContext) -> None:
-    """打印函数调用消息的紧凑格式 (v2)。"""
-    args_str = ""
-    if message.arguments:
-        try:
-            parsed_args = json.loads(message.arguments)
-            args_str = f" {parsed_args}"
-        except (json.JSONDecodeError, TypeError):
-            args_str = f" {message.arguments}"
-
-    args_display = context.truncate_content(args_str, context.max_content_length - len(message.name) - 10)
-    context.console.print(f"{context.timestamp_str}{context.index_str}[magenta]Call:[/magenta]\n{message.name}{args_display}")
-
-
-def _display_function_output_message_compact_v2(message: AgentFunctionCallOutput, context: MessageContext) -> None:
-    """打印函数输出消息的紧凑格式 (v2)。"""
-    output = context.truncate_content(str(message.output), context.max_content_length)
-    context.console.print(f"{context.timestamp_str}{context.index_str}[cyan]Output:[/cyan]\n{output}")
 
 
 def _display_unknown_message_compact_v2(message: FlexibleRunnerMessage, context: MessageContext) -> None:

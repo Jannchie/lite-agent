@@ -2,7 +2,7 @@
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AgentFunctionCallOutput, AgentFunctionToolCallMessage
+from lite_agent.types import AssistantToolCall, AssistantToolCallResult, NewAssistantMessage
 
 
 def get_temperature(city: str) -> str:
@@ -171,29 +171,30 @@ class TestSetChatHistory:
         assert self.runner.agent.name == "TemperatureAgent"
 
     def test_set_chat_history_with_agent_objects(self):
-        """Test chat history setting with AgentFunctionToolCallMessage objects."""
-        transfer_message = AgentFunctionToolCallMessage(
-            type="function_call",
-            call_id="call_1",
-            name="transfer_to_agent",
-            arguments='{"name": "WeatherAgent"}',
-        )
-
-        output_message = AgentFunctionCallOutput(
-            type="function_call_output",
-            call_id="call_1",
-            output="Transferring to agent: WeatherAgent",
+        """Test chat history setting with tool calls in new message format."""
+        # Create assistant message with tool call and result using new format
+        assistant_message = NewAssistantMessage(
+            content=[
+                AssistantToolCall(
+                    call_id="call_1",
+                    name="transfer_to_agent",
+                    arguments='{"name": "WeatherAgent"}',
+                ),
+                AssistantToolCallResult(
+                    call_id="call_1",
+                    output="Transferring to agent: WeatherAgent",
+                ),
+            ],
         )
 
         messages = [
             {"role": "user", "content": "Hello"},
-            transfer_message,
-            output_message,
+            assistant_message,
         ]
 
         self.runner.set_chat_history(messages, root_agent=self.parent)
 
-        assert len(self.runner.messages) == 2  # In new format: user message + aggregated assistant message
+        assert len(self.runner.messages) == 2
         assert self.runner.agent.name == "WeatherAgent"
 
     def test_set_chat_history_invalid_agent_name(self):
@@ -314,24 +315,22 @@ class TestSetChatHistory:
         self.runner.append_message(dict_msg)
         assert len(self.runner.messages) == 1
 
-        # Test AgentFunctionToolCallMessage
-        function_call_msg = AgentFunctionToolCallMessage(
-            type="function_call",
-            call_id="call_1",
-            name="test_function",
-            arguments='{"test": "value"}',
+        # Test new format assistant message with tool call and result
+        assistant_msg = NewAssistantMessage(
+            content=[
+                AssistantToolCall(
+                    call_id="call_1",
+                    name="test_function",
+                    arguments='{"test": "value"}',
+                ),
+                AssistantToolCallResult(
+                    call_id="call_1",
+                    output="Test output",
+                ),
+            ],
         )
-        self.runner.append_message(function_call_msg)
+        self.runner.append_message(assistant_msg)
         assert len(self.runner.messages) == 2
-
-        # Test AgentFunctionCallOutput
-        output_msg = AgentFunctionCallOutput(
-            type="function_call_output",
-            call_id="call_1",
-            output="Test output",
-        )
-        self.runner.append_message(output_msg)
-        assert len(self.runner.messages) == 2  # Tool result is added to existing assistant message
 
     def test_find_agent_by_name(self):
         """Test the _find_agent_by_name helper method."""

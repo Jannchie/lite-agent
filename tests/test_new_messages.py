@@ -1,6 +1,5 @@
 """Tests for the new structured message types."""
 
-
 from lite_agent.types.messages import (
     AssistantMessageContent,
     AssistantMessageMeta,
@@ -15,6 +14,8 @@ from lite_agent.types.messages import (
     UserImageContent,
     UserMessageContent,
     UserTextContent,
+    assistant_message_to_llm_dict,
+    user_message_to_llm_dict,
 )
 
 
@@ -118,7 +119,7 @@ def test_to_llm_dict_user_message():
     # Single text content
     content: list[UserMessageContent] = [UserTextContent(text="Hello")]
     message = NewUserMessage(content=content)
-    llm_dict = message.to_llm_dict()
+    llm_dict = user_message_to_llm_dict(message)
 
     assert llm_dict["role"] == "user"
     assert llm_dict["content"] == "Hello"
@@ -129,7 +130,7 @@ def test_to_llm_dict_user_message():
         UserImageContent(image_url="https://example.com/image.jpg"),
     ]
     message = NewUserMessage(content=content)
-    llm_dict = message.to_llm_dict()
+    llm_dict = user_message_to_llm_dict(message)
 
     assert llm_dict["role"] == "user"
     assert isinstance(llm_dict["content"], list)
@@ -147,11 +148,10 @@ def test_to_llm_dict_assistant_message():
         ),
     ]
     message = NewAssistantMessage(content=content)
-    llm_dict = message.to_llm_dict()
+    llm_dict = assistant_message_to_llm_dict(message)
 
     assert llm_dict["role"] == "assistant"
     assert llm_dict["content"] == "I can help"
     assert "tool_calls" in llm_dict
     assert len(llm_dict["tool_calls"]) == 1
     assert llm_dict["tool_calls"][0]["id"] == "call_123"
-

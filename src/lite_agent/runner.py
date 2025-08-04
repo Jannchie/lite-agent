@@ -30,6 +30,7 @@ from lite_agent.types import (
     UserMessageContent,
     UserTextContent,
 )
+from lite_agent.types.events import AssistantMessageEvent
 
 DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
     "completion_raw",
@@ -229,62 +230,70 @@ class Runner:
                     msg = f"Unknown API type: {self.api}"
                     raise ValueError(msg)
             async for chunk in resp:
-                if chunk.type in includes:
-                    yield chunk
-                if chunk.type == "assistant_message":
-                    # Start or update assistant message in new format
-                    meta = AssistantMessageMeta(
-                        sent_at=chunk.message.meta.sent_at,
-                        latency_ms=getattr(chunk.message.meta, "latency_ms", None),
-                        total_time_ms=getattr(chunk.message.meta, "output_time_ms", None),
-                    )
-                    # If we already have a current assistant message, just update its metadata
-                    if self._current_assistant_message is not None:
-                        self._current_assistant_message.meta = meta
-                    else:
-                        # Extract text content from the new message format
-                        text_content = ""
-                        if chunk.message.content:
-                            for item in chunk.message.content:
-                                if hasattr(item, "type") and item.type == "text":
-                                    text_content = item.text
-                                    break
-                        self._start_assistant_message(text_content, meta)
-                if chunk.type == "content_delta":
-                    # Accumulate text content to current assistant message
-                    self._add_text_content_to_current_assistant_message(chunk.delta)
-                if chunk.type == "function_call":
-                    # Add tool call to current assistant message
-                    # Keep arguments as string for compatibility with funcall library
-                    tool_call = AssistantToolCall(
-                        call_id=chunk.call_id,
-                        name=chunk.name,
-                        arguments=chunk.arguments or "{}",
-                    )
-                    self._add_to_current_assistant_message(tool_call)
-                if chunk.type == "usage":
-                    # Update the last assistant message with usage data and output_time_ms
-                    usage_time = datetime.now(timezone.utc)
-                    for i in range(len(self.messages) - 1, -1, -1):
-                        current_message = self.messages[i]
-                        if isinstance(current_message, NewAssistantMessage):
-                            # Update usage information
-                            if current_message.meta.usage is None:
-                                current_message.meta.usage = MessageUsage()
-                            current_message.meta.usage.input_tokens = chunk.usage.input_tokens
-                            current_message.meta.usage.output_tokens = chunk.usage.output_tokens
-                            current_message.meta.usage.total_tokens = (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
+                match chunk.type:
+                    case "assistant_message":
+                        # Start or update assistant message in new format
+                        meta = AssistantMessageMeta(
+                            sent_at=chunk.message.meta.sent_at,
+                            latency_ms=getattr(chunk.message.meta, "latency_ms", None),
+                            total_time_ms=getattr(chunk.message.meta, "output_time_ms", None),
+                        )
+                        # If we already have a current assistant message, just update its metadata
+                        if self._current_assistant_message is not None:
+                            self._current_assistant_message.meta = meta
+                        else:
+                            # Extract text content from the new message format
+                            text_content = ""
+                            if chunk.message.content:
+                                for item in chunk.message.content:
+                                    if hasattr(item, "type") and item.type == "text":
+                                        text_content = item.text
+                                        break
+                            self._start_assistant_message(text_content, meta)
+                        # Only yield assistant_message chunk if it's in includes and has content
+                        if chunk.type in includes and self._current_assistant_message is not None:
+                            # Create a new chunk with the current assistant message content
+                            updated_chunk = AssistantMessageEvent(
+                                message=self._current_assistant_message,
+                            )
+                            yield updated_chunk
+                    case "content_delta":
+                        # Accumulate text content to current assistant message
+                        self._add_text_content_to_current_assistant_message(chunk.delta)
+                    case "function_call":
+                        # Add tool call to current assistant message
+                        # Keep arguments as string for compatibility with funcall library
+                        tool_call = AssistantToolCall(
+                            call_id=chunk.call_id,
+                            name=chunk.name,
+                            arguments=chunk.arguments or "{}",
+                        )
+                        self._add_to_current_assistant_message(tool_call)
+                    case "usage":
+                        # Update the last assistant message with usage data and output_time_ms
+                        usage_time = datetime.now(timezone.utc)
+                        for i in range(len(self.messages) - 1, -1, -1):
+                            current_message = self.messages[i]
+                            if isinstance(current_message, NewAssistantMessage):
+                                # Update usage information
+                                if current_message.meta.usage is None:
+                                    current_message.meta.usage = MessageUsage()
+                                current_message.meta.usage.input_tokens = chunk.usage.input_tokens
+                                current_message.meta.usage.output_tokens = chunk.usage.output_tokens
+                                current_message.meta.usage.total_tokens = (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
 
-                            # Calculate output_time_ms if latency_ms is available
-                            if current_message.meta.latency_ms is not None:
-                                # We need to calculate from first output to usage time
-                                # We'll calculate: usage_time - (sent_at - latency_ms)
-                                # This gives us the time from first output to usage completion
-                                # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
-                                first_output_time_approx = current_message.meta.sent_at - timedelta(milliseconds=current_message.meta.latency_ms)
-                                output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
-                                current_message.meta.total_time_ms = max(0, output_time_ms)
-                            break
+                                # Calculate output_time_ms if latency_ms is available
+                                if current_message.meta.latency_ms is not None:
+                                    # We need to calculate from first output to usage time
+                                    # We'll calculate: usage_time - (sent_at - latency_ms)
+                                    # This gives us the time from first output to usage completion
+                                    # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
+                                    first_output_time_approx = current_message.meta.sent_at - timedelta(milliseconds=current_message.meta.latency_ms)
+                                    output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
+                                    current_message.meta.total_time_ms = max(0, output_time_ms)
+                                break
+                    case _ if chunk.type in includes:
+                        yield chunk
 
             # Finalize assistant message so it can be found in pending function calls
             self._finalize_assistant_message()

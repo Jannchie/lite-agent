@@ -174,9 +174,11 @@ class Agent:
         if self.completion_condition == "call":
             instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
         return [
-            system_message_to_llm_dict(NewSystemMessage(
-                content=f"You are {self.name}. {instructions}",
-            )),
+            system_message_to_llm_dict(
+                NewSystemMessage(
+                    content=f"You are {self.name}. {instructions}",
+                ),
+            ),
             *converted_messages,
         ]
 

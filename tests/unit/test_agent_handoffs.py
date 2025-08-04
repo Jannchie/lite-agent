@@ -118,7 +118,7 @@ class TestAgentHandoffs:
         )
 
         # Handle the transfer
-        await runner._handle_agent_transfer(transfer_call, [])
+        await runner._handle_agent_transfer(transfer_call)
 
         # Verify agent was switched
         assert runner.agent.name == "SalesAgent"
@@ -163,7 +163,7 @@ class TestAgentHandoffs:
         )
 
         # Handle the invalid transfer
-        await runner._handle_agent_transfer(invalid_transfer_call, [])
+        await runner._handle_agent_transfer(invalid_transfer_call)
 
         # Agent should remain unchanged
         assert runner.agent.name == "MainAgent"
@@ -249,7 +249,7 @@ class TestAgentHandoffs:
         )
 
         # Should handle gracefully
-        await runner._handle_agent_transfer(transfer_call, [])
+        await runner._handle_agent_transfer(transfer_call)
 
         # Agent should remain unchanged
         assert runner.agent.name == "MainAgent"
@@ -296,7 +296,7 @@ class TestAgentHandoffs:
         )
 
         # Should transfer successfully
-        await runner._handle_parent_transfer(transfer_call, [])
+        await runner._handle_parent_transfer(transfer_call)
 
         # Agent should have switched to parent
         assert runner.agent.name == "ParentAgent"
@@ -334,7 +334,7 @@ class TestAgentHandoffs:
         )
 
         # Should handle gracefully
-        await runner._handle_parent_transfer(transfer_call, [])
+        await runner._handle_parent_transfer(transfer_call)
 
         # Agent should remain unchanged
         assert runner.agent.name == "MainAgent"

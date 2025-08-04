@@ -57,38 +57,31 @@ class Runner:
 
     def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
         """Start a new assistant message."""
-        if meta is None:
-            meta = AssistantMessageMeta()
-
-        # Always add text content, even if empty (we can update it later)
-        assistant_content_items: list[AssistantMessageContent] = [AssistantTextContent(text=content)]
         self._current_assistant_message = NewAssistantMessage(
-            content=assistant_content_items,
-            meta=meta,
+            content=[AssistantTextContent(text=content)],
+            meta=meta or AssistantMessageMeta(),
         )
+
+    def _ensure_current_assistant_message(self) -> NewAssistantMessage:
+        """Ensure current assistant message exists and return it."""
+        if self._current_assistant_message is None:
+            self._start_assistant_message()
+        return self._current_assistant_message  # type: ignore[return-value]
 
     def _add_to_current_assistant_message(self, content_item: AssistantTextContent | AssistantToolCall | AssistantToolCallResult) -> None:
         """Add content to the current assistant message."""
-        if self._current_assistant_message is None:
-            self._start_assistant_message()
-
-        if self._current_assistant_message is not None:
-            self._current_assistant_message.content.append(content_item)
+        self._ensure_current_assistant_message().content.append(content_item)
 
     def _add_text_content_to_current_assistant_message(self, delta: str) -> None:
         """Add text delta to the current assistant message's text content."""
-        if self._current_assistant_message is None:
-            self._start_assistant_message()
-
-        if self._current_assistant_message is not None:
-            # Find the first text content item and append the delta
-            for content_item in self._current_assistant_message.content:
-                if content_item.type == "text":
-                    content_item.text += delta
-                    return
-            # If no text content found, add new text content
-            new_content = AssistantTextContent(text=delta)
-            self._current_assistant_message.content.append(new_content)
+        message = self._ensure_current_assistant_message()
+        # Find the first text content item and append the delta
+        for content_item in message.content:
+            if content_item.type == "text":
+                content_item.text += delta
+                return
+        # If no text content found, add new text content
+        message.content.append(AssistantTextContent(text=delta))
 
     def _finalize_assistant_message(self) -> None:
         """Finalize the current assistant message and add it to messages."""
@@ -132,7 +125,7 @@ class Runner:
             for i, tool_call in enumerate(transfer_calls):
                 if i == 0:
                     # Execute the first transfer
-                    await self._handle_agent_transfer(tool_call, includes)
+                    await self._handle_agent_transfer(tool_call)
                 else:
                     # Add response for additional transfer calls without executing them
                     self._add_tool_call_result(
@@ -147,7 +140,7 @@ class Runner:
             for i, tool_call in enumerate(return_parent_calls):
                 if i == 0:
                     # Execute the first transfer
-                    await self._handle_parent_transfer(tool_call, includes)
+                    await self._handle_parent_transfer(tool_call)
                 else:
                     # Add response for additional transfer calls without executing them
                     self._add_tool_call_result(
@@ -185,17 +178,16 @@ class Runner:
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
-        if isinstance(user_input, str):
-            user_message = NewUserMessage(content=[UserTextContent(text=user_input)])
-            self.messages.append(user_message)
-        elif isinstance(user_input, (list, tuple)):
-            # Handle sequence of messages
-            for message in user_input:
-                self.append_message(message)
-        else:
-            # Handle single message (BaseModel, TypedDict, or dict)
-            # Type assertion needed due to the complex union type
-            self.append_message(user_input)  # type: ignore[arg-type]
+        match user_input:
+            case str():
+                self.messages.append(NewUserMessage(content=[UserTextContent(text=user_input)]))
+            case list() | tuple():
+                # Handle sequence of messages
+                for message in user_input:
+                    self.append_message(message)
+            case _:
+                # Handle single message (BaseModel, TypedDict, or dict)
+                self.append_message(user_input)  # type: ignore[arg-type]
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
     async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: Any | None = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
@@ -260,6 +252,9 @@ class Runner:
                     case "content_delta":
                         # Accumulate text content to current assistant message
                         self._add_text_content_to_current_assistant_message(chunk.delta)
+                        # Always yield content_delta chunk if it's in includes
+                        if chunk.type in includes:
+                            yield chunk
                     case "function_call":
                         # Add tool call to current assistant message
                         # Keep arguments as string for compatibility with funcall library
@@ -269,6 +264,9 @@ class Runner:
                             arguments=chunk.arguments or "{}",
                         )
                         self._add_to_current_assistant_message(tool_call)
+                        # Always yield function_call chunk if it's in includes
+                        if chunk.type in includes:
+                            yield chunk
                     case "usage":
                         # Update the last assistant message with usage data and output_time_ms
                         usage_time = datetime.now(timezone.utc)
@@ -292,6 +290,9 @@ class Runner:
                                     output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
                                     current_message.meta.total_time_ms = max(0, output_time_ms)
                                 break
+                        # Always yield usage chunk if it's in includes
+                        if chunk.type in includes:
+                            yield chunk
                     case _ if chunk.type in includes:
                         yield chunk
 
@@ -386,58 +387,50 @@ class Runner:
         resp = self.run(user_input, max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
-    def _find_pending_tool_calls(self) -> list[AssistantToolCall]:
-        """Find tool calls that don't have corresponding results yet."""
-        # Find pending calls directly in new format messages
-        pending_calls: list[AssistantToolCall] = []
+    def _analyze_last_assistant_message(self) -> tuple[list[AssistantToolCall], dict[str, str]]:
+        """Analyze the last assistant message and return pending tool calls and tool call map."""
+        if not self.messages or not isinstance(self.messages[-1], NewAssistantMessage):
+            return [], {}
 
-        # Look at the last assistant message for pending tool calls
-        if not self.messages:
-            return pending_calls
-
-        last_message = self.messages[-1]
-        if not isinstance(last_message, NewAssistantMessage):
-            return pending_calls
-
-        # Collect tool calls and results from the last assistant message
         tool_calls = {}
         tool_results = set()
+        tool_call_names = {}
 
-        for content_item in last_message.content:
+        for content_item in self.messages[-1].content:
             if content_item.type == "tool_call":
                 tool_calls[content_item.call_id] = content_item
+                tool_call_names[content_item.call_id] = content_item.name
             elif content_item.type == "tool_call_result":
                 tool_results.add(content_item.call_id)
 
-        # Return tool calls that don't have corresponding results
-        return [call for call_id, call in tool_calls.items() if call_id not in tool_results]
+        # Return pending tool calls and tool call names map
+        pending_calls = [call for call_id, call in tool_calls.items() if call_id not in tool_results]
+        return pending_calls, tool_call_names
+
+    def _find_pending_tool_calls(self) -> list[AssistantToolCall]:
+        """Find tool calls that don't have corresponding results yet."""
+        pending_calls, _ = self._analyze_last_assistant_message()
+        return pending_calls
 
     def _get_tool_call_name_by_id(self, call_id: str) -> str | None:
         """Get the tool name for a given call_id from the last assistant message."""
-        if not self.messages or not isinstance(self.messages[-1], NewAssistantMessage):
-            return None
-
-        for content_item in self.messages[-1].content:
-            if content_item.type == "tool_call" and content_item.call_id == call_id:
-                return content_item.name
-        return None
+        _, tool_call_names = self._analyze_last_assistant_message()
+        return tool_call_names.get(call_id)
 
     def _convert_tool_calls_to_tool_calls(self, tool_calls: list[AssistantToolCall]) -> list[ToolCall]:
         """Convert AssistantToolCall objects to ToolCall objects for compatibility."""
-
-        result_tool_calls = []
-        for tc in tool_calls:
-            tool_call = ToolCall(
+        return [
+            ToolCall(
                 id=tc.call_id,
                 type="function",
                 function=ToolCallFunction(
                     name=tc.name,
                     arguments=tc.arguments if isinstance(tc.arguments, str) else str(tc.arguments),
                 ),
-                index=len(result_tool_calls),
+                index=i,
             )
-            result_tool_calls.append(tool_call)
-        return result_tool_calls
+            for i, tc in enumerate(tool_calls)
+        ]
 
     def set_chat_history(self, messages: Sequence[FlexibleRunnerMessage], root_agent: Agent | None = None) -> None:
         """Set the entire chat history and track the current agent based on function calls.
@@ -700,12 +693,11 @@ class Runner:
             msg = f"Unsupported message type: {type(message)}"
             raise TypeError(msg)
 
-    async def _handle_agent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
+    async def _handle_agent_transfer(self, tool_call: ToolCall) -> None:
         """Handle agent transfer when transfer_to_agent tool is called.
 
         Args:
             tool_call: The transfer_to_agent tool call
-            _includes: The types of chunks to include in output (unused)
         """
 
         # Parse the arguments to get the target agent name
@@ -780,12 +772,11 @@ class Runner:
                 output=f"Transfer failed: {e!s}",
             )
 
-    async def _handle_parent_transfer(self, tool_call: ToolCall, _includes: Sequence[AgentChunkType]) -> None:
+    async def _handle_parent_transfer(self, tool_call: ToolCall) -> None:
         """Handle parent transfer when transfer_to_parent tool is called.
 
         Args:
             tool_call: The transfer_to_parent tool call
-            _includes: The types of chunks to include in output (unused)
         """
 
         # Check if current agent has a parent

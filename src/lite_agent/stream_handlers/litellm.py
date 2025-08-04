@@ -16,18 +16,27 @@ if TYPE_CHECKING:
     from aiofiles.threadpool.text import AsyncTextIOWrapper
 
 
-def ensure_record_file(record_to: Path | None) -> Path | None:
+def ensure_record_file(record_to: Path | str | None) -> Path | None:
     if not record_to:
         return None
-    if not record_to.parent.exists():
-        logger.warning('Record directory "%s" does not exist, creating it.', record_to.parent)
-        record_to.parent.mkdir(parents=True, exist_ok=True)
-    return record_to
+
+    path = Path(record_to) if isinstance(record_to, str) else record_to
+
+    # If the path is a directory, generate a filename
+    if path.is_dir():
+        path = path / "conversation.jsonl"
+
+    # Ensure parent directory exists
+    if not path.parent.exists():
+        logger.warning('Record directory "%s" does not exist, creating it.', path.parent)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+    return path
 
 
 async def litellm_completion_stream_handler(
     resp: litellm.CustomStreamWrapper,
-    record_to: Path | None = None,
+    record_to: Path | str | None = None,
 ) -> AsyncGenerator[AgentChunk, None]:
     """
     Optimized chunk handler
@@ -52,7 +61,7 @@ async def litellm_completion_stream_handler(
 
 async def litellm_response_stream_handler(
     resp: AsyncGenerator[ResponsesAPIStreamingResponse, None],
-    record_to: Path | None = None,
+    record_to: Path | str | None = None,
 ) -> AsyncGenerator[AgentChunk, None]:
     """
     Response API stream handler for processing ResponsesAPIStreamingResponse chunks

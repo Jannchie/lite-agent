@@ -293,9 +293,11 @@ class TestResponseEventProcessor:
         processor = ResponseEventProcessor()
 
         # 先添加一个带文本内容的消息
-        processor._messages.append({
-            "content": [{"text": "Hello", "type": "text"}],
-        })
+        processor._messages.append(
+            {
+                "content": [{"text": "Hello", "type": "text"}],
+            }
+        )
 
         # 创建 OutputTextDeltaEvent
         event = OutputTextDeltaEvent(
@@ -374,10 +376,12 @@ class TestResponseEventProcessor:
         processor = ResponseEventProcessor()
 
         # 先添加一个函数调用消息
-        processor._messages.append({
-            "type": "function_call",
-            "arguments": "{",
-        })
+        processor._messages.append(
+            {
+                "type": "function_call",
+                "arguments": "{",
+            }
+        )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDeltaEvent
         event = Mock(spec=FunctionCallArgumentsDeltaEvent)
@@ -395,9 +399,11 @@ class TestResponseEventProcessor:
         processor = ResponseEventProcessor()
 
         # 先添加一个没有 arguments 字段的函数调用消息
-        processor._messages.append({
-            "type": "function_call",
-        })
+        processor._messages.append(
+            {
+                "type": "function_call",
+            }
+        )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDeltaEvent
         event = Mock(spec=FunctionCallArgumentsDeltaEvent)
@@ -416,10 +422,12 @@ class TestResponseEventProcessor:
         processor = ResponseEventProcessor()
 
         # 先添加一个函数调用消息
-        processor._messages.append({
-            "type": "function_call",
-            "arguments": "partial",
-        })
+        processor._messages.append(
+            {
+                "type": "function_call",
+                "arguments": "partial",
+            }
+        )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDoneEvent
         event = Mock(spec=FunctionCallArgumentsDoneEvent)

@@ -10,21 +10,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 pytest                    # Run all tests
 pytest tests/unit/        # Run only unit tests
 pytest tests/integration/ # Run only integration tests
+pytest tests/performance/ # Run performance tests
 pytest --cov             # Run with coverage
+pytest -v                # Verbose output
+pytest -k "test_name"     # Run specific test
 ```
 
 ### Linting and Formatting
 
 ```bash
 ruff check               # Run linter
+ruff check --fix         # Run linter and auto-fix issues
 ruff format              # Format code
+pyright                  # Type checking (optional)
 ```
 
 ### Package Management
 
 ```bash
-uv add lite-agent # Install from PyPI
-uv add --dev lite-agent # Install dev package
+uv install              # Install all dependencies
+uv add <package>         # Add a new dependency
+uv add --dev <package>   # Add a development dependency
+uv sync                  # Sync dependencies from lock file
+```
+
+### Running Examples
+
+```bash
+uv run python examples/basic.py
+uv run python examples/handoffs.py
+uv run python examples/chat_display_demo.py
 ```
 
 ## Project Architecture
@@ -96,5 +111,23 @@ Examples demonstrate various usage patterns:
 - **Integration tests**: Test full agent workflows with mocked LLM responses
 - **Performance tests**: Test memory usage and performance characteristics
 - **Mock system**: JSONL-based conversation recording/playback for deterministic testing
+
+### API Compatibility
+
+The framework supports two OpenAI API modes:
+
+- **Response API** (default): Modern structured response format
+- **Completion API**: Legacy completion format for backward compatibility
+
+Set via `Runner(agent, api="completion")` or `Runner(agent, api="responses")`.
+
+### Development Notes
+
+- Project uses strict ruff linting with `select = ["ALL"]` and specific ignores
+- All functions require full type annotations
+- Uses `uv` for package management and dependency resolution
+- Mock conversations stored in `tests/mocks/` as JSONL files for reproducible testing
+- Examples in `examples/` directory demonstrate various usage patterns
+- Template system uses Jinja2 for dynamic instruction generation
 
 The framework emphasizes simplicity and extensibility while maintaining full type safety and comprehensive streaming support.

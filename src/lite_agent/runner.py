@@ -367,11 +367,6 @@ class Runner:
                 msg = "Cannot continue running without a valid last message from the assistant."
                 raise ValueError(msg)
 
-            last_message = self.messages[-1]
-            if not (isinstance(last_message, NewAssistantMessage) or (hasattr(last_message, "role") and getattr(last_message, "role", None) == "assistant")):
-                msg = "Cannot continue running without a valid last message from the assistant."
-                raise ValueError(msg)
-
             resp = self._run(max_steps=max_steps, includes=includes, record_to=self._normalize_record_path(record_to), context=context)
             async for chunk in resp:
                 yield chunk

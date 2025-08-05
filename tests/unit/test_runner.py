@@ -142,21 +142,6 @@ async def test_run_stream_with_max_steps():
 
 
 @pytest.mark.asyncio
-async def test_run_continue_stream_with_invalid_last_message():
-    """Test run_continue_stream when last message is not from assistant"""
-    agent = DummyAgent()
-    runner = Runner(agent=agent)
-
-    # Add a user message as the last message
-    user_msg_dict = {"role": "user", "content": "Hello"}
-    runner.append_message(user_msg_dict)
-
-    with pytest.raises(ValueError, match="Cannot continue running without a valid last message from the assistant"):
-        async for _ in runner.run_continue_stream():
-            pass
-
-
-@pytest.mark.asyncio
 async def test_run_continue_stream_with_empty_messages():
     """Test run_continue_stream when there are no messages"""
     agent = DummyAgent()

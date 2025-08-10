@@ -32,14 +32,18 @@ uv install              # Install all dependencies
 uv add <package>         # Add a new dependency
 uv add --dev <package>   # Add a development dependency
 uv sync                  # Sync dependencies from lock file
+uv run <command>         # Run command in project environment
 ```
 
 ### Running Examples
 
 ```bash
 uv run python examples/basic.py
-uv run python examples/handoffs.py
+uv run python examples/handoffs.py  
 uv run python examples/chat_display_demo.py
+uv run python examples/context.py
+uv run python examples/terminal.py
+uv run python examples/translate/main.py
 ```
 
 ## Project Architecture
@@ -107,10 +111,12 @@ Examples demonstrate various usage patterns:
 
 ### Testing Architecture
 
-- **Unit tests**: Test individual components in isolation
-- **Integration tests**: Test full agent workflows with mocked LLM responses
-- **Performance tests**: Test memory usage and performance characteristics
-- **Mock system**: JSONL-based conversation recording/playback for deterministic testing
+- **Unit tests**: Test individual components in isolation (`tests/unit/`)
+- **Integration tests**: Test full agent workflows with mocked LLM responses (`tests/integration/`)
+- **Performance tests**: Test memory usage and performance characteristics (`tests/performance/`)
+- **Mock system**: JSONL-based conversation recording/playback for deterministic testing (`tests/mocks/`)
+
+**Recording Mock Conversations**: Use `scripts/record_chat_messages.py` to capture real LLM interactions for test scenarios
 
 ### API Compatibility
 
@@ -125,9 +131,11 @@ Set via `Runner(agent, api="completion")` or `Runner(agent, api="responses")`.
 
 - Project uses strict ruff linting with `select = ["ALL"]` and specific ignores
 - All functions require full type annotations
-- Uses `uv` for package management and dependency resolution
+- Uses `uv` for package management and dependency resolution  
 - Mock conversations stored in `tests/mocks/` as JSONL files for reproducible testing
 - Examples in `examples/` directory demonstrate various usage patterns
-- Template system uses Jinja2 for dynamic instruction generation
+- Template system uses Jinja2 for dynamic instruction generation (`src/lite_agent/templates/`)
+- Requires `litellm` as core dependency for LLM interactions
+- Chat display functionality uses `rich` library for formatted console output
 
 The framework emphasizes simplicity and extensibility while maintaining full type safety and comprehensive streaming support.

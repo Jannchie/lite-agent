@@ -168,13 +168,14 @@ class Runner:
         """Collect all chunks from an async generator into a list."""
         return [chunk async for chunk in stream]
 
-    def run(
+    def run(  # noqa: PLR0913
         self,
         user_input: UserInput,
         max_steps: int = 20,
         includes: Sequence[AgentChunkType] | None = None,
         context: "Any | None" = None,  # noqa: ANN401
         record_to: PathLike | str | None = None,
+        agent_kwargs: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
@@ -188,9 +189,16 @@ class Runner:
             case _:
                 # Handle single message (BaseModel, TypedDict, or dict)
                 self.append_message(user_input)  # type: ignore[arg-type]
-        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
+        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context, agent_kwargs=agent_kwargs)
 
-    async def _run(self, max_steps: int, includes: Sequence[AgentChunkType], record_to: Path | None = None, context: Any | None = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
+    async def _run(
+        self,
+        max_steps: int,
+        includes: Sequence[AgentChunkType],
+        record_to: Path | None = None,
+        context: Any | None = None,  # noqa: ANN401
+        agent_kwargs: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
         steps = 0
@@ -213,11 +221,24 @@ class Runner:
             logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
             # Convert to legacy format only when needed for LLM communication
             # This allows us to keep the new format internally but ensures compatibility
+            # Extract agent kwargs for reasoning configuration
+            reasoning = None
+            if agent_kwargs:
+                reasoning = agent_kwargs.get("reasoning")
+
             match self.api:
                 case "completion":
-                    resp = await self.agent.completion(self.messages, record_to_file=record_to)
+                    resp = await self.agent.completion(
+                        self.messages,
+                        record_to_file=record_to,
+                        reasoning=reasoning,
+                    )
                 case "responses":
-                    resp = await self.agent.responses(self.messages, record_to_file=record_to)
+                    resp = await self.agent.responses(
+                        self.messages,
+                        record_to_file=record_to,
+                        reasoning=reasoning,
+                    )
                 case _:
                     msg = f"Unknown API type: {self.api}"
                     raise ValueError(msg)

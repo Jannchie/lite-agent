@@ -7,7 +7,7 @@ from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 from litellm import CustomStreamWrapper
 
-from lite_agent.client import BaseLLMClient, LiteLLMClient
+from lite_agent.client import BaseLLMClient, LiteLLMClient, ReasoningConfig
 from lite_agent.loggers import logger
 from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
 from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall, message_to_llm_dict, system_message_to_llm_dict
@@ -32,15 +32,21 @@ class Agent:
         handoffs: list["Agent"] | None = None,
         message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
         completion_condition: str = "stop",
+        reasoning: ReasoningConfig = None,
     ) -> None:
         self.name = name
         self.instructions = instructions
+        self.reasoning = reasoning
+
         if isinstance(model, BaseLLMClient):
             # If model is a BaseLLMClient instance, use it directly
             self.client = model
         else:
             # Otherwise, create a LitellmClient instance
-            self.client = LiteLLMClient(model=model)
+            self.client = LiteLLMClient(
+                model=model,
+                reasoning=reasoning,
+            )
         self.completion_condition = completion_condition
         self.handoffs = handoffs if handoffs else []
         self._parent: Agent | None = None
@@ -269,7 +275,12 @@ class Agent:
                 res.append(message)
         return res
 
-    async def completion(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def completion(
+        self,
+        messages: RunnerMessages,
+        record_to_file: Path | None = None,
+        reasoning: ReasoningConfig = None,
+    ) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
@@ -284,6 +295,7 @@ class Agent:
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
+            reasoning=reasoning,
         )
 
         # Ensure resp is a CustomStreamWrapper
@@ -292,7 +304,12 @@ class Agent:
         msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
         raise TypeError(msg)
 
-    async def responses(self, messages: RunnerMessages, record_to_file: Path | None = None) -> AsyncGenerator[AgentChunk, None]:
+    async def responses(
+        self,
+        messages: RunnerMessages,
+        record_to_file: Path | None = None,
+        reasoning: ReasoningConfig = None,
+    ) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
         if self.message_transfer:
@@ -306,6 +323,7 @@ class Agent:
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
+            reasoning=reasoning,
         )
         return litellm_response_stream_handler(resp, record_to=record_to_file)
 

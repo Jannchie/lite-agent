@@ -1,3 +1,19 @@
+## v0.5.0
+
+[v0.4.1...v0.5.0](https://github.com/Jannchie/lite-agent/compare/v0.4.1...v0.5.0)
+
+### :sparkles: Features
+
+- **reasoning**: add unified reasoning config for agent and runner - By [Jannchie](mailto:jannchie@gmail.com) in [1ede077](https://github.com/Jannchie/lite-agent/commit/1ede077)
+
+### :adhesive_bandage: Fixes
+
+- **runner**: remove redundant last message check - By [Jannchie](mailto:jannchie@gmail.com) in [0037b96](https://github.com/Jannchie/lite-agent/commit/0037b96)
+
+### :memo: Documentation
+
+- **claude-guide**: expand testing linting and dev instructions - By [Jannchie](mailto:jannchie@gmail.com) in [d9136c2](https://github.com/Jannchie/lite-agent/commit/d9136c2)
+
 ## v0.4.1
 
 [v0.4.0...v0.4.1](https://github.com/Jannchie/lite-agent/compare/v0.4.0...v0.4.1)

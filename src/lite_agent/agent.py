@@ -22,7 +22,7 @@ WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE = jinja_env.get_template("wait_for_user_inst
 
 
 class Agent:
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         *,
         model: str | BaseLLMClient,

@@ -437,7 +437,7 @@ def display_messages(
         )
 
 
-def _display_single_message_compact(  # noqa: PLR0913
+def _display_single_message_compact(
     message: FlexibleRunnerMessage,
     *,
     index: int | None = None,

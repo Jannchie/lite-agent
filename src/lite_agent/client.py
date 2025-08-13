@@ -5,6 +5,7 @@ from typing import Any, Literal
 import litellm
 from openai.types.chat import ChatCompletionToolParam
 from openai.types.responses import FunctionToolParam
+from pydantic import BaseModel
 
 ReasoningEffort = Literal["minimal", "low", "medium", "high"]
 ThinkingConfig = dict[str, Any] | None
@@ -16,6 +17,17 @@ ReasoningConfig = (
     | bool  # True/False 简单开关
     | None  # 不启用推理
 )
+
+
+class LLMConfig(BaseModel):
+    """LLM generation parameters configuration."""
+
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_p: float | None = None
+    frequency_penalty: float | None = None
+    presence_penalty: float | None = None
+    stop: list[str] | str | None = None
 
 
 def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort | None, ThinkingConfig]:
@@ -36,7 +48,10 @@ def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort 
         return None, None
     if isinstance(reasoning, str):
         # 字符串类型，使用 reasoning_effort
-        return reasoning, None
+        # 确保字符串是有效的 ReasoningEffort 值
+        if reasoning in ("minimal", "low", "medium", "high"):
+            return reasoning, None  # type: ignore[return-value]
+        return None, None
     if isinstance(reasoning, dict):
         # 字典类型，使用 thinking_config
         return None, reasoning
@@ -58,13 +73,24 @@ class BaseLLMClient(abc.ABC):
         api_base: str | None = None,
         api_version: str | None = None,
         reasoning: ReasoningConfig = None,
+        llm_config: LLMConfig | None = None,
+        **llm_params: Any,  # noqa: ANN401
     ):
         self.model = model
         self.api_key = api_key
         self.api_base = api_base
         self.api_version = api_version
 
+        # 处理 LLM 生成参数
+        if llm_config is not None:
+            self.llm_config = llm_config
+        else:
+            # 从 **llm_params 创建配置
+            self.llm_config = LLMConfig(**llm_params)
+
         # 处理推理配置
+        self.reasoning_effort: ReasoningEffort | None
+        self.thinking_config: ThinkingConfig
         self.reasoning_effort, self.thinking_config = parse_reasoning_config(reasoning)
 
     @abc.abstractmethod
@@ -130,6 +156,20 @@ class LiteLLMClient(BaseLLMClient):
             **kwargs,
         }
 
+        # Add LLM generation parameters if specified
+        if self.llm_config.temperature is not None:
+            completion_params["temperature"] = self.llm_config.temperature
+        if self.llm_config.max_tokens is not None:
+            completion_params["max_tokens"] = self.llm_config.max_tokens
+        if self.llm_config.top_p is not None:
+            completion_params["top_p"] = self.llm_config.top_p
+        if self.llm_config.frequency_penalty is not None:
+            completion_params["frequency_penalty"] = self.llm_config.frequency_penalty
+        if self.llm_config.presence_penalty is not None:
+            completion_params["presence_penalty"] = self.llm_config.presence_penalty
+        if self.llm_config.stop is not None:
+            completion_params["stop"] = self.llm_config.stop
+
         # Add reasoning parameters if specified
         if final_reasoning_effort is not None:
             completion_params["reasoning_effort"] = final_reasoning_effort
@@ -168,6 +208,20 @@ class LiteLLMClient(BaseLLMClient):
             "store": False,
             **kwargs,
         }
+
+        # Add LLM generation parameters if specified
+        if self.llm_config.temperature is not None:
+            response_params["temperature"] = self.llm_config.temperature
+        if self.llm_config.max_tokens is not None:
+            response_params["max_tokens"] = self.llm_config.max_tokens
+        if self.llm_config.top_p is not None:
+            response_params["top_p"] = self.llm_config.top_p
+        if self.llm_config.frequency_penalty is not None:
+            response_params["frequency_penalty"] = self.llm_config.frequency_penalty
+        if self.llm_config.presence_penalty is not None:
+            response_params["presence_penalty"] = self.llm_config.presence_penalty
+        if self.llm_config.stop is not None:
+            response_params["stop"] = self.llm_config.stop
 
         # Add reasoning parameters if specified
         if final_reasoning_effort is not None:

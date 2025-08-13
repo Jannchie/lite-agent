@@ -168,7 +168,7 @@ class Runner:
         """Collect all chunks from an async generator into a list."""
         return [chunk async for chunk in stream]
 
-    def run(  # noqa: PLR0913
+    def run(
         self,
         user_input: UserInput,
         max_steps: int = 20,

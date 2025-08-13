@@ -44,10 +44,11 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
 
 
 class Runner:
-    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "responses") -> None:
+    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "responses", streaming: bool = True) -> None:
         self.agent = agent
         self.messages: list[NewMessage] = []
         self.api = api
+        self.streaming = streaming
         self._current_assistant_message: NewAssistantMessage | None = None
 
     @property
@@ -178,6 +179,7 @@ class Runner:
         agent_kwargs: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
+        logger.debug(f"Runner.run called with streaming={self.streaming}, api={self.api}")
         includes = self._normalize_includes(includes)
         match user_input:
             case str():
@@ -189,6 +191,7 @@ class Runner:
             case _:
                 # Handle single message (BaseModel, TypedDict, or dict)
                 self.append_message(user_input)  # type: ignore[arg-type]
+        logger.debug("Messages prepared, calling _run")
         return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context, agent_kwargs=agent_kwargs)
 
     async def _run(
@@ -226,22 +229,28 @@ class Runner:
             if agent_kwargs:
                 reasoning = agent_kwargs.get("reasoning")
 
+            logger.debug(f"Using API: {self.api}, streaming: {self.streaming}")
             match self.api:
                 case "completion":
+                    logger.debug("Calling agent.completion")
                     resp = await self.agent.completion(
                         self.messages,
                         record_to_file=record_to,
                         reasoning=reasoning,
+                        streaming=self.streaming,
                     )
                 case "responses":
+                    logger.debug("Calling agent.responses")
                     resp = await self.agent.responses(
                         self.messages,
                         record_to_file=record_to,
                         reasoning=reasoning,
+                        streaming=self.streaming,
                     )
                 case _:
                     msg = f"Unknown API type: {self.api}"
                     raise ValueError(msg)
+            logger.debug(f"Received response from agent: {type(resp)}")
             async for chunk in resp:
                 match chunk.type:
                     case "assistant_message":

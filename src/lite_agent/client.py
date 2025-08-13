@@ -100,6 +100,7 @@ class BaseLLMClient(abc.ABC):
         tools: list[ChatCompletionToolParam] | None = None,
         tool_choice: str = "auto",
         reasoning: ReasoningConfig = None,
+        streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
         """Perform a completion request to the LLM."""
@@ -111,6 +112,7 @@ class BaseLLMClient(abc.ABC):
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
+        streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
         """Perform a response request to the LLM."""
@@ -134,6 +136,7 @@ class LiteLLMClient(BaseLLMClient):
         tools: list[ChatCompletionToolParam] | None = None,
         tool_choice: str = "auto",
         reasoning: ReasoningConfig = None,
+        streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
         """Perform a completion request to the Litellm API."""
@@ -152,7 +155,7 @@ class LiteLLMClient(BaseLLMClient):
             "api_version": self.api_version,
             "api_key": self.api_key,
             "api_base": self.api_base,
-            "stream": True,
+            "stream": streaming,
             **kwargs,
         }
 
@@ -184,6 +187,7 @@ class LiteLLMClient(BaseLLMClient):
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
+        streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # type: ignore[return]  # noqa: ANN401
         """Perform a response request to the Litellm API."""
@@ -204,7 +208,7 @@ class LiteLLMClient(BaseLLMClient):
             "api_version": self.api_version,
             "api_key": self.api_key,
             "api_base": self.api_base,
-            "stream": True,
+            "stream": streaming,
             "store": False,
             **kwargs,
         }

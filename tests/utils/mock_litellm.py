@@ -7,11 +7,10 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import aiofiles
+from litellm import CustomStreamWrapper as RealCustomStreamWrapper
 from litellm.types.llms.openai import ResponsesAPIStreamingResponse
 from litellm.types.utils import ModelResponseStream
 from pydantic import TypeAdapter
-
-from lite_agent.agent import CustomStreamWrapper as RealCustomStreamWrapper
 
 
 async def mock_acompletion(jsonl_file: str | Path, **_kwargs: object) -> AsyncGenerator[ModelResponseStream, None]:

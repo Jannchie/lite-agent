@@ -13,13 +13,13 @@ class DummyAgent(Agent):
     def __init__(self) -> None:
         super().__init__(model="dummy-model", name="Dummy Agent", instructions="This is a dummy agent for testing.")
 
-    async def completion(self, _message, record_to_file=None, reasoning=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
+    async def completion(self, _message, record_to_file=None, reasoning=None, streaming=True) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
         return async_gen()
 
-    async def responses(self, _message, record_to_file=None, reasoning=None) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
+    async def responses(self, _message, record_to_file=None, reasoning=None, streaming=True) -> AsyncGenerator[AgentChunk, None]:  # type: ignore
         async def async_gen() -> AsyncGenerator[AgentChunk, None]:
             yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
@@ -30,7 +30,7 @@ class DummyAgent(Agent):
 async def test_run_until_complete():
     mock_agent = Mock()
 
-    async def async_gen(_: object, record_to_file=None, reasoning=None) -> AsyncGenerator[AgentChunk, None]:
+    async def async_gen(_: object, record_to_file=None, reasoning=None, streaming=True) -> AsyncGenerator[AgentChunk, None]:
         yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
 
     mock_agent.completion = AsyncMock(side_effect=async_gen)

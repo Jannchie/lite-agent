@@ -5,11 +5,10 @@ from typing import Any, Optional
 
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
-from litellm import CustomStreamWrapper
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient, ReasoningConfig
 from lite_agent.loggers import logger
-from lite_agent.stream_handlers import litellm_completion_stream_handler, litellm_response_stream_handler
+from lite_agent.response_handlers import CompletionResponseHandler, ResponsesAPIHandler
 from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall, message_to_llm_dict, system_message_to_llm_dict
 from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage, NewUserMessage
 
@@ -280,6 +279,7 @@ class Agent:
         messages: RunnerMessages,
         record_to_file: Path | None = None,
         reasoning: ReasoningConfig = None,
+        streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
@@ -296,19 +296,19 @@ class Agent:
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
             reasoning=reasoning,
+            streaming=streaming,
         )
 
-        # Ensure resp is a CustomStreamWrapper
-        if isinstance(resp, CustomStreamWrapper):
-            return litellm_completion_stream_handler(resp, record_to=record_to_file)
-        msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
-        raise TypeError(msg)
+        # Use response handler for unified processing
+        handler = CompletionResponseHandler()
+        return handler.handle(resp, streaming, record_to_file)
 
     async def responses(
         self,
         messages: RunnerMessages,
         record_to_file: Path | None = None,
         reasoning: ReasoningConfig = None,
+        streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
         processed_messages = messages
@@ -324,8 +324,11 @@ class Agent:
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
             reasoning=reasoning,
+            streaming=streaming,
         )
-        return litellm_response_stream_handler(resp, record_to=record_to_file)
+        # Use response handler for unified processing
+        handler = ResponsesAPIHandler()
+        return handler.handle(resp, streaming, record_to_file)
 
     async def list_require_confirm_tools(self, tool_calls: Sequence[ToolCall] | None) -> Sequence[ToolCall]:
         if not tool_calls:
@@ -539,3 +542,4 @@ class Agent:
             required=[],
             handler=wait_for_user_handler,
         )
+

@@ -22,15 +22,15 @@ async def test_stream_async_success():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     fake_resp = MagicMock()
-    with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=fake_resp)), patch("lite_agent.agent.CustomStreamWrapper", new=lambda _: True):
-        # Patch Agent模块作用域下的litellm_completion_stream_handler
+    with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=fake_resp)):
+        # Mock the response handler
         from collections.abc import AsyncGenerator
         from typing import Any
 
         async def fake_async_gen(*_args, **_kwargs) -> AsyncGenerator[Any, None]:  # type: ignore
             yield "GENERATOR"
 
-        with patch("lite_agent.agent.litellm_completion_stream_handler", new=fake_async_gen), patch("lite_agent.agent.isinstance", new=lambda _obj, _typ: True):
+        with patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=fake_async_gen):
             result = await agent.completion([AgentUserMessage(content=[UserTextContent(text="hi")])])
             assert hasattr(result, "__aiter__")
             items = []
@@ -45,15 +45,15 @@ async def test_stream_async_typeerror():
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     not_a_stream = object()
 
-    class DummyWrapper:
-        pass
-
     with (
         patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)),
-        patch("lite_agent.agent.CustomStreamWrapper", DummyWrapper),
         pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"),
     ):
-        await agent.completion([{"role": "user", "content": "hi"}])
+        # The actual response handler should raise TypeError when it encounters a non-CustomStreamWrapper
+        result = await agent.completion([{"role": "user", "content": "hi"}])
+        # Force consumption of the async generator to trigger the error
+        async for _ in result:
+            pass
 
 
 @pytest.mark.asyncio

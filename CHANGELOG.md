@@ -1,3 +1,12 @@
+## v0.6.0
+
+[v0.5.0...v0.6.0](https://github.com/Jannchie/lite-agent/compare/v0.5.0...v0.6.0)
+
+### :sparkles: Features
+
+- **examples**: add basic and llm config usage examples - By [Jannchie](mailto:jannchie@gmail.com) in [ea4112f](https://github.com/Jannchie/lite-agent/commit/ea4112f)
+- **streaming**: add unified streaming and non-streaming response handling - By [Jannchie](mailto:jannchie@gmail.com) in [53daf42](https://github.com/Jannchie/lite-agent/commit/53daf42)
+
 ## v0.5.0
 
 [v0.4.1...v0.5.0](https://github.com/Jannchie/lite-agent/compare/v0.4.1...v0.5.0)

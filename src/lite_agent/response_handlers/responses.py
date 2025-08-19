@@ -7,8 +7,8 @@ from typing import Any
 from lite_agent.response_handlers.base import ResponseHandler
 from lite_agent.stream_handlers import litellm_response_stream_handler
 from lite_agent.types import AgentChunk
-from lite_agent.types.events import AssistantMessageEvent
-from lite_agent.types.messages import AssistantMessageMeta, AssistantTextContent, NewAssistantMessage
+from lite_agent.types.events import AssistantMessageEvent, Usage, UsageEvent
+from lite_agent.types.messages import AssistantMessageMeta, AssistantTextContent, AssistantToolCall, NewAssistantMessage
 
 
 class ResponsesAPIHandler(ResponseHandler):
@@ -27,16 +27,38 @@ class ResponsesAPIHandler(ResponseHandler):
         """Handle non-streaming responses API response."""
         # Convert ResponsesAPIResponse to chunks
         if hasattr(response, "output") and response.output:
-            for output_message in response.output:
-                if hasattr(output_message, "content") and output_message.content:
+            content_items = []
+            
+            for output_item in response.output:
+                # Handle function tool calls
+                if hasattr(output_item, "type") and output_item.type == "function_call":
+                    content_items.append(AssistantToolCall(
+                        call_id=output_item.call_id,
+                        name=output_item.name,
+                        arguments=output_item.arguments,
+                    ))
+                # Handle text content (if exists)
+                elif hasattr(output_item, "content") and output_item.content:
                     content_text = ""
-                    for content_item in output_message.content:
+                    for content_item in output_item.content:
                         if hasattr(content_item, "text"):
                             content_text += content_item.text
-
+                    
                     if content_text:
-                        message = NewAssistantMessage(
-                            content=[AssistantTextContent(text=content_text)],
-                            meta=AssistantMessageMeta(sent_at=datetime.now(timezone.utc)),
-                        )
-                        yield AssistantMessageEvent(message=message)
+                        content_items.append(AssistantTextContent(text=content_text))
+            
+            # Create assistant message if we have any content
+            if content_items:
+                message = NewAssistantMessage(
+                    content=content_items,
+                    meta=AssistantMessageMeta(sent_at=datetime.now(timezone.utc)),
+                )
+                yield AssistantMessageEvent(message=message)
+
+        # Yield usage information if available
+        if hasattr(response, "usage") and response.usage:
+            usage = Usage(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            )
+            yield UsageEvent(usage=usage)

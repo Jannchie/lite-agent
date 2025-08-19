@@ -44,15 +44,16 @@ DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
 
 
 class Runner:
-    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "responses", streaming: bool = True) -> None:
+    def __init__(self, agent: Agent, api: Literal["completion", "responses"] = "responses", *, streaming: bool = True) -> None:
         self.agent = agent
-        self.messages: list[NewMessage] = []
+        self.messages: list[FlexibleRunnerMessage] = []
         self.api = api
         self.streaming = streaming
         self._current_assistant_message: NewAssistantMessage | None = None
+        self.usage = MessageUsage(input_tokens=0, output_tokens=0, total_tokens=0)
 
     @property
-    def legacy_messages(self) -> list[NewMessage]:
+    def legacy_messages(self) -> list[FlexibleRunnerMessage]:
         """Return messages in new format (legacy_messages is now an alias)."""
         return self.messages
 
@@ -105,6 +106,15 @@ class Runner:
             # Create new assistant message with just the tool result
             assistant_message = NewAssistantMessage(content=[result])
             self.messages.append(assistant_message)
+
+        # For completion API compatibility, also add as separate message
+        if self.api == "completion":
+            function_output_msg: dict[str, Any] = {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": output,
+            }
+            self.messages.append(function_output_msg)
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""
@@ -164,6 +174,15 @@ class Runner:
                         execution_time_ms=tool_call_chunk.execution_time_ms,
                     )
                     self.messages[-1].content.append(tool_result)
+
+                # For completion API compatibility, also add as separate message
+                if self.api == "completion":
+                    function_output_msg: dict[str, Any] = {
+                        "type": "function_call_output",
+                        "call_id": tool_call_chunk.tool_call_id,
+                        "output": tool_call_chunk.content,
+                    }
+                    self.messages.append(function_output_msg)
 
     async def _collect_all_chunks(self, stream: AsyncGenerator[AgentChunk, None]) -> list[AgentChunk]:
         """Collect all chunks from an async generator into a list."""
@@ -264,14 +283,11 @@ class Runner:
                         if self._current_assistant_message is not None:
                             self._current_assistant_message.meta = meta
                         else:
-                            # Extract text content from the new message format
-                            text_content = ""
-                            if chunk.message.content:
-                                for item in chunk.message.content:
-                                    if hasattr(item, "type") and item.type == "text":
-                                        text_content = item.text
-                                        break
-                            self._start_assistant_message(text_content, meta)
+                            # For non-streaming mode, directly use the message from the response handler
+                            self._current_assistant_message = NewAssistantMessage(
+                                content=chunk.message.content,
+                                meta=meta,
+                            )
                         # Only yield assistant_message chunk if it's in includes and has content
                         if chunk.type in includes and self._current_assistant_message is not None:
                             # Create a new chunk with the current assistant message content
@@ -298,28 +314,45 @@ class Runner:
                         if chunk.type in includes:
                             yield chunk
                     case "usage":
-                        # Update the last assistant message with usage data and output_time_ms
+                        # Update the current or last assistant message with usage data and output_time_ms
                         usage_time = datetime.now(timezone.utc)
-                        for i in range(len(self.messages) - 1, -1, -1):
-                            current_message = self.messages[i]
-                            if isinstance(current_message, NewAssistantMessage):
-                                # Update usage information
-                                if current_message.meta.usage is None:
-                                    current_message.meta.usage = MessageUsage()
-                                current_message.meta.usage.input_tokens = chunk.usage.input_tokens
-                                current_message.meta.usage.output_tokens = chunk.usage.output_tokens
-                                current_message.meta.usage.total_tokens = (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
 
-                                # Calculate output_time_ms if latency_ms is available
-                                if current_message.meta.latency_ms is not None:
-                                    # We need to calculate from first output to usage time
-                                    # We'll calculate: usage_time - (sent_at - latency_ms)
-                                    # This gives us the time from first output to usage completion
-                                    # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
-                                    first_output_time_approx = current_message.meta.sent_at - timedelta(milliseconds=current_message.meta.latency_ms)
-                                    output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
-                                    current_message.meta.total_time_ms = max(0, output_time_ms)
-                                break
+                        # Always accumulate usage in runner first
+                        self.usage.input_tokens = (self.usage.input_tokens or 0) + (chunk.usage.input_tokens or 0)
+                        self.usage.output_tokens = (self.usage.output_tokens or 0) + (chunk.usage.output_tokens or 0)
+                        self.usage.total_tokens = (self.usage.total_tokens or 0) + (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
+
+                        # Try to find the assistant message to update
+                        target_message = None
+
+                        # First check if we have a current assistant message
+                        if self._current_assistant_message is not None:
+                            target_message = self._current_assistant_message
+                        else:
+                            # Otherwise, look for the last assistant message in the list
+                            for i in range(len(self.messages) - 1, -1, -1):
+                                current_message = self.messages[i]
+                                if isinstance(current_message, NewAssistantMessage):
+                                    target_message = current_message
+                                    break
+
+                        # Update the target message with usage information
+                        if target_message is not None:
+                            if target_message.meta.usage is None:
+                                target_message.meta.usage = MessageUsage()
+                            target_message.meta.usage.input_tokens = chunk.usage.input_tokens
+                            target_message.meta.usage.output_tokens = chunk.usage.output_tokens
+                            target_message.meta.usage.total_tokens = (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
+
+                            # Calculate output_time_ms if latency_ms is available
+                            if target_message.meta.latency_ms is not None:
+                                # We need to calculate from first output to usage time
+                                # We'll calculate: usage_time - (sent_at - latency_ms)
+                                # This gives us the time from first output to usage completion
+                                # sent_at is when the message was completed, so sent_at - latency_ms approximates first output time
+                                first_output_time_approx = target_message.meta.sent_at - timedelta(milliseconds=target_message.meta.latency_ms)
+                                output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
+                                target_message.meta.total_time_ms = max(0, output_time_ms)
                         # Always yield usage chunk if it's in includes
                         if chunk.type in includes:
                             yield chunk
@@ -484,7 +517,16 @@ class Runner:
 
     def get_messages_dict(self) -> list[dict[str, Any]]:
         """Get the messages in JSONL format."""
-        return [msg.model_dump(mode="json") for msg in self.messages]
+        result = []
+        for msg in self.messages:
+            if hasattr(msg, "model_dump"):
+                result.append(msg.model_dump(mode="json"))
+            elif isinstance(msg, dict):
+                result.append(msg)
+            else:
+                # Fallback for any other message types
+                result.append({"error": "unknown message type"})
+        return result
 
     def _track_agent_transfer_in_message(self, message: FlexibleRunnerMessage, current_agent: Agent) -> Agent:
         """Track agent transfers in a single message.

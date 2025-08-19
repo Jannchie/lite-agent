@@ -28,6 +28,7 @@ from lite_agent.types import (
     TimingEvent,
     UsageEvent,
 )
+from lite_agent.utils.metrics import TimingMetrics
 
 
 class ResponseEventProcessor:
@@ -111,14 +112,8 @@ class ResponseEventProcessor:
                 content = item.get("content", [])
                 if content and isinstance(content, list) and len(content) > 0:
                     end_time = datetime.now(timezone.utc)
-                    latency_ms = None
-                    output_time_ms = None
-                    # latency_ms: 从开始准备输出到 LLM 输出第一个字符的时间差
-                    if self._start_time and self._first_output_time:
-                        latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
-                    # output_time_ms: 从输出第一个字符到输出完成的时间差
-                    if self._first_output_time and self._output_complete_time:
-                        output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+                    latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
+                    output_time_ms = TimingMetrics.calculate_output_time_ms(self._first_output_time, self._output_complete_time)
 
                     # Extract model information from event
                     model_name = getattr(event, "model", None)
@@ -186,9 +181,9 @@ class ResponseEventProcessor:
                 )
 
                 # Then yield timing event if we have timing data
-                if self._start_time and self._first_output_time and self._output_complete_time:
-                    latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
-                    output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+                latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
+                output_time_ms = TimingMetrics.calculate_output_time_ms(self._first_output_time, self._output_complete_time)
+                if latency_ms is not None and output_time_ms is not None:
 
                     results.append(
                         TimingEvent(

@@ -26,6 +26,7 @@ from lite_agent.types import (
     ToolCallFunction,
     UsageEvent,
 )
+from lite_agent.utils.metrics import TimingMetrics
 
 
 class CompletionEventProcessor:
@@ -71,14 +72,8 @@ class CompletionEventProcessor:
             if not self.yielded_content:
                 self.yielded_content = True
                 end_time = datetime.now(timezone.utc)
-                latency_ms = None
-                output_time_ms = None
-                # latency_ms: 从开始准备输出到 LLM 输出第一个字符的时间差
-                if self._start_time and self._first_output_time:
-                    latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
-                # output_time_ms: 从输出第一个字符到输出完成的时间差
-                if self._first_output_time and self._output_complete_time:
-                    output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+                latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
+                output_time_ms = TimingMetrics.calculate_output_time_ms(self._first_output_time, self._output_complete_time)
 
                 usage = MessageUsage(
                     input_tokens=self._usage_data.get("input_tokens"),
@@ -155,14 +150,8 @@ class CompletionEventProcessor:
             if not self.yielded_content:
                 self.yielded_content = True
                 end_time = datetime.now(timezone.utc)
-                latency_ms = None
-                output_time_ms = None
-                # latency_ms: 从开始准备输出到 LLM 输出第一个字符的时间差
-                if self._start_time and self._first_output_time:
-                    latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
-                # output_time_ms: 从输出第一个字符到输出完成的时间差
-                if self._first_output_time and self._output_complete_time:
-                    output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+                latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
+                output_time_ms = TimingMetrics.calculate_output_time_ms(self._first_output_time, self._output_complete_time)
 
                 usage = MessageUsage(
                     input_tokens=self._usage_data.get("input_tokens"),
@@ -205,9 +194,9 @@ class CompletionEventProcessor:
             results.append(UsageEvent(usage=EventUsage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"])))
 
             # Then yield timing event if we have timing data
-            if self._start_time and self._first_output_time and self._output_complete_time:
-                latency_ms = int((self._first_output_time - self._start_time).total_seconds() * 1000)
-                output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
+            latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
+            output_time_ms = TimingMetrics.calculate_output_time_ms(self._first_output_time, self._output_complete_time)
+            if latency_ms is not None and output_time_ms is not None:
 
                 results.append(
                     TimingEvent(

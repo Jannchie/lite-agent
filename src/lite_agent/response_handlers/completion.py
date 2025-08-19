@@ -53,7 +53,7 @@ class CompletionResponseHandler(ResponseHandler):
                             call_id=tool_call.id,
                             name=tool_call.function.name,
                             arguments=tool_call.function.arguments,
-                        )
+                        ),
                     )
 
             # Always yield assistant message, even if content is empty for tool calls

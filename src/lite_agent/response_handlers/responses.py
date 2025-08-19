@@ -42,7 +42,7 @@ class ResponsesAPIHandler(ResponseHandler):
                             call_id=output_item.call_id,
                             name=output_item.name,
                             arguments=output_item.arguments,
-                        )
+                        ),
                     )
                 # Handle text content (if exists)
                 elif hasattr(output_item, "content") and output_item.content:

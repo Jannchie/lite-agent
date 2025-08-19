@@ -7,6 +7,7 @@ from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient, ReasoningConfig
+from lite_agent.constants import CompletionMode, ToolName
 from lite_agent.loggers import logger
 from lite_agent.response_handlers import CompletionResponseHandler, ResponsesAPIHandler
 from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall, message_to_llm_dict, system_message_to_llm_dict
@@ -54,7 +55,7 @@ class Agent:
         self.fc = Funcall(tools)
 
         # Add wait_for_user tool if completion condition is "call"
-        if completion_condition == "call":
+        if completion_condition == CompletionMode.CALL:
             self._add_wait_for_user_tool()
 
         # Set parent for handoff agents
@@ -99,7 +100,7 @@ class Agent:
 
         # Add single dynamic tool for all transfers
         self.fc.add_dynamic_tool(
-            name="transfer_to_agent",
+            name=ToolName.TRANSFER_TO_AGENT,
             description="Transfer conversation to another agent.",
             parameters={
                 "name": {
@@ -129,7 +130,7 @@ class Agent:
 
         # Add dynamic tool for parent transfer
         self.fc.add_dynamic_tool(
-            name="transfer_to_parent",
+            name=ToolName.TRANSFER_TO_PARENT,
             description="Transfer conversation back to parent agent when current task is completed or cannot be solved by current agent",
             parameters={},
             required=[],
@@ -160,7 +161,7 @@ class Agent:
             try:
                 # Try to remove the existing transfer tool
                 if hasattr(self.fc, "remove_dynamic_tool"):
-                    self.fc.remove_dynamic_tool("transfer_to_agent")
+                    self.fc.remove_dynamic_tool(ToolName.TRANSFER_TO_AGENT)
             except Exception as e:
                 # If removal fails, log and continue anyway
                 logger.debug(f"Failed to remove existing transfer tool: {e}")
@@ -536,7 +537,7 @@ class Agent:
 
         # Add dynamic tool for task completion
         self.fc.add_dynamic_tool(
-            name="wait_for_user",
+            name=ToolName.WAIT_FOR_USER,
             description="Call this function when you have completed your assigned task or need more information from the user.",
             parameters={},
             required=[],

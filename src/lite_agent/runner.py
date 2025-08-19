@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from lite_agent.agent import Agent
+from lite_agent.constants import CompletionMode, StreamIncludes, ToolName
 from lite_agent.loggers import logger
 from lite_agent.types import (
     AgentChunk,
     AgentChunkType,
-    AssistantMessageContent,
     AssistantMessageMeta,
     AssistantTextContent,
     AssistantToolCall,
@@ -20,27 +20,14 @@ from lite_agent.types import (
     MessageUsage,
     NewAssistantMessage,
     NewMessage,
-    NewSystemMessage,
-    # New structured message types
     NewUserMessage,
     ToolCall,
     ToolCallFunction,
-    UserImageContent,
     UserInput,
-    UserMessageContent,
     UserTextContent,
 )
 from lite_agent.types.events import AssistantMessageEvent
-
-DEFAULT_INCLUDES: tuple[AgentChunkType, ...] = (
-    "completion_raw",
-    "usage",
-    "function_call",
-    "function_call_output",
-    "content_delta",
-    "function_call_delta",
-    "assistant_message",
-)
+from lite_agent.utils.message_builder import MessageBuilder
 
 
 class Runner:
@@ -118,7 +105,7 @@ class Runner:
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""
-        return includes if includes is not None else DEFAULT_INCLUDES
+        return includes if includes is not None else StreamIncludes.DEFAULT_INCLUDES
 
     def _normalize_record_path(self, record_to: PathLike | str | None) -> Path | None:
         """Normalize record_to parameter to Path object if provided."""
@@ -130,7 +117,7 @@ class Runner:
             return
 
         # Check for transfer_to_agent calls first
-        transfer_calls = [tc for tc in tool_calls if tc.function.name == "transfer_to_agent"]
+        transfer_calls = [tc for tc in tool_calls if tc.function.name == ToolName.TRANSFER_TO_AGENT]
         if transfer_calls:
             # Handle all transfer calls but only execute the first one
             for i, tool_call in enumerate(transfer_calls):
@@ -145,7 +132,7 @@ class Runner:
                     )
             return  # Stop processing other tool calls after transfer
 
-        return_parent_calls = [tc for tc in tool_calls if tc.function.name == "transfer_to_parent"]
+        return_parent_calls = [tc for tc in tool_calls if tc.function.name == ToolName.TRANSFER_TO_PARENT]
         if return_parent_calls:
             # Handle multiple transfer_to_parent calls (only execute the first one)
             for i, tool_call in enumerate(return_parent_calls):
@@ -227,17 +214,17 @@ class Runner:
         finish_reason = None
 
         # Determine completion condition based on agent configuration
-        completion_condition = getattr(self.agent, "completion_condition", "stop")
+        completion_condition = getattr(self.agent, "completion_condition", CompletionMode.STOP)
 
         def is_finish() -> bool:
-            if completion_condition == "call":
+            if completion_condition == CompletionMode.CALL:
                 # Check if wait_for_user was called in the last assistant message
                 if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
                     for content_item in self.messages[-1].content:
-                        if content_item.type == "tool_call_result" and self._get_tool_call_name_by_id(content_item.call_id) == "wait_for_user":
+                        if content_item.type == "tool_call_result" and self._get_tool_call_name_by_id(content_item.call_id) == ToolName.WAIT_FOR_USER:
                             return True
                 return False
-            return finish_reason == "stop"
+            return finish_reason == CompletionMode.STOP
 
         while not is_finish() and steps < max_steps:
             logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
@@ -381,7 +368,7 @@ class Runner:
                     yield tool_chunk
                 finish_reason = "tool_calls"
             else:
-                finish_reason = "stop"
+                finish_reason = CompletionMode.STOP
             steps += 1
 
     async def has_require_confirm_tools(self):
@@ -555,10 +542,10 @@ class Runner:
         """Track transfers from NewAssistantMessage objects."""
         for content_item in message.content:
             if content_item.type == "tool_call":
-                if content_item.name == "transfer_to_agent":
+                if content_item.name == ToolName.TRANSFER_TO_AGENT:
                     arguments = content_item.arguments if isinstance(content_item.arguments, str) else str(content_item.arguments)
                     return self._handle_transfer_to_agent_tracking(arguments, current_agent)
-                if content_item.name == "transfer_to_parent":
+                if content_item.name == ToolName.TRANSFER_TO_PARENT:
                     return self._handle_transfer_to_parent_tracking(current_agent)
         return current_agent
 
@@ -569,10 +556,10 @@ class Runner:
             return current_agent
 
         function_name = message.get("name", "")
-        if function_name == "transfer_to_agent":
+        if function_name == ToolName.TRANSFER_TO_AGENT:
             return self._handle_transfer_to_agent_tracking(message.get("arguments", ""), current_agent)
 
-        if function_name == "transfer_to_parent":
+        if function_name == ToolName.TRANSFER_TO_PARENT:
             return self._handle_transfer_to_parent_tracking(current_agent)
 
         return current_agent
@@ -642,78 +629,13 @@ class Runner:
             role = message.get("role")
 
             if role == "user":
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    user_message = NewUserMessage(content=[UserTextContent(text=content)])
-                elif isinstance(content, list):
-                    # Handle complex content array
-                    user_content_items: list[UserMessageContent] = []
-                    for item in content:
-                        if isinstance(item, dict):
-                            item_type = item.get("type")
-                            if item_type in {"input_text", "text"}:
-                                user_content_items.append(UserTextContent(text=item.get("text", "")))
-                            elif item_type in {"input_image", "image_url"}:
-                                if item_type == "image_url":
-                                    # Handle completion API format
-                                    image_url = item.get("image_url", {})
-                                    url = image_url.get("url", "") if isinstance(image_url, dict) else str(image_url)
-                                    user_content_items.append(UserImageContent(image_url=url))
-                                else:
-                                    # Handle response API format
-                                    user_content_items.append(
-                                        UserImageContent(
-                                            image_url=item.get("image_url"),
-                                            file_id=item.get("file_id"),
-                                            detail=item.get("detail", "auto"),
-                                        ),
-                                    )
-                        elif hasattr(item, "type"):
-                            # Handle Pydantic models
-                            if item.type == "input_text":
-                                user_content_items.append(UserTextContent(text=item.text))
-                            elif item.type == "input_image":
-                                user_content_items.append(
-                                    UserImageContent(
-                                        image_url=getattr(item, "image_url", None),
-                                        file_id=getattr(item, "file_id", None),
-                                        detail=getattr(item, "detail", "auto"),
-                                    ),
-                                )
-                        else:
-                            # Fallback: convert to text
-                            user_content_items.append(UserTextContent(text=str(item)))
-
-                    user_message = NewUserMessage(content=user_content_items)
-                else:
-                    # Handle non-string, non-list content
-                    user_message = NewUserMessage(content=[UserTextContent(text=str(content))])
+                user_message = MessageBuilder.build_user_message_from_dict(message)
                 self.messages.append(user_message)
             elif role == "system":
-                content = message.get("content", "")
-                system_message = NewSystemMessage(content=str(content))
+                system_message = MessageBuilder.build_system_message_from_dict(message)
                 self.messages.append(system_message)
             elif role == "assistant":
-                content = message.get("content", "")
-                assistant_content_items: list[AssistantMessageContent] = [AssistantTextContent(text=str(content))] if content else []
-
-                # Handle tool calls if present
-                if "tool_calls" in message:
-                    for tool_call in message.get("tool_calls", []):
-                        try:
-                            arguments = json.loads(tool_call["function"]["arguments"]) if isinstance(tool_call["function"]["arguments"], str) else tool_call["function"]["arguments"]
-                        except (json.JSONDecodeError, TypeError):
-                            arguments = tool_call["function"]["arguments"]
-
-                        assistant_content_items.append(
-                            AssistantToolCall(
-                                call_id=tool_call["id"],
-                                name=tool_call["function"]["name"],
-                                arguments=arguments,
-                            ),
-                        )
-
-                assistant_message = NewAssistantMessage(content=assistant_content_items)
+                assistant_message = MessageBuilder.build_assistant_message_from_dict(message)
                 self.messages.append(assistant_message)
             elif message_type == "function_call":
                 # Handle function_call directly like AgentFunctionToolCallMessage

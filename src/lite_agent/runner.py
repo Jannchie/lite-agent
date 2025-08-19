@@ -274,20 +274,26 @@ class Runner:
                 match chunk.type:
                     case "assistant_message":
                         # Start or update assistant message in new format
-                        meta = AssistantMessageMeta(
-                            sent_at=chunk.message.meta.sent_at,
-                            latency_ms=getattr(chunk.message.meta, "latency_ms", None),
-                            total_time_ms=getattr(chunk.message.meta, "output_time_ms", None),
-                        )
                         # If we already have a current assistant message, just update its metadata
                         if self._current_assistant_message is not None:
-                            self._current_assistant_message.meta = meta
+                            # Preserve all existing metadata and only update specific fields
+                            original_meta = self._current_assistant_message.meta
+                            original_meta.sent_at = chunk.message.meta.sent_at
+                            if hasattr(chunk.message.meta, "latency_ms"):
+                                original_meta.latency_ms = chunk.message.meta.latency_ms
+                            if hasattr(chunk.message.meta, "output_time_ms"):
+                                original_meta.total_time_ms = chunk.message.meta.output_time_ms
+                            # Preserve other metadata fields like model, usage, etc.
+                            for attr in ["model", "usage", "input_tokens", "output_tokens"]:
+                                if hasattr(chunk.message.meta, attr):
+                                    setattr(original_meta, attr, getattr(chunk.message.meta, attr))
                         else:
-                            # For non-streaming mode, directly use the message from the response handler
-                            self._current_assistant_message = NewAssistantMessage(
-                                content=chunk.message.content,
-                                meta=meta,
-                            )
+                            # For non-streaming mode, directly use the complete message from the response handler
+                            self._current_assistant_message = chunk.message
+
+                        # If model is None, try to get it from agent client
+                        if self._current_assistant_message is not None and self._current_assistant_message.meta.model is None and hasattr(self.agent.client, "model"):
+                            self._current_assistant_message.meta.model = self.agent.client.model
                         # Only yield assistant_message chunk if it's in includes and has content
                         if chunk.type in includes and self._current_assistant_message is not None:
                             # Create a new chunk with the current assistant message content

@@ -1,6 +1,7 @@
 """
 Simple debug to check which API is being used.
 """
+
 import asyncio
 
 from lite_agent import Agent, Runner

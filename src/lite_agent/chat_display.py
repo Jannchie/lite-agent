@@ -295,10 +295,18 @@ def _process_object_meta(meta: BasicMessageMeta | LLMResponseMeta | AssistantMes
     """处理对象类型的 meta 数据。"""
     # LLMResponseMeta 和 AssistantMessageMeta 都有这些字段
     if isinstance(meta, (LLMResponseMeta, AssistantMessageMeta)):
-        if hasattr(meta, "input_tokens") and meta.input_tokens is not None:
-            total_input += int(meta.input_tokens)
-        if hasattr(meta, "output_tokens") and meta.output_tokens is not None:
-            total_output += int(meta.output_tokens)
+        # For AssistantMessageMeta, use the structured usage field
+        if isinstance(meta, AssistantMessageMeta) and meta.usage is not None:
+            if meta.usage.input_tokens is not None:
+                total_input += int(meta.usage.input_tokens)
+            if meta.usage.output_tokens is not None:
+                total_output += int(meta.usage.output_tokens)
+        # For LLMResponseMeta, use the flat fields
+        elif isinstance(meta, LLMResponseMeta):
+            if hasattr(meta, "input_tokens") and meta.input_tokens is not None:
+                total_input += int(meta.input_tokens)
+            if hasattr(meta, "output_tokens") and meta.output_tokens is not None:
+                total_output += int(meta.output_tokens)
         if hasattr(meta, "latency_ms") and meta.latency_ms is not None:
             total_latency += int(meta.latency_ms)
         if hasattr(meta, "output_time_ms") and meta.output_time_ms is not None:
@@ -577,9 +585,9 @@ def _display_assistant_message_compact_v2(message: AgentAssistantMessage, contex
             meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
         if message.meta.output_time_ms is not None:
             meta_parts.append(f"Output:{message.meta.output_time_ms}ms")
-        if message.meta.input_tokens is not None and message.meta.output_tokens is not None:
-            total_tokens = message.meta.input_tokens + message.meta.output_tokens
-            meta_parts.append(f"Tokens:↑{message.meta.input_tokens}↓{message.meta.output_tokens}={total_tokens}")
+        if message.meta.usage and message.meta.usage.input_tokens is not None and message.meta.usage.output_tokens is not None:
+            total_tokens = message.meta.usage.input_tokens + message.meta.usage.output_tokens
+            meta_parts.append(f"Tokens:↑{message.meta.usage.input_tokens}↓{message.meta.usage.output_tokens}={total_tokens}")
 
         if meta_parts:
             meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"

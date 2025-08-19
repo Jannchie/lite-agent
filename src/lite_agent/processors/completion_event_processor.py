@@ -84,8 +84,11 @@ class CompletionEventProcessor:
                     input_tokens=self._usage_data.get("input_tokens"),
                     output_tokens=self._usage_data.get("output_tokens"),
                 )
+                # Extract model information from chunk
+                model_name = getattr(chunk, "model", None)
                 meta = AssistantMessageMeta(
                     sent_at=end_time,
+                    model=model_name,
                     latency_ms=latency_ms,
                     total_time_ms=output_time_ms,
                     usage=usage,
@@ -165,8 +168,11 @@ class CompletionEventProcessor:
                     input_tokens=self._usage_data.get("input_tokens"),
                     output_tokens=self._usage_data.get("output_tokens"),
                 )
+                # Extract model information from chunk
+                model_name = getattr(chunk, "model", None)
                 meta = AssistantMessageMeta(
                     sent_at=end_time,
+                    model=model_name,
                     latency_ms=latency_ms,
                     total_time_ms=output_time_ms,
                     usage=usage,

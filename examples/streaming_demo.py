@@ -1,6 +1,7 @@
 """
 Demo script showing streaming vs non-streaming configuration in LiteAgent.
 """
+
 import asyncio
 import time
 

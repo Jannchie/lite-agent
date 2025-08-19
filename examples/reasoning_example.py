@@ -75,9 +75,9 @@ async def main():
     """主演示函数。"""
     await demo_reasoning_configurations()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("推理配置使用说明:")
-    print("="*60)
+    print("=" * 60)
     print("""
 1. reasoning_effort 参数 (OpenAI兼容):
    - "minimal": 最小推理，快速响应

@@ -1,6 +1,7 @@
 """
 Debug example to investigate non-streaming mode issues.
 """
+
 import asyncio
 import logging
 

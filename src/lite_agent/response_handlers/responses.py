@@ -1,4 +1,5 @@
 """Responses API response handler."""
+
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,43 +16,54 @@ class ResponsesAPIHandler(ResponseHandler):
     """Handler for Responses API responses."""
 
     async def _handle_streaming(
-        self, response: Any, record_to: Path | None = None,
+        self,
+        response: Any,
+        record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming responses API response."""
         async for chunk in litellm_response_stream_handler(response, record_to):
             yield chunk
 
     async def _handle_non_streaming(
-        self, response: Any, record_to: Path | None = None,
+        self,
+        response: Any,
+        record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle non-streaming responses API response."""
         # Convert ResponsesAPIResponse to chunks
         if hasattr(response, "output") and response.output:
             content_items = []
-            
+
             for output_item in response.output:
                 # Handle function tool calls
                 if hasattr(output_item, "type") and output_item.type == "function_call":
-                    content_items.append(AssistantToolCall(
-                        call_id=output_item.call_id,
-                        name=output_item.name,
-                        arguments=output_item.arguments,
-                    ))
+                    content_items.append(
+                        AssistantToolCall(
+                            call_id=output_item.call_id,
+                            name=output_item.name,
+                            arguments=output_item.arguments,
+                        )
+                    )
                 # Handle text content (if exists)
                 elif hasattr(output_item, "content") and output_item.content:
                     content_text = ""
                     for content_item in output_item.content:
                         if hasattr(content_item, "text"):
                             content_text += content_item.text
-                    
+
                     if content_text:
                         content_items.append(AssistantTextContent(text=content_text))
-            
+
             # Create assistant message if we have any content
             if content_items:
+                # Extract model information from response
+                model_name = getattr(response, "model", None)
                 message = NewAssistantMessage(
                     content=content_items,
-                    meta=AssistantMessageMeta(sent_at=datetime.now(timezone.utc)),
+                    meta=AssistantMessageMeta(
+                        sent_at=datetime.now(timezone.utc),
+                        model=model_name,
+                    ),
                 )
                 yield AssistantMessageEvent(message=message)
 

@@ -46,8 +46,6 @@ class AssistantMessageMeta(MessageMeta):
     total_time_ms: int | None = None
     latency_ms: int | None = None
     output_time_ms: int | None = None
-    input_tokens: int | None = None
-    output_tokens: int | None = None
 
 
 class ResponseInputImageDict(TypedDict):

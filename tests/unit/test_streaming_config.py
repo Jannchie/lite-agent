@@ -1,4 +1,5 @@
 """Test streaming configuration functionality."""
+
 import pytest
 
 from lite_agent.agent import Agent
@@ -18,19 +19,23 @@ class MockAgent(Agent):
     async def completion(self, messages, record_to_file=None, reasoning=None, streaming=True):
         """Mock completion method that tracks streaming parameter."""
         self.last_streaming_value = streaming
+
         # Return empty async generator
         async def empty_gen():
             return
             yield  # This line will never be reached, but makes it a generator
+
         return empty_gen()
 
     async def responses(self, messages, record_to_file=None, reasoning=None, streaming=True):
         """Mock responses method that tracks streaming parameter."""
         self.last_streaming_value = streaming
+
         # Return empty async generator
         async def empty_gen():
             return
             yield  # This line will never be reached, but makes it a generator
+
         return empty_gen()
 
 

@@ -1,6 +1,7 @@
 """
 Simple example demonstrating non-streaming mode in LiteAgent.
 """
+
 import asyncio
 
 from lite_agent import Agent, Runner
@@ -33,6 +34,7 @@ async def main():
     def get_time() -> str:
         """Get the current time."""
         from datetime import datetime
+
         return f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
     agent_with_tools = Agent(

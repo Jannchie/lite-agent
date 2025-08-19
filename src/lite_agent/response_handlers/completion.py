@@ -1,4 +1,5 @@
 """Completion API response handler."""
+
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +18,9 @@ class CompletionResponseHandler(ResponseHandler):
     """Handler for Completion API responses."""
 
     async def _handle_streaming(
-        self, response: Any, record_to: Path | None = None,
+        self,
+        response: Any,
+        record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming completion response."""
         if isinstance(response, CustomStreamWrapper):
@@ -28,7 +31,9 @@ class CompletionResponseHandler(ResponseHandler):
             raise TypeError(msg)
 
     async def _handle_non_streaming(
-        self, response: Any, record_to: Path | None = None,
+        self,
+        response: Any,
+        record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle non-streaming completion response."""
         # Convert completion response to chunks
@@ -43,17 +48,24 @@ class CompletionResponseHandler(ResponseHandler):
             # Handle tool calls
             if choice.message and choice.message.tool_calls:
                 for tool_call in choice.message.tool_calls:
-                    content_items.append(AssistantToolCall(
-                        call_id=tool_call.id,
-                        name=tool_call.function.name,
-                        arguments=tool_call.function.arguments,
-                    ))
+                    content_items.append(
+                        AssistantToolCall(
+                            call_id=tool_call.id,
+                            name=tool_call.function.name,
+                            arguments=tool_call.function.arguments,
+                        )
+                    )
 
             # Always yield assistant message, even if content is empty for tool calls
             if choice.message and (content_items or choice.message.tool_calls):
+                # Extract model information from response
+                model_name = getattr(response, "model", None)
                 message = NewAssistantMessage(
                     content=content_items,
-                    meta=AssistantMessageMeta(sent_at=datetime.now(timezone.utc)),
+                    meta=AssistantMessageMeta(
+                        sent_at=datetime.now(timezone.utc),
+                        model=model_name,
+                    ),
                 )
                 yield AssistantMessageEvent(message=message)
 

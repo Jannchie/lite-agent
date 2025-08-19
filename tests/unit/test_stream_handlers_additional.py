@@ -112,6 +112,7 @@ class TestStreamHandlersAdditional:
     @pytest.mark.asyncio
     async def test_litellm_response_stream_handler_unexpected_chunk(self):
         """Test litellm_response_stream_handler with unexpected chunk type"""
+
         # Create a mock chunk that's not a proper ResponsesAPIStreamingResponse
         async def mock_resp() -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
             # Use type: ignore to bypass type checking for testing purposes

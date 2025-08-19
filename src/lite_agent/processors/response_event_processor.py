@@ -120,12 +120,25 @@ class ResponseEventProcessor:
                     if self._first_output_time and self._output_complete_time:
                         output_time_ms = int((self._output_complete_time - self._first_output_time).total_seconds() * 1000)
 
-                    meta = AssistantMessageMeta(
-                        sent_at=end_time,
-                        latency_ms=latency_ms,
-                        output_time_ms=output_time_ms,
+                    # Extract model information from event
+                    model_name = getattr(event, "model", None)
+                    # Debug: check if event has model info in different location
+                    if hasattr(event, "response") and hasattr(event.response, "model"):
+                        model_name = event.response.model
+                    # Create usage information
+                    from lite_agent.types import MessageUsage
+
+                    usage = MessageUsage(
                         input_tokens=self._usage_data.get("input_tokens"),
                         output_tokens=self._usage_data.get("output_tokens"),
+                        total_tokens=(self._usage_data.get("input_tokens") or 0) + (self._usage_data.get("output_tokens") or 0),
+                    )
+                    meta = AssistantMessageMeta(
+                        sent_at=end_time,
+                        model=model_name,
+                        latency_ms=latency_ms,
+                        output_time_ms=output_time_ms,
+                        usage=usage,
                     )
                     return [
                         AssistantMessageEvent(

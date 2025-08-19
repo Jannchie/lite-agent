@@ -1,6 +1,7 @@
 """
 Simple debug to check non-streaming response.
 """
+
 import asyncio
 
 from lite_agent import Agent, Runner
@@ -29,6 +30,7 @@ async def main():
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 

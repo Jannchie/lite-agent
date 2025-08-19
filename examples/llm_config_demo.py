@@ -72,7 +72,7 @@ async def main():
         logger.info(chunk)
     display_messages(runner1.messages)
 
-    print("\n" + "="*50 + "\n")
+    print("\n" + "=" * 50 + "\n")
 
     # Test agent with creative settings (high temperature, longer responses)
     print("=== Testing Agent 2 (Creative Settings) ===")

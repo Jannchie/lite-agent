@@ -542,4 +542,3 @@ class Agent:
             required=[],
             handler=wait_for_user_handler,
         )
-

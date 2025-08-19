@@ -1,4 +1,5 @@
 """Base response handler for unified streaming and non-streaming response processing."""
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -17,12 +18,12 @@ class ResponseHandler(ABC):
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle a response in either streaming or non-streaming mode.
-        
+
         Args:
             response: The LLM response object
             streaming: Whether to process as streaming or non-streaming
             record_to: Optional file path to record the conversation
-            
+
         Yields:
             AgentChunk: Processed chunks from the response
         """
@@ -35,12 +36,16 @@ class ResponseHandler(ABC):
 
     @abstractmethod
     async def _handle_streaming(
-        self, response: Any, record_to: Path | None = None,
+        self,
+        response: Any,
+        record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming response."""
 
     @abstractmethod
     async def _handle_non_streaming(
-        self, response: Any, record_to: Path | None = None,
+        self,
+        response: Any,
+        record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle non-streaming response."""

@@ -26,6 +26,8 @@ from lite_agent.types import (
     AgentSystemMessage,
     AgentUserMessage,
     AssistantMessageMeta,
+    AssistantToolCall,
+    AssistantToolCallResult,
     BasicMessageMeta,
     FlexibleRunnerMessage,
     LLMResponseMeta,
@@ -228,9 +230,9 @@ def _update_message_counts(message: FlexibleRunnerMessage, counts: dict[str, int
         counts["Assistant"] += 1
         # Count tool calls and outputs within the assistant message
         for content_item in message.content:
-            if content_item.type == "tool_call":
+            if isinstance(content_item, AssistantToolCall):
                 counts["Function Call"] += 1
-            elif content_item.type == "tool_call_result":
+            elif isinstance(content_item, AssistantToolCallResult):
                 counts["Function Output"] += 1
     elif isinstance(message, NewSystemMessage):
         counts["System"] += 1
@@ -371,11 +373,9 @@ def display_chat_summary(messages: RunnerMessages, *, console: Console | None = 
         messages: 要汇总的消息列表
         console: Rich Console 实例，如果为 None 则创建新的
     """
-    if console is None:
-        console = Console()
-
+    active_console = console or Console()
     summary_table = build_chat_summary_table(messages)
-    console.print(summary_table)
+    active_console.print(summary_table)
 
 
 def display_messages(

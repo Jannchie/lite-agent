@@ -10,7 +10,18 @@ from lite_agent.client import BaseLLMClient, LiteLLMClient, ReasoningConfig
 from lite_agent.constants import CompletionMode, ToolName
 from lite_agent.loggers import logger
 from lite_agent.response_handlers import CompletionResponseHandler, ResponsesAPIHandler
-from lite_agent.types import AgentChunk, FunctionCallEvent, FunctionCallOutputEvent, RunnerMessages, ToolCall, message_to_llm_dict, system_message_to_llm_dict
+from lite_agent.types import (
+    AgentChunk,
+    AssistantTextContent,
+    AssistantToolCall,
+    AssistantToolCallResult,
+    FunctionCallEvent,
+    FunctionCallOutputEvent,
+    RunnerMessages,
+    ToolCall,
+    message_to_llm_dict,
+    system_message_to_llm_dict,
+)
 from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage, NewUserMessage
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -206,31 +217,30 @@ class Agent:
         for message in messages:
             if isinstance(message, NewAssistantMessage):
                 for item in message.content:
-                    match item.type:
-                        case "text":
-                            res.append(
-                                {
-                                    "role": "assistant",
-                                    "content": item.text,
-                                },
-                            )
-                        case "tool_call":
-                            res.append(
-                                {
-                                    "type": "function_call",
-                                    "call_id": item.call_id,
-                                    "name": item.name,
-                                    "arguments": item.arguments,
-                                },
-                            )
-                        case "tool_call_result":
-                            res.append(
-                                {
-                                    "type": "function_call_output",
-                                    "call_id": item.call_id,
-                                    "output": item.output,
-                                },
-                            )
+                    if isinstance(item, AssistantTextContent):
+                        res.append(
+                            {
+                                "role": "assistant",
+                                "content": item.text,
+                            },
+                        )
+                    elif isinstance(item, AssistantToolCall):
+                        res.append(
+                            {
+                                "type": "function_call",
+                                "call_id": item.call_id,
+                                "name": item.name,
+                                "arguments": item.arguments,
+                            },
+                        )
+                    elif isinstance(item, AssistantToolCallResult):
+                        res.append(
+                            {
+                                "type": "function_call_output",
+                                "call_id": item.call_id,
+                                "output": item.output,
+                            },
+                        )
             elif isinstance(message, NewSystemMessage):
                 res.append(
                     {
@@ -280,6 +290,7 @@ class Agent:
         messages: RunnerMessages,
         record_to_file: Path | None = None,
         reasoning: ReasoningConfig = None,
+        *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility
@@ -309,6 +320,7 @@ class Agent:
         messages: RunnerMessages,
         record_to_file: Path | None = None,
         reasoning: ReasoningConfig = None,
+        *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
         # Apply message transfer callback if provided - always use legacy format for LLM compatibility

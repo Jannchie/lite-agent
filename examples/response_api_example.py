@@ -9,6 +9,8 @@ to the legacy Completion API format when making actual LLM calls.
 
 import asyncio
 
+from pydantic import BaseModel
+
 from lite_agent import Agent, Runner
 from lite_agent.types import ResponseInputImage, ResponseInputText
 
@@ -96,7 +98,7 @@ async def main():
     print("\n=== Internal message representation ===")
     for i, message in enumerate(runner.messages):
         print(f"Message {i + 1}:")
-        if hasattr(message, "model_dump"):
+        if isinstance(message, BaseModel):
             print(f"  {message.model_dump()}")
         else:
             print(f"  {message}")

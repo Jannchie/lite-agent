@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timedelta, timezone
 from os import PathLike
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from lite_agent.agent import Agent
 from lite_agent.constants import CompletionMode, StreamIncludes, ToolName
@@ -55,7 +55,10 @@ class Runner:
         """Ensure current assistant message exists and return it."""
         if self._current_assistant_message is None:
             self._start_assistant_message()
-        return self._current_assistant_message  # type: ignore[return-value]
+        if self._current_assistant_message is None:
+            msg = "Failed to create current assistant message"
+            raise RuntimeError(msg)
+        return self._current_assistant_message
 
     def _add_to_current_assistant_message(self, content_item: AssistantTextContent | AssistantToolCall | AssistantToolCallResult) -> None:
         """Add content to the current assistant message."""
@@ -88,7 +91,8 @@ class Runner:
 
         if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
             # Add to existing assistant message
-            self.messages[-1].content.append(result)
+            last_message = cast("NewAssistantMessage", self.messages[-1])
+            last_message.content.append(result)
         else:
             # Create new assistant message with just the tool result
             assistant_message = NewAssistantMessage(content=[result])
@@ -160,7 +164,8 @@ class Runner:
                         output=tool_call_chunk.content,
                         execution_time_ms=tool_call_chunk.execution_time_ms,
                     )
-                    self.messages[-1].content.append(tool_result)
+                    last_message = cast("NewAssistantMessage", self.messages[-1])
+                    last_message.content.append(tool_result)
 
                 # For completion API compatibility, also add as separate message
                 if self.api == "completion":
@@ -220,8 +225,10 @@ class Runner:
             if completion_condition == CompletionMode.CALL:
                 # Check if wait_for_user was called in the last assistant message
                 if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                    for content_item in self.messages[-1].content:
-                        if content_item.type == "tool_call_result" and self._get_tool_call_name_by_id(content_item.call_id) == ToolName.WAIT_FOR_USER:
+                    last_message = self.messages[-1]
+                    for content_item in last_message.content:
+                        if (isinstance(content_item, AssistantToolCallResult)
+                            and self._get_tool_call_name_by_id(content_item.call_id) == ToolName.WAIT_FOR_USER):
                             return True
                 return False
             return finish_reason == CompletionMode.STOP
@@ -447,11 +454,12 @@ class Runner:
         tool_results = set()
         tool_call_names = {}
 
-        for content_item in self.messages[-1].content:
-            if content_item.type == "tool_call":
+        last_message = self.messages[-1]
+        for content_item in last_message.content:
+            if isinstance(content_item, AssistantToolCall):
                 tool_calls[content_item.call_id] = content_item
                 tool_call_names[content_item.call_id] = content_item.name
-            elif content_item.type == "tool_call_result":
+            elif isinstance(content_item, AssistantToolCallResult):
                 tool_results.add(content_item.call_id)
 
         # Return pending tool calls and tool call names map
@@ -512,7 +520,7 @@ class Runner:
         """Get the messages in JSONL format."""
         result = []
         for msg in self.messages:
-            if hasattr(msg, "model_dump"):
+            if isinstance(msg, NewMessage):
                 result.append(msg.model_dump(mode="json"))
             elif isinstance(msg, dict):
                 result.append(msg)
@@ -648,7 +656,8 @@ class Runner:
                             name=function_call_msg["name"],  # type: ignore
                             arguments=function_call_msg["arguments"],  # type: ignore
                         )
-                        self.messages[-1].content.append(tool_call)
+                        last_message = cast("NewAssistantMessage", self.messages[-1])
+                        last_message.content.append(tool_call)
                     else:
                         assistant_message = NewAssistantMessage(
                             content=[
@@ -670,7 +679,8 @@ class Runner:
                             call_id=function_output_msg["call_id"],  # type: ignore
                             output=function_output_msg["output"],  # type: ignore
                         )
-                        self.messages[-1].content.append(tool_result)
+                        last_message = cast("NewAssistantMessage", self.messages[-1])
+                        last_message.content.append(tool_result)
                     else:
                         assistant_message = NewAssistantMessage(
                             content=[

@@ -20,10 +20,10 @@ class MessageBuilder:
     @staticmethod
     def build_user_message_from_dict(message: dict[str, Any]) -> NewUserMessage:
         """Build a NewUserMessage from a dictionary.
-        
+
         Args:
             message: Dictionary containing user message data
-            
+
         Returns:
             NewUserMessage instance
         """
@@ -41,10 +41,10 @@ class MessageBuilder:
     @staticmethod
     def _build_user_content_items(content_list: list[Any]) -> list[UserMessageContent]:
         """Build user content items from a list of content data.
-        
+
         Args:
             content_list: List of content items (dicts or objects)
-            
+
         Returns:
             List of UserMessageContent items
         """
@@ -64,10 +64,10 @@ class MessageBuilder:
     @staticmethod
     def _build_user_content_from_dict(item: dict[str, Any]) -> UserMessageContent:
         """Build user content from a dictionary item.
-        
+
         Args:
             item: Dictionary containing content item data
-            
+
         Returns:
             UserMessageContent instance
         """
@@ -94,12 +94,12 @@ class MessageBuilder:
         return UserTextContent(text=str(item.get("text", item)))
 
     @staticmethod
-    def _build_user_content_from_object(item: Any) -> UserMessageContent:
+    def _build_user_content_from_object(item: Any) -> UserMessageContent:  # noqa: ANN401
         """Build user content from an object with attributes.
-        
+
         Args:
             item: Object with type attribute and other properties
-            
+
         Returns:
             UserMessageContent instance
         """
@@ -119,10 +119,10 @@ class MessageBuilder:
     @staticmethod
     def build_system_message_from_dict(message: dict[str, Any]) -> NewSystemMessage:
         """Build a NewSystemMessage from a dictionary.
-        
+
         Args:
             message: Dictionary containing system message data
-            
+
         Returns:
             NewSystemMessage instance
         """
@@ -132,10 +132,10 @@ class MessageBuilder:
     @staticmethod
     def build_assistant_message_from_dict(message: dict[str, Any]) -> NewAssistantMessage:
         """Build a NewAssistantMessage from a dictionary.
-        
+
         Args:
             message: Dictionary containing assistant message data
-            
+
         Returns:
             NewAssistantMessage instance
         """

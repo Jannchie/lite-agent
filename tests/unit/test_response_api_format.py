@@ -159,8 +159,8 @@ class TestResponseAPIFormat:
             },
         )
 
-        # 转换为 Completion API 格式 - 需要使用 legacy_messages
-        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
+        # 转换为 Completion API 格式
+        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.messages)
 
         assert len(converted_messages) == 1
         converted_msg = converted_messages[0]
@@ -199,7 +199,7 @@ class TestResponseAPIFormat:
             },
         )
 
-        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
+        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.messages)
 
         assert len(converted_messages) == 1
         converted_msg = converted_messages[0]
@@ -238,7 +238,7 @@ class TestResponseAPIFormat:
 
         # 应该抛出 ValueError 异常
         with pytest.raises(ValueError, match="File ID input is not supported for Completion API"):
-            self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
+            self.agent._convert_responses_to_completions_format(self.runner.messages)
 
     def test_conversion_with_missing_image_data_raises_error(self):
         """测试既没有 image_url 也没有 file_id时会抛出异常"""
@@ -278,7 +278,7 @@ class TestResponseAPIFormat:
         assert len(self.runner.messages) == 2
 
         # 检查两种格式都被正确处理
-        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.legacy_messages)
+        converted_messages = self.agent._convert_responses_to_completions_format(self.runner.messages)
         assert len(converted_messages) == 2
 
         # 新格式消息的转换 - 单一文本内容被优化为字符串

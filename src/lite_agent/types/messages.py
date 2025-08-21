@@ -277,7 +277,7 @@ RunnerMessages = Sequence[FlexibleRunnerMessage]
 
 
 # Type alias for user input - supports string, single message, or sequence of messages
-UserInput = str | FlexibleRunnerMessage | RunnerMessages
+UserInput = str | FlexibleRunnerMessage | RunnerMessages | dict[str, Any]
 
 
 def user_message_to_llm_dict(message: NewUserMessage) -> dict[str, Any]:

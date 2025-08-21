@@ -282,8 +282,55 @@ class Agent:
                 )
             # Handle dict messages (legacy format)
             elif isinstance(message, dict):
-                res.append(message)
+                # Clean dict message to remove meta and other unsupported fields for responses API
+                cleaned_message = self._clean_dict_message_for_responses_api(message)
+                res.append(cleaned_message)
         return res
+
+    def _clean_dict_message_for_responses_api(self, message: dict[str, Any]) -> dict[str, Any]:
+        """Clean dict message to remove unsupported fields for responses API.
+
+        Args:
+            message: The message dict to clean
+
+        Returns:
+            A cleaned message dict without unsupported fields like 'meta' and with proper content type conversion
+        """
+        # Create a copy to avoid modifying the original
+        cleaned = message.copy()
+
+        # Remove meta field which is not supported by responses API
+        cleaned.pop("meta", None)
+
+        # Convert content types for responses API compatibility
+        if isinstance(cleaned.get("content"), list):
+            cleaned_content = []
+            for item in cleaned["content"]:
+                if isinstance(item, dict):
+                    item_copy = item.copy()
+                    if cleaned.get("role") == "user":
+                        # Convert 'text' type to 'input_text' for user messages
+                        if item_copy.get("type") == "text":
+                            item_copy["type"] = "input_text"
+                        # Convert 'image' type to 'input_image' for user messages
+                        elif item_copy.get("type") == "image":
+                            item_copy["type"] = "input_image"
+                        # Convert 'file' type to 'input_file' for user messages
+                        elif item_copy.get("type") == "file":
+                            item_copy["type"] = "input_file"
+                    elif cleaned.get("role") == "assistant":
+                        # Convert 'text' type to 'output_text' for assistant messages
+                        if item_copy.get("type") == "text":
+                            item_copy["type"] = "output_text"
+                        # Skip tool_call and tool_call_result types as they will be processed separately
+                        elif item_copy.get("type") in ["tool_call", "tool_call_result"]:
+                            continue
+                    cleaned_content.append(item_copy)
+                else:
+                    cleaned_content.append(item)
+            cleaned["content"] = cleaned_content
+
+        return cleaned
 
     async def completion(
         self,

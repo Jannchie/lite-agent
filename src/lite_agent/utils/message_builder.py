@@ -3,8 +3,11 @@ from typing import Any
 
 from lite_agent.types import (
     AssistantMessageContent,
+    AssistantMessageMeta,
     AssistantTextContent,
     AssistantToolCall,
+    AssistantToolCallResult,
+    MessageMeta,
     NewAssistantMessage,
     NewSystemMessage,
     NewUserMessage,
@@ -29,14 +32,18 @@ class MessageBuilder:
         """
         content = message.get("content", "")
 
+        # Preserve meta information if present
+        meta_data = message.get("meta", {})
+        meta = MessageMeta(**meta_data) if meta_data else MessageMeta()
+
         if isinstance(content, str):
-            return NewUserMessage(content=[UserTextContent(text=content)])
+            return NewUserMessage(content=[UserTextContent(text=content)], meta=meta)
 
         if isinstance(content, list):
-            return NewUserMessage(content=MessageBuilder._build_user_content_items(content))
+            return NewUserMessage(content=MessageBuilder._build_user_content_items(content), meta=meta)
 
         # Handle non-string, non-list content
-        return NewUserMessage(content=[UserTextContent(text=str(content))])
+        return NewUserMessage(content=[UserTextContent(text=str(content))], meta=meta)
 
     @staticmethod
     def _build_user_content_items(content_list: list[Any]) -> list[UserMessageContent]:
@@ -127,7 +134,15 @@ class MessageBuilder:
             NewSystemMessage instance
         """
         content = message.get("content", "")
-        return NewSystemMessage(content=str(content))
+
+        # Preserve meta information if present
+        meta_data = message.get("meta", {})
+        if meta_data:
+            meta = MessageMeta(**meta_data)
+        else:
+            meta = MessageMeta()
+
+        return NewSystemMessage(content=str(content), meta=meta)
 
     @staticmethod
     def build_assistant_message_from_dict(message: dict[str, Any]) -> NewAssistantMessage:
@@ -160,6 +175,14 @@ class MessageBuilder:
                                     arguments=item.get("arguments", "{}"),
                                 ),
                             )
+                        elif item_type == "tool_call_result":
+                            assistant_content_items.append(
+                                AssistantToolCallResult(
+                                    call_id=item.get("call_id", ""),
+                                    output=item.get("output", ""),
+                                    execution_time_ms=item.get("execution_time_ms"),
+                                ),
+                            )
                         # Add more content types as needed
                     else:
                         # Fallback for unknown item format
@@ -184,4 +207,11 @@ class MessageBuilder:
                     ),
                 )
 
-        return NewAssistantMessage(content=assistant_content_items)
+        # Preserve meta information if present
+        meta_data = message.get("meta", {})
+        if meta_data:
+            meta = AssistantMessageMeta(**meta_data)
+        else:
+            meta = AssistantMessageMeta()
+
+        return NewAssistantMessage(content=assistant_content_items, meta=meta)

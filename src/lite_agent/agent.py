@@ -409,10 +409,42 @@ class Agent:
             role = message_dict.get("role")
 
             if role == "assistant":
-                # Look ahead for function_call messages
+                # Extract tool_calls from content if present
                 tool_calls = []
-                j = i + 1
+                content = message_dict.get("content", [])
 
+                # Handle both string and array content
+                if isinstance(content, list):
+                    # Extract tool_calls from content array and filter out non-text content
+                    filtered_content = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "tool_call":
+                                tool_call = {
+                                    "id": item.get("call_id", ""),
+                                    "type": "function",
+                                    "function": {
+                                        "name": item.get("name", ""),
+                                        "arguments": item.get("arguments", "{}"),
+                                    },
+                                    "index": len(tool_calls),
+                                }
+                                tool_calls.append(tool_call)
+                            elif item.get("type") == "text":
+                                filtered_content.append(item)
+                            # Skip tool_call_result - they should be handled by separate function_call_output messages
+
+                    # Update content to only include text items
+                    if filtered_content:
+                        message_dict = message_dict.copy()
+                        message_dict["content"] = filtered_content
+                    elif tool_calls:
+                        # If we have tool_calls but no text content, set content to None per OpenAI API spec
+                        message_dict = message_dict.copy()
+                        message_dict["content"] = None
+
+                # Look ahead for function_call messages (legacy support)
+                j = i + 1
                 while j < len(messages):
                     next_message = messages[j]
                     next_dict = message_to_llm_dict(next_message) if isinstance(next_message, (NewUserMessage, NewSystemMessage, NewAssistantMessage)) else next_message
@@ -436,6 +468,16 @@ class Agent:
                 assistant_msg = message_dict.copy()
                 if tool_calls:
                     assistant_msg["tool_calls"] = tool_calls  # type: ignore
+
+                # Convert content format for OpenAI API compatibility
+                content = assistant_msg.get("content", [])
+                if isinstance(content, list):
+                    # Extract text content and convert to string
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                    assistant_msg["content"] = " ".join(text_parts) if text_parts else None
 
                 converted_messages.append(assistant_msg)
                 i = j  # Skip the function_call messages we've processed

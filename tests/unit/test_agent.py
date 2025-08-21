@@ -45,11 +45,7 @@ async def test_stream_async_typeerror():
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     not_a_stream = object()
 
-    with (
-        patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)),
-        pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"),
-    ):
-        # The actual response handler should raise TypeError when it encounters a non-CustomStreamWrapper
+    with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)), pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"):  # noqa: PT012
         result = await agent.completion([{"role": "user", "content": "hi"}])
         # Force consumption of the async generator to trigger the error
         async for _ in result:

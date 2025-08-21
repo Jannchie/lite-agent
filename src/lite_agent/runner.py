@@ -27,7 +27,6 @@ from lite_agent.types import (
     UserTextContent,
 )
 from lite_agent.types.events import AssistantMessageEvent
-from lite_agent.utils.message_builder import MessageBuilder
 
 
 class Runner:
@@ -632,68 +631,8 @@ class Runner:
             # Already in new format
             self.messages.append(message)
         elif isinstance(message, dict):
-            # Handle different message types from dict
-            message_type = message.get("type")
-            role = message.get("role")
-
-            if role == "user":
-                user_message = MessageBuilder.build_user_message_from_dict(message)
-                self.messages.append(user_message)
-            elif role == "system":
-                system_message = MessageBuilder.build_system_message_from_dict(message)
-                self.messages.append(system_message)
-            elif role == "assistant":
-                assistant_message = MessageBuilder.build_assistant_message_from_dict(message)
-                self.messages.append(assistant_message)
-            elif message_type == "function_call":
-                # Handle function_call directly like AgentFunctionToolCallMessage
-                # Type guard: ensure we have the right message type
-                if "call_id" in message and "name" in message and "arguments" in message:
-                    function_call_msg = message  # Type should be FunctionCallDict now
-                    if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                        tool_call = AssistantToolCall(
-                            call_id=function_call_msg["call_id"],  # type: ignore
-                            name=function_call_msg["name"],  # type: ignore
-                            arguments=function_call_msg["arguments"],  # type: ignore
-                        )
-                        last_message = cast("NewAssistantMessage", self.messages[-1])
-                        last_message.content.append(tool_call)
-                    else:
-                        assistant_message = NewAssistantMessage(
-                            content=[
-                                AssistantToolCall(
-                                    call_id=function_call_msg["call_id"],  # type: ignore
-                                    name=function_call_msg["name"],  # type: ignore
-                                    arguments=function_call_msg["arguments"],  # type: ignore
-                                ),
-                            ],
-                        )
-                        self.messages.append(assistant_message)
-            elif message_type == "function_call_output":
-                # Handle function_call_output directly like AgentFunctionCallOutput
-                # Type guard: ensure we have the right message type
-                if "call_id" in message and "output" in message:
-                    function_output_msg = message  # Type should be FunctionCallOutputDict now
-                    if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                        tool_result = AssistantToolCallResult(
-                            call_id=function_output_msg["call_id"],  # type: ignore
-                            output=function_output_msg["output"],  # type: ignore
-                        )
-                        last_message = cast("NewAssistantMessage", self.messages[-1])
-                        last_message.content.append(tool_result)
-                    else:
-                        assistant_message = NewAssistantMessage(
-                            content=[
-                                AssistantToolCallResult(
-                                    call_id=function_output_msg["call_id"],  # type: ignore
-                                    output=function_output_msg["output"],  # type: ignore
-                                ),
-                            ],
-                        )
-                        self.messages.append(assistant_message)
-            else:
-                msg = "Message must have a 'role' or 'type' field."
-                raise ValueError(msg)
+            # For chat history preservation, keep dict messages as-is to maintain exact structure
+            self.messages.append(message)
         else:
             msg = f"Unsupported message type: {type(message)}"
             raise TypeError(msg)

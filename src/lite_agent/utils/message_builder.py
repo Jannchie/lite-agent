@@ -140,9 +140,35 @@ class MessageBuilder:
             NewAssistantMessage instance
         """
         content = message.get("content", "")
-        assistant_content_items: list[AssistantMessageContent] = [AssistantTextContent(text=str(content))] if content else []
+        assistant_content_items: list[AssistantMessageContent] = []
 
-        # Handle tool calls if present
+        if content:
+            if isinstance(content, str):
+                assistant_content_items = [AssistantTextContent(text=content)]
+            elif isinstance(content, list):
+                # Handle array content (from new format messages)
+                for item in content:
+                    if isinstance(item, dict):
+                        item_type = item.get("type")
+                        if item_type == "text":
+                            assistant_content_items.append(AssistantTextContent(text=item.get("text", "")))
+                        elif item_type == "tool_call":
+                            assistant_content_items.append(
+                                AssistantToolCall(
+                                    call_id=item.get("call_id", ""),
+                                    name=item.get("name", ""),
+                                    arguments=item.get("arguments", "{}"),
+                                ),
+                            )
+                        # Add more content types as needed
+                    else:
+                        # Fallback for unknown item format
+                        assistant_content_items.append(AssistantTextContent(text=str(item)))
+            else:
+                # Fallback for other content types
+                assistant_content_items = [AssistantTextContent(text=str(content))]
+
+        # Handle tool calls if present (legacy format)
         if "tool_calls" in message:
             for tool_call in message.get("tool_calls", []):
                 try:

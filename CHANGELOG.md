@@ -1,3 +1,18 @@
+## v0.7.0
+
+[v0.6.0...v0.7.0](https://github.com/Jannchie/lite-agent/compare/v0.6.0...v0.7.0)
+
+### :sparkles: Features
+
+- **assistant-meta**: add model and usage support to assistant message meta and refactor token accounting - By [Jannchie](mailto:jannchie@gmail.com) in [b50ed0e](https://github.com/Jannchie/lite-agent/commit/b50ed0e)
+- **message-builder**: support array content in assistant messages - By [Jannchie](mailto:jannchie@gmail.com) in [1b7a790](https://github.com/Jannchie/lite-agent/commit/1b7a790)
+- **runner**: add tool call handling and usage events for completion and responses api - By [Jannchie](mailto:jannchie@gmail.com) in [1a82a18](https://github.com/Jannchie/lite-agent/commit/1a82a18)
+
+### :art: Refactors
+
+- **messages**: replace type checks with isinstance for assistant content - By [Jannchie](mailto:jannchie@gmail.com) in [ec506a8](https://github.com/Jannchie/lite-agent/commit/ec506a8)
+- **utils**: extract constants and message utilities && centralize timing metrics - By [Jannchie](mailto:jannchie@gmail.com) in [d928637](https://github.com/Jannchie/lite-agent/commit/d928637)
+
 ## v0.6.0
 
 [v0.5.0...v0.6.0](https://github.com/Jannchie/lite-agent/compare/v0.5.0...v0.6.0)

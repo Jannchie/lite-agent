@@ -3,6 +3,7 @@ Simple debug to check non-streaming response.
 """
 
 import asyncio
+import traceback
 
 from lite_agent import Agent, Runner
 
@@ -29,8 +30,6 @@ async def main():
             print(f"First chunk: {chunks[0]}")
     except Exception as e:
         print(f"Error: {e}")
-        import traceback
-
         traceback.print_exc()
 
 

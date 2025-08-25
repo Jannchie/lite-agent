@@ -832,8 +832,6 @@ class Runner:
             logger.info("Transferring conversation from %s to %s", self.agent.name, target_agent_name)
             self.agent = target_agent
 
-            return tool_call.id, output
-
         except Exception as e:
             logger.exception("Failed to execute transfer_to_agent tool call")
             output = f"Transfer failed: {e!s}"
@@ -842,6 +840,8 @@ class Runner:
                 call_id=tool_call.id,
                 output=output,
             )
+            return tool_call.id, output
+        else:
             return tool_call.id, output
 
     async def _handle_parent_transfer(self, tool_call: ToolCall) -> tuple[str, str]:
@@ -883,8 +883,6 @@ class Runner:
             logger.info("Transferring conversation from %s back to parent %s", self.agent.name, self.agent.parent.name)
             self.agent = self.agent.parent
 
-            return tool_call.id, output
-
         except Exception as e:
             logger.exception("Failed to execute transfer_to_parent tool call")
             output = f"Transfer to parent failed: {e!s}"
@@ -893,4 +891,6 @@ class Runner:
                 call_id=tool_call.id,
                 output=output,
             )
+            return tool_call.id, output
+        else:
             return tool_call.id, output

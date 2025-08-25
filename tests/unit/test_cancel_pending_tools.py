@@ -51,7 +51,7 @@ class TestCancelPendingTools:
 
         # Verify cancellation events were generated
         assert len(cancellation_events) == 2
-        for i, event in enumerate(cancellation_events):
+        for _, event in enumerate(cancellation_events):
             assert event.type == "function_call_output"
             assert event.tool_call_id in ["call_1", "call_2"]
             assert event.name == "dummy_tool"

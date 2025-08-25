@@ -86,7 +86,7 @@ async def main():
         )
 
         # This will raise an error when trying to convert
-        converted_messages = agent._convert_responses_to_completions_format(runner.messages)  # noqa: SLF001
+        converted_messages = agent._convert_responses_to_completions_format(runner.messages)
         print("❌ This should not be reached!")
 
     except ValueError as e:
@@ -108,7 +108,7 @@ async def main():
     print("\n=== Converted messages for LLM API ===")
     # Note: In a real application, this conversion happens automatically
     # We're accessing the private method here just for demonstration
-    converted_messages = agent._convert_responses_to_completions_format(runner.messages)  # noqa: SLF001
+    converted_messages = agent._convert_responses_to_completions_format(runner.messages)
     for i, message in enumerate(converted_messages):
         print(f"Converted Message {i + 1}:")
         print(f"  {message}")

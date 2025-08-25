@@ -6,6 +6,7 @@ Demo showing two new features:
 """
 
 import asyncio
+import json
 import logging
 
 from funcall.decorators import tool
@@ -13,7 +14,8 @@ from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AssistantTextContent, AssistantToolCall, NewAssistantMessage
+from lite_agent.types import AssistantTextContent, AssistantToolCall, AssistantToolCallResult, NewAssistantMessage, ToolCall, ToolCallFunction
+from lite_agent.types.events import FunctionCallOutputEvent
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -106,9 +108,9 @@ async def demo_1_cancel_pending_tools():
             chunks.append(chunk)
             if len(chunks) >= 3:  # Stop after getting cancellation events
                 break
-    except Exception:
+    except Exception as e:
         # Expected - no real LLM configured
-        pass
+        logger.debug("Expected exception in demo: %s", e)
 
     print(f"Events from run() method: {len(chunks)}")
     for i, chunk in enumerate(chunks):
@@ -156,7 +158,7 @@ async def demo_1_cancel_pending_tools():
         print(f"Content items in assistant message: {len(assistant_msg.content)}")
 
         # Show the cancellation results
-        cancellation_results = [item for item in assistant_msg.content if item.type == "tool_call_result"]
+        cancellation_results = [item for item in assistant_msg.content if isinstance(item, AssistantToolCallResult)]
         print(f"Cancellation results added: {len(cancellation_results)}")
         for result in cancellation_results:
             print(f"  - {result.call_id}: {result.output}")
@@ -194,9 +196,6 @@ async def demo_2_transfer_events():
     print(f"Current agent: {runner.agent.name}")
 
     # Simulate transfer_to_agent call
-    import json
-
-    from lite_agent.types import ToolCall, ToolCallFunction
 
     transfer_call = ToolCall(
         type="function",
@@ -209,13 +208,14 @@ async def demo_2_transfer_events():
     )
 
     # Handle transfer and collect events
-    chunks = []
-    async for chunk in runner._handle_tool_calls([transfer_call], ["function_call_output"]):
-        chunks.append(chunk)
+    chunks = [chunk async for chunk in runner._handle_tool_calls([transfer_call], ["function_call_output"])]
 
     print(f"Events generated: {len(chunks)}")
     for i, chunk in enumerate(chunks):
-        print(f"  Event {i + 1}: {chunk.type} - {chunk.content}")
+        if isinstance(chunk, FunctionCallOutputEvent):
+            print(f"  Event {i + 1}: {chunk.type} - {chunk.content}")
+        else:
+            print(f"  Event {i + 1}: {chunk.type}")
 
     print(f"Agent after transfer: {runner.agent.name}")
 
@@ -232,13 +232,14 @@ async def demo_2_transfer_events():
     )
 
     # Handle parent transfer and collect events
-    chunks = []
-    async for chunk in runner._handle_tool_calls([parent_transfer_call], ["function_call_output"]):
-        chunks.append(chunk)
+    chunks = [chunk async for chunk in runner._handle_tool_calls([parent_transfer_call], ["function_call_output"])]
 
     print(f"Events generated: {len(chunks)}")
     for i, chunk in enumerate(chunks):
-        print(f"  Event {i + 1}: {chunk.type} - {chunk.content}")
+        if isinstance(chunk, FunctionCallOutputEvent):
+            print(f"  Event {i + 1}: {chunk.type} - {chunk.content}")
+        else:
+            print(f"  Event {i + 1}: {chunk.type}")
 
     print(f"Agent after parent transfer: {runner.agent.name}")
 
@@ -265,13 +266,14 @@ async def demo_2_transfer_events():
         index=1,
     )
 
-    chunks = []
-    async for chunk in runner._handle_tool_calls([transfer_call_1, transfer_call_2], ["function_call_output"]):
-        chunks.append(chunk)
+    chunks = [chunk async for chunk in runner._handle_tool_calls([transfer_call_1, transfer_call_2], ["function_call_output"])]
 
     print(f"Events generated: {len(chunks)}")
     for i, chunk in enumerate(chunks):
-        print(f"  Event {i + 1}: {chunk.content}")
+        if isinstance(chunk, FunctionCallOutputEvent):
+            print(f"  Event {i + 1}: {chunk.content}")
+        else:
+            print(f"  Event {i + 1}: {chunk.type}")
 
     print(f"Final agent: {runner.agent.name}")
 

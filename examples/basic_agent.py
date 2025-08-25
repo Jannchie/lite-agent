@@ -4,6 +4,7 @@ import logging
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
+from lite_agent.types import NewUserMessage, UserTextContent
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -39,10 +40,9 @@ agent = Agent(
 async def main():
     resp = await agent.completion(
         [
-            {
-                "role": "user",
-                "content": "What is the temperature and whether in New York?",
-            },
+            NewUserMessage(
+                content=[UserTextContent(text="What is the temperature and whether in New York?")],
+            ),
         ],
     )
     async for chunk in resp:

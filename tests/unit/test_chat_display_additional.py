@@ -272,15 +272,14 @@ class TestChatDisplayAdditional:
 
     def test_message_with_meta_data_variants(self):
         """Test messages with different meta data structures"""
-        from lite_agent.types import AssistantMessageMeta
+        from lite_agent.types import AssistantMessageMeta, MessageUsage
 
         messages = [
             # Message with object-style meta
             AgentAssistantMessage(
                 content="Test with meta",
                 meta=AssistantMessageMeta(
-                    input_tokens=10,
-                    output_tokens=5,
+                    usage=MessageUsage(input_tokens=10, output_tokens=5, total_tokens=15),
                     latency_ms=100,
                 ),
             ),

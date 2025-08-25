@@ -119,8 +119,10 @@ class ResponseEventProcessor:
                     # Extract model information from event
                     model_name = getattr(event, "model", None)
                     # Debug: check if event has model info in different location
-                    if hasattr(event, "response") and hasattr(event.response, "model"):
-                        model_name = getattr(event.response, "model", None)
+                    if hasattr(event, "response"):
+                        response = getattr(event, "response", None)
+                        if response and hasattr(response, "model"):
+                            model_name = getattr(response, "model", None)
                     # Create usage information
                     usage = MessageUsage(
                         input_tokens=self._usage_data.get("input_tokens"),

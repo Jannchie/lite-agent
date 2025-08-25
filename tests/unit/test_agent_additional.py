@@ -6,6 +6,9 @@ from lite_agent.agent import Agent
 from lite_agent.types import (
     AgentAssistantMessage,
     AgentUserMessage,
+    AssistantTextContent,
+    AssistantToolCall,
+    AssistantToolCallResult,
     FlexibleRunnerMessage,
     NewSystemMessage,
     NewUserMessage,
@@ -46,18 +49,10 @@ class TestAgentAdditional:
         # 包含函数调用的消息
         messages: list[FlexibleRunnerMessage] = [
             AgentUserMessage(content=[UserTextContent(text="Hello")]),
-            AgentAssistantMessage(content=[]),
-            {
-                "type": "function_call",
-                "call_id": "call_123",
-                "name": "test_function",
-                "arguments": '{"param": "value"}',
-            },
-            {
-                "type": "function_call_output",
-                "call_id": "call_123",
-                "output": "Function result",
-            },
+            AgentAssistantMessage(content=[
+                AssistantToolCall(call_id="call_123", name="test_function", arguments='{"param": "value"}'),
+                AssistantToolCallResult(call_id="call_123", output="Function result"),
+            ]),
         ]
 
         result = agent.prepare_completion_messages(messages)

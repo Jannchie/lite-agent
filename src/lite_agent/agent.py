@@ -44,10 +44,24 @@ class Agent:
         message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
         completion_condition: str = "stop",
         reasoning: ReasoningConfig = None,
+        stop_before_tools: list[str] | list[Callable] | None = None,
     ) -> None:
         self.name = name
         self.instructions = instructions
         self.reasoning = reasoning
+        # Convert stop_before_functions to function names
+        if stop_before_tools:
+            self.stop_before_functions = set()
+            for func in stop_before_tools:
+                if isinstance(func, str):
+                    self.stop_before_functions.add(func)
+                elif callable(func):
+                    self.stop_before_functions.add(func.__name__)
+                else:
+                    msg = f"stop_before_functions must contain strings or callables, got {type(func)}"
+                    raise TypeError(msg)
+        else:
+            self.stop_before_functions = set()
 
         if isinstance(model, BaseLLMClient):
             # If model is a BaseLLMClient instance, use it directly
@@ -345,13 +359,22 @@ class Agent:
             return []
         results = []
         for tool_call in tool_calls:
-            tool_func = self.fc.function_registry.get(tool_call.function.name)
-            if not tool_func:
-                logger.warning("Tool function %s not found in registry", tool_call.function.name)
+            function_name = tool_call.function.name
+
+            # Check if function is in dynamic stop_before_functions list
+            if function_name in self.stop_before_functions:
+                logger.debug('Tool call "%s" requires confirmation (stop_before_functions)', tool_call.id)
+                results.append(tool_call)
                 continue
-            tool_meta = self.fc.get_tool_meta(tool_call.function.name)
+
+            # Check decorator-based require_confirmation
+            tool_func = self.fc.function_registry.get(function_name)
+            if not tool_func:
+                logger.warning("Tool function %s not found in registry", function_name)
+                continue
+            tool_meta = self.fc.get_tool_meta(function_name)
             if tool_meta["require_confirm"]:
-                logger.debug('Tool call "%s" requires confirmation', tool_call.id)
+                logger.debug('Tool call "%s" requires confirmation (decorator)', tool_call.id)
                 results.append(tool_call)
         return results
 
@@ -470,11 +493,7 @@ class Agent:
                 content = assistant_msg.get("content", [])
                 if isinstance(content, list):
                     # Extract text content and convert to string using list comprehension
-                    text_parts = [
-                        item.get("text", "")
-                        for item in content
-                        if isinstance(item, dict) and item.get("type") == "text"
-                    ]
+                    text_parts = [item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text"]
                     assistant_msg["content"] = " ".join(text_parts) if text_parts else None
 
                 converted_messages.append(assistant_msg)
@@ -595,3 +614,67 @@ class Agent:
             required=[],
             handler=wait_for_user_handler,
         )
+
+    def set_stop_before_functions(self, functions: list[str] | list[Callable]) -> None:
+        """Set the list of functions that require confirmation before execution.
+
+        Args:
+            functions: List of function names (str) or callable objects
+        """
+        self.stop_before_functions = set()
+        for func in functions:
+            if isinstance(func, str):
+                self.stop_before_functions.add(func)
+            elif callable(func):
+                self.stop_before_functions.add(func.__name__)
+            else:
+                msg = f"stop_before_functions must contain strings or callables, got {type(func)}"
+                raise TypeError(msg)
+        logger.debug(f"Set stop_before_functions to: {self.stop_before_functions}")
+
+    def add_stop_before_function(self, function: str | Callable) -> None:
+        """Add a function to the stop_before_functions list.
+
+        Args:
+            function: Function name (str) or callable object to add
+        """
+        if isinstance(function, str):
+            function_name = function
+        elif callable(function):
+            function_name = function.__name__
+        else:
+            msg = f"function must be a string or callable, got {type(function)}"
+            raise TypeError(msg)
+
+        self.stop_before_functions.add(function_name)
+        logger.debug(f"Added '{function_name}' to stop_before_functions")
+
+    def remove_stop_before_function(self, function: str | Callable) -> None:
+        """Remove a function from the stop_before_functions list.
+
+        Args:
+            function: Function name (str) or callable object to remove
+        """
+        if isinstance(function, str):
+            function_name = function
+        elif callable(function):
+            function_name = function.__name__
+        else:
+            msg = f"function must be a string or callable, got {type(function)}"
+            raise TypeError(msg)
+
+        self.stop_before_functions.discard(function_name)
+        logger.debug(f"Removed '{function_name}' from stop_before_functions")
+
+    def clear_stop_before_functions(self) -> None:
+        """Clear all function names from the stop_before_functions list."""
+        self.stop_before_functions.clear()
+        logger.debug("Cleared all stop_before_functions")
+
+    def get_stop_before_functions(self) -> set[str]:
+        """Get the current set of function names that require confirmation.
+
+        Returns:
+            Set of function names
+        """
+        return self.stop_before_functions.copy()

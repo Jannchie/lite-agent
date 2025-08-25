@@ -48,7 +48,7 @@ async def main():
     )
     async for chunk in resp:
         logger.info(chunk)
-    resp = runner.run_continue_stream(
+    resp = runner.run(
         includes=["usage", "assistant_message", "function_call", "function_call_output"],
         record_to="tests/mocks/confirm_and_continue/2.jsonl",
     )

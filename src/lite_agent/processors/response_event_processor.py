@@ -183,7 +183,6 @@ class ResponseEventProcessor:
                 latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
                 output_time_ms = TimingMetrics.calculate_output_time_ms(self._first_output_time, self._output_complete_time)
                 if latency_ms is not None and output_time_ms is not None:
-
                     results.append(
                         TimingEvent(
                             timing=Timing(

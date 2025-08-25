@@ -1,4 +1,5 @@
 import json
+import warnings
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timedelta, timezone
 from os import PathLike
@@ -166,16 +167,27 @@ class Runner:
 
     def run(
         self,
-        user_input: UserInput,
+        user_input: UserInput | None = None,
         max_steps: int = 20,
         includes: Sequence[AgentChunkType] | None = None,
         context: "Any | None" = None,  # noqa: ANN401
         record_to: PathLike | str | None = None,
         agent_kwargs: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
-        """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
+        """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk.
+
+        If user_input is None, the method will continue execution from the current state,
+        equivalent to calling the continue methods.
+        """
         logger.debug(f"Runner.run called with streaming={self.streaming}, api={self.api}")
         includes = self._normalize_includes(includes)
+
+        # If no user input provided, use continue logic
+        if user_input is None:
+            logger.debug("No user input provided, using continue logic")
+            return self._run_continue_stream(max_steps, includes, self._normalize_record_path(record_to), context)
+
+        # Process user input
         match user_input:
             case str():
                 self.messages.append(NewUserMessage(content=[UserTextContent(text=user_input)]))
@@ -375,6 +387,12 @@ class Runner:
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
     ) -> list[AgentChunk]:
+        """Deprecated: Use run_until_complete(None) instead."""
+        warnings.warn(
+            "run_continue_until_complete is deprecated. Use run_until_complete(None) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         resp = self.run_continue_stream(max_steps, includes, record_to=record_to)
         return await self._collect_all_chunks(resp)
 
@@ -385,6 +403,12 @@ class Runner:
         record_to: PathLike | str | None = None,
         context: "Any | None" = None,  # noqa: ANN401
     ) -> AsyncGenerator[AgentChunk, None]:
+        """Deprecated: Use run(None) instead."""
+        warnings.warn(
+            "run_continue_stream is deprecated. Use run(None) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._run_continue_stream(max_steps, includes, record_to=record_to, context=context)
 
     async def _run_continue_stream(
@@ -419,7 +443,7 @@ class Runner:
 
     async def run_until_complete(
         self,
-        user_input: UserInput,
+        user_input: UserInput | None = None,
         max_steps: int = 20,
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,

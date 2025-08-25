@@ -386,8 +386,12 @@ class TestAgentHandoffs:
         async for chunk in runner._handle_tool_calls([transfer_call], ["function_call_output"]):
             chunks.append(chunk)
 
-        # Should return immediately after transfer (no chunks yielded)
-        assert len(chunks) == 0
+        # Should now yield function_call_output event for transfer
+        assert len(chunks) == 1
+        assert chunks[0].type == "function_call_output"
+        assert chunks[0].tool_call_id == "call_789"
+        assert chunks[0].name == "transfer_to_parent"
+        assert "Transferring back to parent agent: ParentAgent" in chunks[0].content
 
         # Agent should have switched to parent
         assert runner.agent.name == "ParentAgent"
@@ -449,8 +453,17 @@ class TestAgentHandoffs:
         async for chunk in runner._handle_tool_calls([transfer_call_1, transfer_call_2], ["function_call_output"]):
             chunks.append(chunk)
 
-        # Should return immediately after transfer (no chunks yielded)
-        assert len(chunks) == 0
+        # Should now yield function_call_output events for both transfers
+        assert len(chunks) == 2
+        assert chunks[0].type == "function_call_output"
+        assert chunks[0].tool_call_id == "call_111"
+        assert chunks[0].name == "transfer_to_parent"
+        assert "Transferring back to parent agent: ParentAgent" in chunks[0].content
+
+        assert chunks[1].type == "function_call_output"
+        assert chunks[1].tool_call_id == "call_222"
+        assert chunks[1].name == "transfer_to_parent"
+        assert "Transfer already executed by previous call" in chunks[1].content
 
         # Agent should have switched to parent
         assert runner.agent.name == "ParentAgent"

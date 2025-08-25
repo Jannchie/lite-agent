@@ -28,7 +28,7 @@ from lite_agent.types import (
     UserInput,
     UserTextContent,
 )
-from lite_agent.types.events import AssistantMessageEvent
+from lite_agent.types.events import AssistantMessageEvent, FunctionCallOutputEvent
 from lite_agent.utils.message_builder import MessageBuilder
 
 
@@ -119,13 +119,30 @@ class Runner:
             for i, tool_call in enumerate(transfer_calls):
                 if i == 0:
                     # Execute the first transfer
-                    await self._handle_agent_transfer(tool_call)
+                    call_id, output = await self._handle_agent_transfer(tool_call)
+                    # Generate function_call_output event if in includes
+                    if "function_call_output" in includes:
+                        yield FunctionCallOutputEvent(
+                            tool_call_id=call_id,
+                            name=tool_call.function.name,
+                            content=output,
+                            execution_time_ms=0,  # Transfer operations are typically fast
+                        )
                 else:
                     # Add response for additional transfer calls without executing them
+                    output = "Transfer already executed by previous call"
                     self._add_tool_call_result(
                         call_id=tool_call.id,
-                        output="Transfer already executed by previous call",
+                        output=output,
                     )
+                    # Generate function_call_output event if in includes
+                    if "function_call_output" in includes:
+                        yield FunctionCallOutputEvent(
+                            tool_call_id=tool_call.id,
+                            name=tool_call.function.name,
+                            content=output,
+                            execution_time_ms=0,
+                        )
             return  # Stop processing other tool calls after transfer
 
         return_parent_calls = [tc for tc in tool_calls if tc.function.name == ToolName.TRANSFER_TO_PARENT]
@@ -134,13 +151,30 @@ class Runner:
             for i, tool_call in enumerate(return_parent_calls):
                 if i == 0:
                     # Execute the first transfer
-                    await self._handle_parent_transfer(tool_call)
+                    call_id, output = await self._handle_parent_transfer(tool_call)
+                    # Generate function_call_output event if in includes
+                    if "function_call_output" in includes:
+                        yield FunctionCallOutputEvent(
+                            tool_call_id=call_id,
+                            name=tool_call.function.name,
+                            content=output,
+                            execution_time_ms=0,  # Transfer operations are typically fast
+                        )
                 else:
                     # Add response for additional transfer calls without executing them
+                    output = "Transfer already executed by previous call"
                     self._add_tool_call_result(
                         call_id=tool_call.id,
-                        output="Transfer already executed by previous call",
+                        output=output,
                     )
+                    # Generate function_call_output event if in includes
+                    if "function_call_output" in includes:
+                        yield FunctionCallOutputEvent(
+                            tool_call_id=tool_call.id,
+                            name=tool_call.function.name,
+                            content=output,
+                            execution_time_ms=0,
+                        )
             return  # Stop processing other tool calls after transfer
 
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
@@ -187,6 +221,14 @@ class Runner:
             logger.debug("No user input provided, using continue logic")
             return self._run_continue_stream(max_steps, includes, self._normalize_record_path(record_to), context)
 
+        # Cancel any pending tool calls before processing new user input
+        # and yield cancellation events if they should be included
+        cancellation_events = self._cancel_pending_tool_calls()
+
+        # We need to handle this differently since run() is not async
+        # Store cancellation events to be yielded by _run
+        self._pending_cancellation_events = cancellation_events
+
         # Process user input
         match user_input:
             case str():
@@ -211,6 +253,15 @@ class Runner:
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
+
+        # First, yield any pending cancellation events
+        if hasattr(self, "_pending_cancellation_events"):
+            for cancellation_event in self._pending_cancellation_events:
+                if "function_call_output" in includes:
+                    yield cancellation_event
+            # Clear the pending events after yielding
+            delattr(self, "_pending_cancellation_events")
+
         steps = 0
         finish_reason = None
 
@@ -483,6 +534,38 @@ class Runner:
         _, tool_call_names = self._analyze_last_assistant_message()
         return tool_call_names.get(call_id)
 
+    def _cancel_pending_tool_calls(self) -> list[FunctionCallOutputEvent]:
+        """Cancel all pending tool calls by adding cancellation results.
+
+        Returns:
+            List of FunctionCallOutputEvent for each cancelled tool call
+        """
+        pending_tool_calls = self._find_pending_tool_calls()
+        if not pending_tool_calls:
+            return []
+
+        logger.debug(f"Cancelling {len(pending_tool_calls)} pending tool calls due to new user input")
+
+        cancellation_events = []
+        for tool_call in pending_tool_calls:
+            output = "Operation cancelled by user - new input provided"
+            self._add_tool_call_result(
+                call_id=tool_call.call_id,
+                output=output,
+                execution_time_ms=0,
+            )
+
+            # Create cancellation event
+            cancellation_event = FunctionCallOutputEvent(
+                tool_call_id=tool_call.call_id,
+                name=tool_call.name,
+                content=output,
+                execution_time_ms=0,
+            )
+            cancellation_events.append(cancellation_event)
+
+        return cancellation_events
+
     def _convert_tool_calls_to_tool_calls(self, tool_calls: list[AssistantToolCall]) -> list[ToolCall]:
         """Convert AssistantToolCall objects to ToolCall objects for compatibility."""
         return [
@@ -670,11 +753,14 @@ class Runner:
             msg = f"Unsupported message type: {type(message)}. Supports NewMessage types and dict."
             raise TypeError(msg)
 
-    async def _handle_agent_transfer(self, tool_call: ToolCall) -> None:
+    async def _handle_agent_transfer(self, tool_call: ToolCall) -> tuple[str, str]:
         """Handle agent transfer when transfer_to_agent tool is called.
 
         Args:
             tool_call: The transfer_to_agent tool call
+
+        Returns:
+            Tuple of (call_id, output) for the tool call result
         """
 
         # Parse the arguments to get the target agent name
@@ -683,31 +769,34 @@ class Runner:
             target_agent_name = arguments.get("name")
         except (json.JSONDecodeError, KeyError):
             logger.error("Failed to parse transfer_to_agent arguments: %s", tool_call.function.arguments)
+            output = "Failed to parse transfer arguments"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output="Failed to parse transfer arguments",
+                output=output,
             )
-            return
+            return tool_call.id, output
 
         if not target_agent_name:
             logger.error("No target agent name provided in transfer_to_agent call")
+            output = "No target agent name provided"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output="No target agent name provided",
+                output=output,
             )
-            return
+            return tool_call.id, output
 
         # Find the target agent in handoffs
         if not self.agent.handoffs:
             logger.error("Current agent has no handoffs configured")
+            output = "Current agent has no handoffs configured"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output="Current agent has no handoffs configured",
+                output=output,
             )
-            return
+            return tool_call.id, output
 
         target_agent = None
         for agent in self.agent.handoffs:
@@ -717,12 +806,13 @@ class Runner:
 
         if not target_agent:
             logger.error("Target agent '%s' not found in handoffs", target_agent_name)
+            output = f"Target agent '{target_agent_name}' not found in handoffs"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output=f"Target agent '{target_agent_name}' not found in handoffs",
+                output=output,
             )
-            return
+            return tool_call.id, output
 
         # Execute the transfer tool call to get the result
         try:
@@ -731,40 +821,49 @@ class Runner:
                 tool_call.function.arguments or "",
             )
 
+            output = str(result)
             # Add the tool call result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output=str(result),
+                output=output,
             )
 
             # Switch to the target agent
             logger.info("Transferring conversation from %s to %s", self.agent.name, target_agent_name)
             self.agent = target_agent
 
+            return tool_call.id, output
+
         except Exception as e:
             logger.exception("Failed to execute transfer_to_agent tool call")
+            output = f"Transfer failed: {e!s}"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output=f"Transfer failed: {e!s}",
+                output=output,
             )
+            return tool_call.id, output
 
-    async def _handle_parent_transfer(self, tool_call: ToolCall) -> None:
+    async def _handle_parent_transfer(self, tool_call: ToolCall) -> tuple[str, str]:
         """Handle parent transfer when transfer_to_parent tool is called.
 
         Args:
             tool_call: The transfer_to_parent tool call
+
+        Returns:
+            Tuple of (call_id, output) for the tool call result
         """
 
         # Check if current agent has a parent
         if not self.agent.parent:
             logger.error("Current agent has no parent to transfer back to.")
+            output = "Current agent has no parent to transfer back to"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output="Current agent has no parent to transfer back to",
+                output=output,
             )
-            return
+            return tool_call.id, output
 
         # Execute the transfer tool call to get the result
         try:
@@ -773,20 +872,25 @@ class Runner:
                 tool_call.function.arguments or "",
             )
 
+            output = str(result)
             # Add the tool call result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output=str(result),
+                output=output,
             )
 
             # Switch to the parent agent
             logger.info("Transferring conversation from %s back to parent %s", self.agent.name, self.agent.parent.name)
             self.agent = self.agent.parent
 
+            return tool_call.id, output
+
         except Exception as e:
             logger.exception("Failed to execute transfer_to_parent tool call")
+            output = f"Transfer to parent failed: {e!s}"
             # Add error result to messages
             self._add_tool_call_result(
                 call_id=tool_call.id,
-                output=f"Transfer to parent failed: {e!s}",
+                output=output,
             )
+            return tool_call.id, output

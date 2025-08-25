@@ -1,3 +1,18 @@
+## v0.8.0
+
+[v0.7.0...v0.8.0](https://github.com/Jannchie/lite-agent/compare/v0.7.0...v0.8.0)
+
+### :rocket: Breaking Changes
+
+- **runner**: remove dict-format and legacy support from message history and enforce newmessage format - By [Jannchie](mailto:jannchie@gmail.com) in [44b435c](https://github.com/Jannchie/lite-agent/commit/44b435c)
+
+### :sparkles: Features
+
+- **agent**: add dynamic stop-before-functions support - By [Jannchie](mailto:jannchie@gmail.com) in [e7de181](https://github.com/Jannchie/lite-agent/commit/e7de181)
+- **agent**: improve tool call extraction and meta preservation - By [Jannchie](mailto:jannchie@gmail.com) in [1b10296](https://github.com/Jannchie/lite-agent/commit/1b10296)
+- **runner**: add cancellation events for pending tool calls and implement function_call_output for agent transfers - By [Jannchie](mailto:jannchie@gmail.com) in [4c298b7](https://github.com/Jannchie/lite-agent/commit/4c298b7)
+- **runner**: preserve original dict message structure in chat history - By [Jannchie](mailto:jannchie@gmail.com) in [da4ad59](https://github.com/Jannchie/lite-agent/commit/da4ad59)
+
 ## v0.7.0
 
 [v0.6.0...v0.7.0](https://github.com/Jannchie/lite-agent/compare/v0.6.0...v0.7.0)

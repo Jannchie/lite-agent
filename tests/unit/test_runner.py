@@ -83,10 +83,10 @@ async def test_runner_append_message():
     assert isinstance(runner.messages[0].content[0], UserTextContent)
     assert runner.messages[0].content[0].text == "Hello"
 
-    # Test appending message object from dict
+    # Test that dict format is converted to NewMessage
     user_msg_dict = {"role": "user", "content": "How are you?"}
     runner.append_message(user_msg_dict)
-    assert len(runner.messages) == 2
+    assert len(runner.messages) == 2  # Original + new dict message
     assert isinstance(runner.messages[1], NewUserMessage)
     assert isinstance(runner.messages[1].content[0], UserTextContent)
     assert runner.messages[1].content[0].text == "How are you?"

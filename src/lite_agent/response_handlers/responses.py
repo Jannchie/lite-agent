@@ -17,7 +17,7 @@ class ResponsesAPIHandler(ResponseHandler):
 
     async def _handle_streaming(
         self,
-        response: Any,
+        response: Any,  # noqa: ANN401
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming responses API response."""
@@ -26,8 +26,8 @@ class ResponsesAPIHandler(ResponseHandler):
 
     async def _handle_non_streaming(
         self,
-        response: Any,
-        record_to: Path | None = None,
+        response: Any,  # noqa: ANN401
+        record_to: Path | None = None,  # noqa: ARG002
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle non-streaming responses API response."""
         # Convert ResponsesAPIResponse to chunks

@@ -70,7 +70,7 @@ async def main():
     )
     async for message in resp:
         logger.info(message)
-    print(f"{runner.get_messages_dict()}")
+    print(f"{runner.get_messages()}")
     logger.info(runner.agent.name)
 
 

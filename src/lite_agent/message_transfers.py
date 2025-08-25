@@ -5,7 +5,7 @@ This module provides common message transfer functions that can be used
 with agents to preprocess messages before sending them to the API.
 """
 
-from lite_agent.types import RunnerMessages
+from lite_agent.types import NewUserMessage, RunnerMessages, UserTextContent
 
 
 def consolidate_history_transfer(messages: RunnerMessages) -> RunnerMessages:
@@ -43,8 +43,8 @@ def consolidate_history_transfer(messages: RunnerMessages) -> RunnerMessages:
     # Create the consolidated message
     consolidated_content = "以下是目前发生的所有交互:\n\n" + "\n".join(xml_content) + "\n\n接下来该做什么?"
 
-    # Return a single user message
-    return [{"role": "user", "content": consolidated_content}]
+    # Return a single user message using NewMessage format
+    return [NewUserMessage(content=[UserTextContent(text=consolidated_content)])]
 
 
 def _process_message_to_xml(message: dict | object) -> list[str]:

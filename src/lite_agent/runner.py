@@ -15,11 +15,12 @@ from lite_agent.types import (
     AssistantTextContent,
     AssistantToolCall,
     AssistantToolCallResult,
+    FlexibleInputMessage,
     FlexibleRunnerMessage,
-    MessageDict,
     MessageUsage,
     NewAssistantMessage,
     NewMessage,
+    NewSystemMessage,
     NewUserMessage,
     ToolCall,
     ToolCallFunction,
@@ -93,14 +94,9 @@ class Runner:
             assistant_message = NewAssistantMessage(content=[result])
             self.messages.append(assistant_message)
 
-        # For completion API compatibility, also add as separate message
-        if self.api == "completion":
-            function_output_msg: dict[str, Any] = {
-                "type": "function_call_output",
-                "call_id": call_id,
-                "output": output,
-            }
-            self.messages.append(function_output_msg)
+        # For completion API compatibility, create a separate assistant message
+        # Note: In the new architecture, we store everything as NewMessage format
+        # The conversion to completion format happens when sending to LLM
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""
@@ -162,14 +158,7 @@ class Runner:
                     last_message = cast("NewAssistantMessage", self.messages[-1])
                     last_message.content.append(tool_result)
 
-                # For completion API compatibility, also add as separate message
-                if self.api == "completion":
-                    function_output_msg: dict[str, Any] = {
-                        "type": "function_call_output",
-                        "call_id": tool_call_chunk.tool_call_id,
-                        "output": tool_call_chunk.content,
-                    }
-                    self.messages.append(function_output_msg)
+                # Note: For completion API compatibility, the conversion happens when sending to LLM
 
     async def _collect_all_chunks(self, stream: AsyncGenerator[AgentChunk, None]) -> list[AgentChunk]:
         """Collect all chunks from an async generator into a list."""
@@ -485,7 +474,7 @@ class Runner:
             for i, tc in enumerate(tool_calls)
         ]
 
-    def set_chat_history(self, messages: Sequence[FlexibleRunnerMessage], root_agent: Agent | None = None) -> None:
+    def set_chat_history(self, messages: Sequence[FlexibleInputMessage], root_agent: Agent | None = None) -> None:
         """Set the entire chat history and track the current agent based on function calls.
 
         This method analyzes the message history to determine which agent should be active
@@ -502,26 +491,54 @@ class Runner:
         current_agent = root_agent if root_agent is not None else self.agent
 
         # Add each message and track agent transfers
-        for message in messages:
-            self.append_message(message, preserve_dict_format=True)
-            current_agent = self._track_agent_transfer_in_message(message, current_agent)
+        for input_message in messages:
+            # Store length before adding to get the added message
+            prev_length = len(self.messages)
+            self.append_message(input_message)
+
+            # Track transfers using the converted message (now in self.messages)
+            if len(self.messages) > prev_length:
+                converted_message = self.messages[-1]  # Get the last added message
+                current_agent = self._track_agent_transfer_in_message(converted_message, current_agent)
 
         # Set the current agent based on the tracked transfers
         self.agent = current_agent
         logger.info(f"Chat history set with {len(self.messages)} messages. Current agent: {self.agent.name}")
 
-    def get_messages_dict(self) -> list[dict[str, Any]]:
+    def get_messages(self) -> list[NewMessage]:
+        """Get the messages as NewMessage objects.
+
+        Only returns NewMessage objects, filtering out any dict or other legacy formats.
+        """
+        return [msg for msg in self.messages if isinstance(msg, NewMessage)]
+
+    def get_dict_messages(self) -> list[dict[str, Any]]:
         """Get the messages in JSONL format."""
         result = []
         for msg in self.messages:
-            if isinstance(msg, NewMessage):
+            if hasattr(msg, "model_dump"):
                 result.append(msg.model_dump(mode="json"))
             elif isinstance(msg, dict):
                 result.append(msg)
             else:
                 # Fallback for any other message types
-                result.append({"error": "unknown message type"})
+                result.append(dict(msg))
         return result
+
+    def add_user_message(self, text: str) -> None:
+        """Convenience method to add a user text message."""
+        message = NewUserMessage(content=[UserTextContent(text=text)])
+        self.append_message(message)
+
+    def add_assistant_message(self, text: str) -> None:
+        """Convenience method to add an assistant text message."""
+        message = NewAssistantMessage(content=[AssistantTextContent(text=text)])
+        self.append_message(message)
+
+    def add_system_message(self, content: str) -> None:
+        """Convenience method to add a system message."""
+        message = NewSystemMessage(content=content)
+        self.append_message(message)
 
     def _track_agent_transfer_in_message(self, message: FlexibleRunnerMessage, current_agent: Agent) -> Agent:
         """Track agent transfers in a single message.
@@ -533,8 +550,6 @@ class Runner:
         Returns:
             The agent that should be active after processing this message
         """
-        if isinstance(message, dict):
-            return self._track_transfer_from_dict_message(message, current_agent)
         if isinstance(message, NewAssistantMessage):
             return self._track_transfer_from_new_assistant_message(message, current_agent)
 
@@ -549,32 +564,6 @@ class Runner:
                     return self._handle_transfer_to_agent_tracking(arguments, current_agent)
                 if content_item.name == ToolName.TRANSFER_TO_PARENT:
                     return self._handle_transfer_to_parent_tracking(current_agent)
-        return current_agent
-
-    def _track_transfer_from_dict_message(self, message: dict[str, Any] | MessageDict, current_agent: Agent) -> Agent:
-        """Track transfers from dictionary-format messages."""
-        message_type = message.get("type")
-        role = message.get("role")
-
-        # Handle function_call type messages (legacy format)
-        if message_type == "function_call":
-            function_name = message.get("name", "")
-            if function_name == ToolName.TRANSFER_TO_AGENT:
-                return self._handle_transfer_to_agent_tracking(message.get("arguments", ""), current_agent)
-            if function_name == ToolName.TRANSFER_TO_PARENT:
-                return self._handle_transfer_to_parent_tracking(current_agent)
-
-        # Handle assistant messages with tool_call content (new format)
-        elif role == "assistant":
-            content = message.get("content", [])
-            if isinstance(content, list):
-                for content_item in content:
-                    if isinstance(content_item, dict) and content_item.get("type") == "tool_call":
-                        if content_item.get("name") == ToolName.TRANSFER_TO_AGENT:
-                            return self._handle_transfer_to_agent_tracking(content_item.get("arguments", ""), current_agent)
-                        if content_item.get("name") == ToolName.TRANSFER_TO_PARENT:
-                            return self._handle_transfer_to_parent_tracking(current_agent)
-
         return current_agent
 
     def _handle_transfer_to_agent_tracking(self, arguments: str | dict, current_agent: Agent) -> Agent:
@@ -632,81 +621,29 @@ class Runner:
 
         return None
 
-    def append_message(self, message: FlexibleRunnerMessage, *, preserve_dict_format: bool = False) -> None:
+    def append_message(self, message: FlexibleInputMessage) -> None:
+        """Append a message to the conversation history.
+
+        Accepts both NewMessage format and dict format (which will be converted internally).
+        """
         if isinstance(message, NewMessage):
-            # Already in new format
             self.messages.append(message)
         elif isinstance(message, dict):
-            if preserve_dict_format:
-                # For chat history preservation, keep dict messages as-is to maintain exact structure
-                self.messages.append(message)
+            # Convert dict to NewMessage using MessageBuilder
+            role = message.get("role", "").lower()
+            if role == "user":
+                converted_message = MessageBuilder.build_user_message_from_dict(message)
+            elif role == "assistant":
+                converted_message = MessageBuilder.build_assistant_message_from_dict(message)
+            elif role == "system":
+                converted_message = MessageBuilder.build_system_message_from_dict(message)
             else:
-                # Handle different message types from dict and convert to NewMessage objects
-                message_type = message.get("type")
-                role = message.get("role")
+                msg = f"Unsupported message role: {role}. Must be 'user', 'assistant', or 'system'."
+                raise ValueError(msg)
 
-                if role == "user":
-                    user_message = MessageBuilder.build_user_message_from_dict(message)
-                    self.messages.append(user_message)
-                elif role == "system":
-                    system_message = MessageBuilder.build_system_message_from_dict(message)
-                    self.messages.append(system_message)
-                elif role == "assistant":
-                    assistant_message = MessageBuilder.build_assistant_message_from_dict(message)
-                    self.messages.append(assistant_message)
-                elif message_type == "function_call":
-                    # Handle function_call directly like AgentFunctionToolCallMessage
-                    # Type guard: ensure we have the right message type
-                    if "call_id" in message and "name" in message and "arguments" in message:
-                        function_call_msg = message  # Type should be FunctionCallDict now
-                        if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                            tool_call = AssistantToolCall(
-                                call_id=function_call_msg["call_id"],  # type: ignore
-                                name=function_call_msg["name"],  # type: ignore
-                                arguments=function_call_msg["arguments"],  # type: ignore
-                            )
-                            last_message = cast("NewAssistantMessage", self.messages[-1])
-                            last_message.content.append(tool_call)
-                        else:
-                            assistant_message = NewAssistantMessage(
-                                content=[
-                                    AssistantToolCall(
-                                        call_id=function_call_msg["call_id"],  # type: ignore
-                                        name=function_call_msg["name"],  # type: ignore
-                                        arguments=function_call_msg["arguments"],  # type: ignore
-                                    ),
-                                ],
-                            )
-                            self.messages.append(assistant_message)
-                elif message_type == "function_call_output":
-                    # Handle function_call_output - check if we should preserve dict format or convert
-                    if preserve_dict_format:
-                        self.messages.append(message)
-                    # Convert to AssistantToolCallResult and add to last assistant message
-                    elif "call_id" in message and "output" in message:
-                        function_output_msg = message  # Type should be FunctionCallOutputDict now
-                        if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
-                            tool_result = AssistantToolCallResult(
-                                call_id=function_output_msg["call_id"],  # type: ignore
-                                output=function_output_msg["output"],  # type: ignore
-                            )
-                            last_message = cast("NewAssistantMessage", self.messages[-1])
-                            last_message.content.append(tool_result)
-                        else:
-                            assistant_message = NewAssistantMessage(
-                                content=[
-                                    AssistantToolCallResult(
-                                        call_id=function_output_msg["call_id"],  # type: ignore
-                                        output=function_output_msg["output"],  # type: ignore
-                                    ),
-                                ],
-                            )
-                            self.messages.append(assistant_message)
-                else:
-                    msg = "Message must have a 'role' or 'type' field."
-                    raise ValueError(msg)
+            self.messages.append(converted_message)
         else:
-            msg = f"Unsupported message type: {type(message)}"
+            msg = f"Unsupported message type: {type(message)}. Supports NewMessage types and dict."
             raise TypeError(msg)
 
     async def _handle_agent_transfer(self, tool_call: ToolCall) -> None:

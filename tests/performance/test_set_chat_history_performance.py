@@ -4,6 +4,14 @@ import time
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
+from lite_agent.types import (
+    AssistantTextContent,
+    AssistantToolCall,
+    AssistantToolCallResult,
+    NewAssistantMessage,
+    NewUserMessage,
+    UserTextContent,
+)
 
 
 def test_set_chat_history_performance():
@@ -42,58 +50,62 @@ def test_set_chat_history_performance():
 
     for i in range(num_cycles):
         cycle_messages = [
-            {"role": "user", "content": f"Request {i}"},
-            {"role": "assistant", "content": f"Response {i}"},
-            {
-                "type": "function_call",
-                "call_id": f"call_{i}_1",
-                "name": "transfer_to_agent",
-                "arguments": '{"name": "Child1Agent"}',
-                "content": "",
-            },
-            {
-                "type": "function_call_output",
-                "call_id": f"call_{i}_1",
-                "output": "Transferring to agent: Child1Agent",
-            },
-            {"role": "assistant", "content": f"Child1 response {i}"},
-            {
-                "type": "function_call",
-                "call_id": f"call_{i}_2",
-                "name": "transfer_to_parent",
-                "arguments": "{}",
-                "content": "",
-            },
-            {
-                "type": "function_call_output",
-                "call_id": f"call_{i}_2",
-                "output": "Transferring back to parent",
-            },
-            {
-                "type": "function_call",
-                "call_id": f"call_{i}_3",
-                "name": "transfer_to_agent",
-                "arguments": '{"name": "Child2Agent"}',
-                "content": "",
-            },
-            {
-                "type": "function_call_output",
-                "call_id": f"call_{i}_3",
-                "output": "Transferring to agent: Child2Agent",
-            },
-            {"role": "assistant", "content": f"Child2 response {i}"},
-            {
-                "type": "function_call",
-                "call_id": f"call_{i}_4",
-                "name": "transfer_to_parent",
-                "arguments": "{}",
-                "content": "",
-            },
-            {
-                "type": "function_call_output",
-                "call_id": f"call_{i}_4",
-                "output": "Transferring back to parent",
-            },
+            NewUserMessage(content=[UserTextContent(text=f"Request {i}")]),
+            NewAssistantMessage(content=[AssistantTextContent(text=f"Response {i}")]),
+            NewAssistantMessage(
+                content=[
+                    AssistantToolCall(
+                        call_id=f"call_{i}_1",
+                        name="transfer_to_agent",
+                        arguments='{"name": "Child1Agent"}',
+                    ),
+                    AssistantToolCallResult(
+                        call_id=f"call_{i}_1",
+                        output="Transferring to agent: Child1Agent",
+                    ),
+                ],
+            ),
+            NewAssistantMessage(content=[AssistantTextContent(text=f"Child1 response {i}")]),
+            NewAssistantMessage(
+                content=[
+                    AssistantToolCall(
+                        call_id=f"call_{i}_2",
+                        name="transfer_to_parent",
+                        arguments="{}",
+                    ),
+                    AssistantToolCallResult(
+                        call_id=f"call_{i}_2",
+                        output="Transferring back to parent",
+                    ),
+                ],
+            ),
+            NewAssistantMessage(
+                content=[
+                    AssistantToolCall(
+                        call_id=f"call_{i}_3",
+                        name="transfer_to_agent",
+                        arguments='{"name": "Child2Agent"}',
+                    ),
+                    AssistantToolCallResult(
+                        call_id=f"call_{i}_3",
+                        output="Transferring to agent: Child2Agent",
+                    ),
+                ],
+            ),
+            NewAssistantMessage(content=[AssistantTextContent(text=f"Child2 response {i}")]),
+            NewAssistantMessage(
+                content=[
+                    AssistantToolCall(
+                        call_id=f"call_{i}_4",
+                        name="transfer_to_parent",
+                        arguments="{}",
+                    ),
+                    AssistantToolCallResult(
+                        call_id=f"call_{i}_4",
+                        output="Transferring back to parent",
+                    ),
+                ],
+            ),
         ]
         large_chat_history.extend(cycle_messages)
 
@@ -114,8 +126,8 @@ def test_set_chat_history_performance():
     print(f"Final message count: {len(runner.messages)}")
 
     # Verify correctness - messages are now preserved in original format
-    # Each cycle: 12 messages (user + assistant + 2 transfers + 4 function calls + 4 outputs)
-    expected_messages = num_cycles * 12  # 12 original messages per cycle
+    # Each cycle: 8 NewMessages (user + 7 assistant messages with tool calls and responses)
+    expected_messages = num_cycles * 8  # 8 NewMessage objects per cycle
     assert len(runner.messages) == expected_messages
     assert runner.agent.name == "ParentAgent"  # Should end at parent after all transfers
 

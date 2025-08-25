@@ -19,7 +19,7 @@ class CompletionResponseHandler(ResponseHandler):
 
     async def _handle_streaming(
         self,
-        response: Any,
+        response: Any,  # noqa: ANN401
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming completion response."""
@@ -32,8 +32,8 @@ class CompletionResponseHandler(ResponseHandler):
 
     async def _handle_non_streaming(
         self,
-        response: Any,
-        record_to: Path | None = None,
+        response: Any,  # noqa: ANN401
+        record_to: Path | None = None,  # noqa: ARG002
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle non-streaming completion response."""
         # Convert completion response to chunks
@@ -48,7 +48,7 @@ class CompletionResponseHandler(ResponseHandler):
             # Handle tool calls
             if choice.message and choice.message.tool_calls:
                 for tool_call in choice.message.tool_calls:
-                    content_items.append(
+                    content_items.append(  # noqa: PERF401
                         AssistantToolCall(
                             call_id=tool_call.id,
                             name=tool_call.function.name,

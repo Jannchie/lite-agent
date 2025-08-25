@@ -22,6 +22,7 @@ from lite_agent.types import (
     ContentDeltaEvent,
     EventUsage,
     FunctionCallEvent,
+    MessageUsage,
     NewAssistantMessage,
     ResponseRawEvent,
     Timing,
@@ -119,10 +120,8 @@ class ResponseEventProcessor:
                     model_name = getattr(event, "model", None)
                     # Debug: check if event has model info in different location
                     if hasattr(event, "response") and hasattr(event.response, "model"):
-                        model_name = event.response.model
+                        model_name = getattr(event.response, "model", None)
                     # Create usage information
-                    from lite_agent.types import MessageUsage
-
                     usage = MessageUsage(
                         input_tokens=self._usage_data.get("input_tokens"),
                         output_tokens=self._usage_data.get("output_tokens"),

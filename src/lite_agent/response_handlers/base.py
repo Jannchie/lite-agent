@@ -13,7 +13,8 @@ class ResponseHandler(ABC):
 
     async def handle(
         self,
-        response: Any,
+        response: Any,  # noqa: ANN401
+        *,
         streaming: bool,
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
@@ -28,24 +29,26 @@ class ResponseHandler(ABC):
             AgentChunk: Processed chunks from the response
         """
         if streaming:
-            async for chunk in self._handle_streaming(response, record_to):
+            stream = self._handle_streaming(response, record_to)
+            async for chunk in stream:
                 yield chunk
         else:
-            async for chunk in self._handle_non_streaming(response, record_to):
+            stream = self._handle_non_streaming(response, record_to)
+            async for chunk in stream:
                 yield chunk
 
     @abstractmethod
-    async def _handle_streaming(
+    def _handle_streaming(
         self,
-        response: Any,
+        response: Any,  # noqa: ANN401
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming response."""
 
     @abstractmethod
-    async def _handle_non_streaming(
+    def _handle_non_streaming(
         self,
-        response: Any,
+        response: Any,  # noqa: ANN401
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle non-streaming response."""

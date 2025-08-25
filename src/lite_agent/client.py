@@ -100,6 +100,7 @@ class BaseLLMClient(abc.ABC):
         tools: list[ChatCompletionToolParam] | None = None,
         tool_choice: str = "auto",
         reasoning: ReasoningConfig = None,
+        *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
@@ -112,6 +113,7 @@ class BaseLLMClient(abc.ABC):
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
+        *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
@@ -136,6 +138,7 @@ class LiteLLMClient(BaseLLMClient):
         tools: list[ChatCompletionToolParam] | None = None,
         tool_choice: str = "auto",
         reasoning: ReasoningConfig = None,
+        *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # noqa: ANN401
@@ -187,6 +190,7 @@ class LiteLLMClient(BaseLLMClient):
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
+        *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
     ) -> Any:  # type: ignore[return]  # noqa: ANN401

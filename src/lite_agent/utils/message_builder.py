@@ -137,10 +137,7 @@ class MessageBuilder:
 
         # Preserve meta information if present
         meta_data = message.get("meta", {})
-        if meta_data:
-            meta = MessageMeta(**meta_data)
-        else:
-            meta = MessageMeta()
+        meta = MessageMeta(**meta_data) if meta_data else MessageMeta()
 
         return NewSystemMessage(content=str(content), meta=meta)
 
@@ -209,9 +206,6 @@ class MessageBuilder:
 
         # Preserve meta information if present
         meta_data = message.get("meta", {})
-        if meta_data:
-            meta = AssistantMessageMeta(**meta_data)
-        else:
-            meta = AssistantMessageMeta()
+        meta = AssistantMessageMeta(**meta_data) if meta_data else AssistantMessageMeta()
 
         return NewAssistantMessage(content=assistant_content_items, meta=meta)

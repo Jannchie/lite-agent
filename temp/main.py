@@ -12,7 +12,9 @@ async def main():
     await runner.run_until_complete("Handoff to ChildAgent")
 
     new_runner = Runner(agent, api="completion")
-    new_runner.set_chat_history(runner.get_messages_dict())
+    messages = runner.get_messages()
+    print(f"Messages type: {[type(msg) for msg in messages]}")
+    new_runner.set_chat_history(messages)
 
     await new_runner.run_until_complete("What's your lucky number?")
     print("Completion API result:", new_runner.messages[-1].content[0].text)
@@ -22,7 +24,7 @@ async def main():
     await runner2.run_until_complete("Handoff to ChildAgent")
 
     new_runner2 = Runner(agent, api="responses")
-    new_runner2.set_chat_history(runner2.get_messages_dict())
+    new_runner2.set_chat_history(runner2.get_messages())
 
     await new_runner2.run_until_complete("What's your lucky number?")
     print("Responses API result:", new_runner2.messages[-1].content[0].text)

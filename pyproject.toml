@@ -10,7 +10,7 @@ dependencies = [
     "funcall>=0.10.0",
     "prompt-toolkit>=3.0.51",
     "rich>=14.0.0",
-    "openai<=1.99.5"
+    "openai<=1.99.5",
 ]
 keywords = [
     "function call",
@@ -89,6 +89,7 @@ ignore = [
     "ARG001",
     "ARG002",
 ]
+
 
 [tool.uv]
 upgrade = true

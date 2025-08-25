@@ -271,13 +271,16 @@ class AssistantMessage(BaseModel):
 
 
 # Enhanced type definitions for better type hints
-# Supports new message format, legacy messages, and dict (for backward compatibility)
-FlexibleRunnerMessage = NewMessage | AgentUserMessage | AgentAssistantMessage | dict[str, Any]
+# FlexibleRunnerMessage for internal storage - only NewMessage types
+FlexibleRunnerMessage = NewMessage
 RunnerMessages = Sequence[FlexibleRunnerMessage]
 
+# Input types that can be converted - includes dict for backward compatibility
+FlexibleInputMessage = NewMessage | dict[str, Any]
+InputMessages = Sequence[FlexibleInputMessage]
 
 # Type alias for user input - supports string, single message, or sequence of messages
-UserInput = str | FlexibleRunnerMessage | RunnerMessages | dict[str, Any]
+UserInput = str | FlexibleInputMessage | InputMessages
 
 
 def user_message_to_llm_dict(message: NewUserMessage) -> dict[str, Any]:

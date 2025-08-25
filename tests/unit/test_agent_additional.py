@@ -6,7 +6,6 @@ from lite_agent.agent import Agent
 from lite_agent.types import (
     AgentAssistantMessage,
     AgentUserMessage,
-    AssistantTextContent,
     AssistantToolCall,
     AssistantToolCallResult,
     FlexibleRunnerMessage,

@@ -5,6 +5,8 @@ This module provides common message transfer functions that can be used
 with agents to preprocess messages before sending them to the API.
 """
 
+import json
+
 from lite_agent.types import NewUserMessage, RunnerMessages, UserTextContent
 
 
@@ -67,8 +69,25 @@ def _process_message_to_xml(message: dict | object) -> list[str]:
 
         # Handle new message format where content is a list
         if isinstance(content, list):
-            # Extract text from content items
-            text_parts = [item.text for item in content if (hasattr(item, "type") and item.type == "text") or hasattr(item, "text")]
+            # Process each content item
+            text_parts = []
+            for item in content:
+                if hasattr(item, "type"):
+                    if item.type == "text":
+                        text_parts.append(item.text)
+                    elif item.type == "tool_call":
+                        # Handle tool call content
+                        arguments = item.arguments
+                        if isinstance(arguments, dict):
+                            arguments = json.dumps(arguments, ensure_ascii=False)
+                        xml_lines.append(f"  <function_call name='{item.name}' arguments='{arguments}' />")
+                    elif item.type == "tool_call_result":
+                        # Handle tool call result content
+                        xml_lines.append(f"  <function_result call_id='{item.call_id}'>{item.output}</function_result>")
+                elif hasattr(item, "text"):
+                    text_parts.append(item.text)
+
+            # Add text content as message if any
             content_text = " ".join(text_parts)
             if content_text:
                 xml_lines.append(f"  <message role='{role}'>{content_text}</message>")

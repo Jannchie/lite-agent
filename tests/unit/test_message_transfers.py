@@ -1,7 +1,7 @@
 """Test the predefined message transfer functions."""
 
 from lite_agent.message_transfers import consolidate_history_transfer
-from lite_agent.types import NewUserMessage, NewAssistantMessage, UserTextContent, AssistantTextContent, AssistantToolCall, AssistantToolCallResult
+from lite_agent.types import AssistantTextContent, AssistantToolCall, AssistantToolCallResult, NewAssistantMessage, NewUserMessage, UserTextContent
 
 
 def test_consolidate_history_transfer_basic():

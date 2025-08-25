@@ -180,7 +180,9 @@ class MessageBuilder:
                                     execution_time_ms=item.get("execution_time_ms"),
                                 ),
                             )
-                        # Add more content types as needed
+                        else:
+                            # Unknown dict type - convert to text
+                            assistant_content_items.append(AssistantTextContent(text=str(item)))
                     else:
                         # Fallback for unknown item format
                         assistant_content_items.append(AssistantTextContent(text=str(item)))

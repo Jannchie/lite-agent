@@ -429,39 +429,76 @@ class Agent:
             role = message_dict.get("role")
 
             if role == "assistant":
-                # Extract tool_calls from content if present
+                # For NewAssistantMessage, extract directly from the message object
                 tool_calls = []
-                content = message_dict.get("content", [])
+                tool_results = []
 
-                # Handle both string and array content
-                if isinstance(content, list):
-                    # Extract tool_calls from content array and filter out non-text content
-                    filtered_content = []
-                    for item in content:
-                        if isinstance(item, dict):
-                            if item.get("type") == "tool_call":
-                                tool_call = {
-                                    "id": item.get("call_id", ""),
-                                    "type": "function",
-                                    "function": {
-                                        "name": item.get("name", ""),
-                                        "arguments": item.get("arguments", "{}"),
-                                    },
-                                    "index": len(tool_calls),
-                                }
-                                tool_calls.append(tool_call)
-                            elif item.get("type") == "text":
-                                filtered_content.append(item)
-                            # Skip tool_call_result - they should be handled by separate function_call_output messages
+                if isinstance(message, NewAssistantMessage):
+                    # Process content directly from NewAssistantMessage
+                    for item in message.content:
+                        if item.type == "tool_call":
+                            tool_call = {
+                                "id": item.call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": item.name,
+                                    "arguments": item.arguments,
+                                },
+                                "index": len(tool_calls),
+                            }
+                            tool_calls.append(tool_call)
+                        elif item.type == "tool_call_result":
+                            # Collect tool call results to be added as separate tool messages
+                            tool_results.append({
+                                "call_id": item.call_id,
+                                "output": item.output,
+                            })
 
-                    # Update content to only include text items
-                    if filtered_content:
-                        message_dict = message_dict.copy()
-                        message_dict["content"] = filtered_content
-                    elif tool_calls:
-                        # If we have tool_calls but no text content, set content to None per OpenAI API spec
-                        message_dict = message_dict.copy()
-                        message_dict["content"] = None
+                    # Create assistant message with only text content and tool calls
+                    text_content = " ".join([item.text for item in message.content if item.type == "text"])
+                    message_dict = {
+                        "role": "assistant",
+                        "content": text_content if text_content else None,
+                    }
+                    if tool_calls:
+                        message_dict["tool_calls"] = tool_calls
+                else:
+                    # Legacy handling for dict messages
+                    content = message_dict.get("content", [])
+                    # Handle both string and array content
+                    if isinstance(content, list):
+                        # Extract tool_calls and tool_call_results from content array and filter out non-text content
+                        filtered_content = []
+                        for item in content:
+                            if isinstance(item, dict):
+                                if item.get("type") == "tool_call":
+                                    tool_call = {
+                                        "id": item.get("call_id", ""),
+                                        "type": "function",
+                                        "function": {
+                                            "name": item.get("name", ""),
+                                            "arguments": item.get("arguments", "{}"),
+                                        },
+                                        "index": len(tool_calls),
+                                    }
+                                    tool_calls.append(tool_call)
+                                elif item.get("type") == "tool_call_result":
+                                    # Collect tool call results to be added as separate tool messages
+                                    tool_results.append({
+                                        "call_id": item.get("call_id", ""),
+                                        "output": item.get("output", ""),
+                                    })
+                                elif item.get("type") == "text":
+                                    filtered_content.append(item)
+
+                        # Update content to only include text items
+                        if filtered_content:
+                            message_dict = message_dict.copy()
+                            message_dict["content"] = filtered_content
+                        elif tool_calls:
+                            # If we have tool_calls but no text content, set content to None per OpenAI API spec
+                            message_dict = message_dict.copy()
+                            message_dict["content"] = None
 
                 # Look ahead for function_call messages (legacy support)
                 j = i + 1
@@ -484,19 +521,33 @@ class Agent:
                     else:
                         break
 
-                # Create assistant message with tool_calls if any
-                assistant_msg = message_dict.copy()
-                if tool_calls:
-                    assistant_msg["tool_calls"] = tool_calls  # type: ignore
+                # For legacy dict messages, create assistant message with tool_calls if any
+                if not isinstance(message, NewAssistantMessage):
+                    assistant_msg = message_dict.copy()
+                    if tool_calls:
+                        assistant_msg["tool_calls"] = tool_calls  # type: ignore
 
-                # Convert content format for OpenAI API compatibility
-                content = assistant_msg.get("content", [])
-                if isinstance(content, list):
-                    # Extract text content and convert to string using list comprehension
-                    text_parts = [item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text"]
-                    assistant_msg["content"] = " ".join(text_parts) if text_parts else None
+                    # Convert content format for OpenAI API compatibility
+                    content = assistant_msg.get("content", [])
+                    if isinstance(content, list):
+                        # Extract text content and convert to string using list comprehension
+                        text_parts = [item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text"]
+                        assistant_msg["content"] = " ".join(text_parts) if text_parts else None
 
-                converted_messages.append(assistant_msg)
+                    message_dict = assistant_msg
+
+                converted_messages.append(message_dict)
+
+                # Add tool messages for any tool_call_results found in the assistant message
+                converted_messages.extend([
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_result["call_id"],
+                        "content": tool_result["output"],
+                    }
+                    for tool_result in tool_results
+                ])
+
                 i = j  # Skip the function_call messages we've processed
 
             elif message_type == "function_call_output":

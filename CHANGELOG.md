@@ -1,3 +1,21 @@
+## v0.9.0
+
+[v0.8.0...v0.9.0](https://github.com/Jannchie/lite-agent/compare/v0.8.0...v0.9.0)
+
+### :sparkles: Features
+
+- **agent**: improve assistant message tool_call handling - By [Jannchie](mailto:jannchie@gmail.com) in [45e6de8](https://github.com/Jannchie/lite-agent/commit/45e6de8)
+- **chat-display**: add column-style message display and show model info - By [Jannchie](mailto:jannchie@gmail.com) in [3559137](https://github.com/Jannchie/lite-agent/commit/3559137)
+- **tests**: add tests for client message_builder and response handlers - By [Jannchie](mailto:jannchie@gmail.com) in [ceec7d7](https://github.com/Jannchie/lite-agent/commit/ceec7d7)
+
+### :art: Refactors
+
+- **examples**: update examples to use new message and content types - By [Jannchie](mailto:jannchie@gmail.com) in [59b4618](https://github.com/Jannchie/lite-agent/commit/59b4618)
+
+### :wrench: Chores
+
+- **deps**: bump funcall to 0.11.0 - By [Jannchie](mailto:jannchie@gmail.com) in [eb5e7ae](https://github.com/Jannchie/lite-agent/commit/eb5e7ae)
+
 ## v0.8.0
 
 [v0.7.0...v0.8.0](https://github.com/Jannchie/lite-agent/compare/v0.7.0...v0.8.0)

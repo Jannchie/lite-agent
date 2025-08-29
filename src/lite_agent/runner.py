@@ -28,7 +28,7 @@ from lite_agent.types import (
     UserInput,
     UserTextContent,
 )
-from lite_agent.types.events import AssistantMessageEvent, FunctionCallOutputEvent
+from lite_agent.types.events import AssistantMessageEvent, FunctionCallOutputEvent, TimingEvent
 from lite_agent.utils.message_builder import MessageBuilder
 
 
@@ -43,9 +43,14 @@ class Runner:
 
     def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
         """Start a new assistant message."""
+        # Create meta with model information if not provided
+        if meta is None:
+            meta = AssistantMessageMeta()
+            if hasattr(self.agent.client, "model"):
+                meta.model = self.agent.client.model
         self._current_assistant_message = NewAssistantMessage(
             content=[AssistantTextContent(text=content)],
-            meta=meta or AssistantMessageMeta(),
+            meta=meta,
         )
 
     def _ensure_current_assistant_message(self) -> NewAssistantMessage:
@@ -90,9 +95,16 @@ class Runner:
             # Add to existing assistant message
             last_message = cast("NewAssistantMessage", self.messages[-1])
             last_message.content.append(result)
+            # Ensure model information is set if not already present
+            if last_message.meta.model is None and hasattr(self.agent.client, "model"):
+                last_message.meta.model = self.agent.client.model
         else:
             # Create new assistant message with just the tool result
-            assistant_message = NewAssistantMessage(content=[result])
+            # Include model information if available
+            meta = AssistantMessageMeta()
+            if hasattr(self.agent.client, "model"):
+                meta.model = self.agent.client.model
+            assistant_message = NewAssistantMessage(content=[result], meta=meta)
             self.messages.append(assistant_message)
 
         # For completion API compatibility, create a separate assistant message
@@ -309,10 +321,14 @@ class Runner:
                 case _:
                     msg = f"Unknown API type: {self.api}"
                     raise ValueError(msg)
-            logger.debug(f"Received response from agent: {type(resp)}")
+            logger.debug("Received response stream from agent, processing chunks...")
             async for chunk in resp:
+                # Only log important chunk types to reduce noise
+                if chunk.type not in ["response_raw", "content_delta"]:
+                    logger.debug(f"Processing chunk: {chunk.type}")
                 match chunk.type:
                     case "assistant_message":
+                        logger.debug(f"Assistant message chunk: {len(chunk.message.content) if chunk.message.content else 0} content items")
                         # Start or update assistant message in new format
                         # If we already have a current assistant message, just update its metadata
                         if self._current_assistant_message is not None:
@@ -348,6 +364,7 @@ class Runner:
                         if chunk.type in includes:
                             yield chunk
                     case "function_call":
+                        logger.debug(f"Function call: {chunk.name}({chunk.arguments or '{}'})")
                         # Add tool call to current assistant message
                         # Keep arguments as string for compatibility with funcall library
                         tool_call = AssistantToolCall(
@@ -360,6 +377,7 @@ class Runner:
                         if chunk.type in includes:
                             yield chunk
                     case "usage":
+                        logger.debug(f"Usage: {chunk.usage.input_tokens} input, {chunk.usage.output_tokens} output tokens")
                         # Update the current or last assistant message with usage data and output_time_ms
                         usage_time = datetime.now(timezone.utc)
 
@@ -400,6 +418,19 @@ class Runner:
                                 output_time_ms = int((usage_time - first_output_time_approx).total_seconds() * 1000)
                                 target_message.meta.total_time_ms = max(0, output_time_ms)
                         # Always yield usage chunk if it's in includes
+                        if chunk.type in includes:
+                            yield chunk
+                    case "timing":
+                        # Update timing information in current assistant message
+                        if self._current_assistant_message is not None:
+                            self._current_assistant_message.meta.latency_ms = chunk.timing.latency_ms
+                            self._current_assistant_message.meta.total_time_ms = chunk.timing.output_time_ms
+                        # Also try to update the last assistant message if no current message
+                        elif self.messages and isinstance(self.messages[-1], NewAssistantMessage):
+                            last_message = cast("NewAssistantMessage", self.messages[-1])
+                            last_message.meta.latency_ms = chunk.timing.latency_ms
+                            last_message.meta.total_time_ms = chunk.timing.output_time_ms
+                        # Always yield timing chunk if it's in includes
                         if chunk.type in includes:
                             yield chunk
                     case _ if chunk.type in includes:

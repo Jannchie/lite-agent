@@ -22,7 +22,7 @@ def list_knowledges() -> list[str]:
     """
     列出系统中存在的知识，返回的是知识的标题
     """
-    return ["苹果的价格的计算方法", "香蕉的价格", "茄子的价格", "芒果的价格"]
+    return ["苹果的价格的计算方法", "香蕉的价格", "茄子的价格", "芒果的价格", "其他水果蔬菜的价格"]
 
 
 def read_knowledge(knowledge: str) -> str:
@@ -34,8 +34,10 @@ def read_knowledge(knowledge: str) -> str:
             return "苹果的价格是两倍的香蕉的价格减去茄子的价格"
         case "香蕉的价格":
             return "香蕉的价格为3元"
-        case "茄子的价格":
+        case "其他水果蔬菜的价格":
             return "茄子的价格为5元"
+        case "茄子的价格":
+            return "茄子的价格请参阅其他知识库"
         case "芒果的价格":
             return "芒果的价格为7元"
         case _:
@@ -43,7 +45,7 @@ def read_knowledge(knowledge: str) -> str:
 
 
 agent = Agent(
-    model="gpt-5",
+    model="gpt-5-mini",
     name="Assistant",
     instructions="你是一个有帮助的助手。",
     tools=[list_knowledges, read_knowledge],

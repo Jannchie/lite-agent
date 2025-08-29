@@ -454,7 +454,7 @@ def _display_single_message_compact(
     show_timestamp: bool = False,
     local_timezone: timezone | None = None,
 ) -> None:
-    """以紧凑格式打印单个消息。"""
+    """以列式格式打印单个消息，类似 rich log。"""
 
     def truncate_content(content: str, max_length: int) -> str:
         """截断内容并添加省略号。"""
@@ -462,20 +462,259 @@ def _display_single_message_compact(
             return content
         return content[: max_length - 3] + "..."
 
-    # 创建消息上下文
-    context_config = {
-        "console": console,
-        "index": index,
-        "message": message,
-        "max_content_length": max_content_length,
-        "truncate_content": truncate_content,
-        "show_timestamp": show_timestamp,
-        "local_timezone": local_timezone,
-    }
-    context = _create_message_context(context_config)
+    # 获取时间戳
+    timestamp = None
+    if show_timestamp:
+        message_time = _extract_message_time(message)
+        timestamp = _format_timestamp(message_time, local_timezone=local_timezone)
 
-    # 根据消息类型分发处理
-    _dispatch_message_display(message, context)
+    # 创建列式显示
+    _display_message_in_columns(message, console, index, timestamp, max_content_length, truncate_content)
+
+
+def _display_message_in_columns(
+    message: FlexibleRunnerMessage,
+    console: Console,
+    index: int | None,
+    timestamp: str | None,
+    max_content_length: int,
+    truncate_content: Callable[[str, int], str],
+) -> None:
+    """以列式格式显示消息，类似 rich log。"""
+
+    # 构建时间和索引列
+    time_str = timestamp or ""
+    index_str = f"#{index:2d}" if index is not None else ""
+
+    # 根据消息类型处理内容
+    if isinstance(message, NewUserMessage):
+        _display_user_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
+    elif isinstance(message, NewAssistantMessage):
+        _display_assistant_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
+    elif isinstance(message, NewSystemMessage):
+        _display_system_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
+    else:
+        # 处理旧格式消息
+        _display_legacy_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
+
+
+def _display_user_message_with_columns(
+    message: NewUserMessage,
+    console: Console,
+    time_str: str,
+    index_str: str,
+    max_content_length: int,
+    truncate_content: Callable[[str, int], str],
+) -> None:
+    """使用列布局显示用户消息。"""
+    content_parts = []
+    for item in message.content:
+        if item.type == "text":
+            content_parts.append(item.text)
+        elif item.type == "image":
+            if item.image_url:
+                content_parts.append(f"[Image: {item.image_url}]")
+            elif item.file_id:
+                content_parts.append(f"[Image: {item.file_id}]")
+        elif item.type == "file":
+            file_name = item.file_name or item.file_id
+            content_parts.append(f"[File: {file_name}]")
+
+    content = " ".join(content_parts)
+    content = truncate_content(content, max_content_length)
+
+    # 创建表格来确保对齐
+    table = Table.grid(padding=0)
+    table.add_column(width=8, justify="left")  # 时间列
+    table.add_column(width=4, justify="left")  # 序号列
+    table.add_column(min_width=0)  # 内容列
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if i == 0:
+            # 第一行显示完整信息
+            table.add_row(
+                f"[dim]{time_str:8}[/dim]",
+                f"[dim]{index_str:4}[/dim]",
+                f"[blue]User:[/blue] {line}",
+            )
+        else:
+            # 续行只在内容列显示
+            table.add_row("", "", line)
+
+    console.print(table)
+
+
+def _display_system_message_with_columns(
+    message: NewSystemMessage,
+    console: Console,
+    time_str: str,
+    index_str: str,
+    max_content_length: int,
+    truncate_content: Callable[[str, int], str],
+) -> None:
+    """使用列布局显示系统消息。"""
+    content = truncate_content(message.content, max_content_length)
+
+    # 创建表格来确保对齐
+    table = Table.grid(padding=0)
+    table.add_column(width=8, justify="left")  # 时间列
+    table.add_column(width=4, justify="left")  # 序号列
+    table.add_column(min_width=0)  # 内容列
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if i == 0:
+            # 第一行显示完整信息
+            table.add_row(
+                f"[dim]{time_str:8}[/dim]",
+                f"[dim]{index_str:4}[/dim]",
+                f"[yellow]System:[/yellow] {line}",
+            )
+        else:
+            # 续行只在内容列显示
+            table.add_row("", "", line)
+
+    console.print(table)
+
+
+def _display_assistant_message_with_columns(
+    message: NewAssistantMessage,
+    console: Console,
+    time_str: str,
+    index_str: str,
+    max_content_length: int,
+    truncate_content: Callable[[str, int], str],
+) -> None:
+    """使用列布局显示助手消息。"""
+    # 提取内容
+    text_parts = []
+    tool_calls = []
+    tool_results = []
+
+    for item in message.content:
+        if item.type == "text":
+            text_parts.append(item.text)
+        elif item.type == "tool_call":
+            tool_calls.append(item)
+        elif item.type == "tool_call_result":
+            tool_results.append(item)
+
+    # 构建元信息
+    meta_info = ""
+    if message.meta:
+        meta_parts = []
+        if message.meta.model is not None:
+            meta_parts.append(f"Model:{message.meta.model}")
+        if message.meta.latency_ms is not None:
+            meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
+        if message.meta.total_time_ms is not None:
+            meta_parts.append(f"Output:{message.meta.total_time_ms}ms")
+        if message.meta.usage and message.meta.usage.input_tokens is not None and message.meta.usage.output_tokens is not None:
+            total_tokens = message.meta.usage.input_tokens + message.meta.usage.output_tokens
+            meta_parts.append(f"Tokens:↑{message.meta.usage.input_tokens}↓{message.meta.usage.output_tokens}={total_tokens}")
+
+        if meta_parts:
+            meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
+
+    # 创建表格来确保对齐
+    table = Table.grid(padding=0)
+    table.add_column(width=8, justify="left")  # 时间列
+    table.add_column(width=4, justify="left")  # 序号列
+    table.add_column(min_width=0)  # 内容列
+
+    # 处理文本内容
+    first_row_added = False
+    if text_parts:
+        content = " ".join(text_parts)
+        content = truncate_content(content, max_content_length)
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if i == 0:
+                # 第一行显示完整信息
+                table.add_row(
+                    f"[dim]{time_str:8}[/dim]",
+                    f"[dim]{index_str:4}[/dim]",
+                    f"[green]Assistant:[/green]{meta_info} {line}",
+                )
+                first_row_added = True
+            else:
+                # 续行只在内容列显示
+                table.add_row("", "", line)
+
+    # 如果没有文本内容，只显示助手消息头
+    if not first_row_added:
+        table.add_row(
+            f"[dim]{time_str:8}[/dim]",
+            f"[dim]{index_str:4}[/dim]",
+            f"[green]Assistant:[/green]{meta_info}",
+        )
+
+    # 添加工具调用
+    for tool_call in tool_calls:
+        args_str = ""
+        if tool_call.arguments:
+            try:
+                parsed_args = json.loads(tool_call.arguments) if isinstance(tool_call.arguments, str) else tool_call.arguments
+                args_str = f" {parsed_args}"
+            except (json.JSONDecodeError, TypeError):
+                args_str = f" {tool_call.arguments}"
+
+        args_display = truncate_content(args_str, max_content_length - len(tool_call.name) - 10)
+        table.add_row("", "", f"[magenta]Call:[/magenta] {tool_call.name}{args_display}")
+
+    # 添加工具结果
+    for tool_result in tool_results:
+        output = truncate_content(str(tool_result.output), max_content_length)
+        time_info = ""
+        if tool_result.execution_time_ms is not None:
+            time_info = f" [dim]({tool_result.execution_time_ms}ms)[/dim]"
+
+        table.add_row("", "", f"[cyan]Output:[/cyan]{time_info}")
+        lines = output.split("\n")
+        for line in lines:
+            table.add_row("", "", line)
+
+    console.print(table)
+
+
+def _display_legacy_message_with_columns(
+    message: FlexibleRunnerMessage,
+    console: Console,
+    time_str: str,
+    index_str: str,
+    max_content_length: int,
+    truncate_content: Callable[[str, int], str],
+) -> None:
+    """使用列布局显示旧格式消息。"""
+    # 这里可以处理旧格式消息，暂时简单显示
+    try:
+        content = str(message.model_dump()) if hasattr(message, "model_dump") else str(message)  # type: ignore[attr-defined]
+    except Exception:
+        content = str(message)
+
+    content = truncate_content(content, max_content_length)
+
+    # 创建表格来确保对齐
+    table = Table.grid(padding=0)
+    table.add_column(width=8, justify="left")  # 时间列
+    table.add_column(width=4, justify="left")  # 序号列
+    table.add_column(min_width=0)  # 内容列
+
+    lines = content.split("\n")
+    for i, line in enumerate(lines):
+        if i == 0:
+            # 第一行显示完整信息
+            table.add_row(
+                f"[dim]{time_str:8}[/dim]",
+                f"[dim]{index_str:4}[/dim]",
+                f"[red]Legacy:[/red] {line}",
+            )
+        else:
+            # 续行只在内容列显示
+            table.add_row("", "", line)
+
+    console.print(table)
 
 
 def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Console | int | bool | timezone | Callable[[str, int], str] | None]) -> MessageContext:
@@ -581,6 +820,8 @@ def _display_assistant_message_compact_v2(message: AgentAssistantMessage, contex
     meta_info = ""
     if message.meta:
         meta_parts = []
+        if message.meta.model is not None:
+            meta_parts.append(f"Model:{message.meta.model}")
         if message.meta.latency_ms is not None:
             meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
         if message.meta.output_time_ms is not None:
@@ -656,7 +897,11 @@ def _display_dict_function_call_compact(message: dict, context: MessageContext) 
 def _display_dict_function_output_compact(message: dict, context: MessageContext) -> None:
     """显示字典类型的函数输出消息。"""
     output = context.truncate_content(str(message.get("output", "")), context.max_content_length)
-    context.console.print(f"{context.timestamp_str}{context.index_str}[cyan]Output:[/cyan]")
+    # Add execution time if available
+    time_info = ""
+    if message.get("execution_time_ms") is not None:
+        time_info = f" [dim]({message['execution_time_ms']}ms)[/dim]"
+    context.console.print(f"{context.timestamp_str}{context.index_str}[cyan]Output:[/cyan]{time_info}")
     context.console.print(f"{output}")
 
 
@@ -676,6 +921,8 @@ def _display_dict_assistant_compact(message: dict, context: MessageContext) -> N
     meta = message.get("meta")
     if meta and isinstance(meta, dict):
         meta_parts = []
+        if meta.get("model") is not None:
+            meta_parts.append(f"Model:{meta['model']}")
         if meta.get("latency_ms") is not None:
             meta_parts.append(f"Latency:{meta['latency_ms']}ms")
         if meta.get("output_time_ms") is not None:
@@ -743,30 +990,34 @@ def _display_new_assistant_message_compact(message: NewAssistantMessage, context
         elif item.type == "tool_call_result":
             tool_results.append(item)
 
-    # Display text content first if available
-    if text_parts:
-        content = " ".join(text_parts)
-        content = context.truncate_content(content, context.max_content_length)
+    # Add meta data information (使用英文标签)
+    meta_info = ""
+    if message.meta:
+        meta_parts = []
+        if message.meta.model is not None:
+            meta_parts.append(f"Model:{message.meta.model}")
+        if message.meta.latency_ms is not None:
+            meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
+        if message.meta.total_time_ms is not None:
+            meta_parts.append(f"Output:{message.meta.total_time_ms}ms")
+        if message.meta.usage and message.meta.usage.input_tokens is not None and message.meta.usage.output_tokens is not None:
+            total_tokens = message.meta.usage.input_tokens + message.meta.usage.output_tokens
+            meta_parts.append(f"Tokens:↑{message.meta.usage.input_tokens}↓{message.meta.usage.output_tokens}={total_tokens}")
 
-        # Add meta data information (使用英文标签)
-        meta_info = ""
-        if message.meta:
-            meta_parts = []
-            if message.meta.latency_ms is not None:
-                meta_parts.append(f"Latency:{message.meta.latency_ms}ms")
-            if message.meta.total_time_ms is not None:
-                meta_parts.append(f"Output:{message.meta.total_time_ms}ms")
-            if message.meta.usage and message.meta.usage.input_tokens is not None and message.meta.usage.output_tokens is not None:
-                total_tokens = message.meta.usage.input_tokens + message.meta.usage.output_tokens
-                meta_parts.append(f"Tokens:↑{message.meta.usage.input_tokens}↓{message.meta.usage.output_tokens}={total_tokens}")
+        if meta_parts:
+            meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
 
-            if meta_parts:
-                meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
-
+    # Always show Assistant header if there's any content (text, tool calls, or results)
+    if text_parts or tool_calls or tool_results:
         context.console.print(f"{context.timestamp_str}{context.index_str}[green]Assistant:[/green]{meta_info}")
-        context.console.print(f"{content}")
 
-    # Display tool calls
+        # Display text content if available
+        if text_parts:
+            content = " ".join(text_parts)
+            content = context.truncate_content(content, context.max_content_length)
+            context.console.print(f"{content}")
+
+    # Display tool calls with proper indentation
     for tool_call in tool_calls:
         args_str = ""
         if tool_call.arguments:
@@ -777,11 +1028,17 @@ def _display_new_assistant_message_compact(message: NewAssistantMessage, context
                 args_str = f" {tool_call.arguments}"
 
         args_display = context.truncate_content(args_str, context.max_content_length - len(tool_call.name) - 10)
-        context.console.print(f"{context.timestamp_str}{context.index_str}[magenta]Call:[/magenta]")
-        context.console.print(f"{tool_call.name}{args_display}")
+        # Always use indented format for better hierarchy
+        context.console.print(f"  [magenta]Call:[/magenta] {tool_call.name}{args_display}")
 
-    # Display tool results
+    # Display tool results with proper indentation
     for tool_result in tool_results:
         output = context.truncate_content(str(tool_result.output), context.max_content_length)
-        context.console.print(f"{context.timestamp_str}{context.index_str}[cyan]Output:[/cyan]")
-        context.console.print(f"{output}")
+        # Add execution time if available
+        time_info = ""
+        if tool_result.execution_time_ms is not None:
+            time_info = f" [dim]({tool_result.execution_time_ms}ms)[/dim]"
+
+        # Always use indented format for better hierarchy
+        context.console.print(f"  [cyan]Output:[/cyan]{time_info}")
+        context.console.print(f"  {output}")

@@ -31,7 +31,7 @@ agent = Agent(
 
 
 async def main():
-    runner = Runner(agent, streaming=False, api="completion")
+    runner = Runner(agent, streaming=True, api="responses")
     resp = await runner.run_until_complete(
         "What is the temperature in New York?",
         includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],

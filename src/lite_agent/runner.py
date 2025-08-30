@@ -28,8 +28,9 @@ from lite_agent.types import (
     UserInput,
     UserTextContent,
 )
-from lite_agent.types.events import AssistantMessageEvent, FunctionCallOutputEvent, TimingEvent
+from lite_agent.types.events import AssistantMessageEvent, FunctionCallOutputEvent
 from lite_agent.utils.message_builder import MessageBuilder
+from lite_agent.utils.message_state_manager import MessageStateManager
 
 
 class Runner:
@@ -38,50 +39,40 @@ class Runner:
         self.messages: list[FlexibleRunnerMessage] = []
         self.api = api
         self.streaming = streaming
-        self._current_assistant_message: NewAssistantMessage | None = None
+        self._message_state_manager = MessageStateManager()
         self.usage = MessageUsage(input_tokens=0, output_tokens=0, total_tokens=0)
 
-    def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
+    async def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
         """Start a new assistant message."""
         # Create meta with model information if not provided
         if meta is None:
             meta = AssistantMessageMeta()
             if hasattr(self.agent.client, "model"):
                 meta.model = self.agent.client.model
-        self._current_assistant_message = NewAssistantMessage(
-            content=[AssistantTextContent(text=content)],
-            meta=meta,
-        )
+        await self._message_state_manager.start_message(content, meta)
 
-    def _ensure_current_assistant_message(self) -> NewAssistantMessage:
+    async def _ensure_current_assistant_message(self) -> NewAssistantMessage:
         """Ensure current assistant message exists and return it."""
-        if self._current_assistant_message is None:
-            self._start_assistant_message()
-        if self._current_assistant_message is None:
-            msg = "Failed to create current assistant message"
-            raise RuntimeError(msg)
-        return self._current_assistant_message
+        return await self._message_state_manager.ensure_message_exists()
 
-    def _add_to_current_assistant_message(self, content_item: AssistantTextContent | AssistantToolCall | AssistantToolCallResult) -> None:
+    async def _add_to_current_assistant_message(self, content_item: AssistantTextContent | AssistantToolCall | AssistantToolCallResult) -> None:
         """Add content to the current assistant message."""
-        self._ensure_current_assistant_message().content.append(content_item)
+        if isinstance(content_item, AssistantTextContent):
+            await self._message_state_manager.add_text_delta(content_item.text)
+        elif isinstance(content_item, AssistantToolCall):
+            await self._message_state_manager.add_tool_call(content_item)
+        elif isinstance(content_item, AssistantToolCallResult):
+            await self._message_state_manager.add_tool_result(content_item)
 
-    def _add_text_content_to_current_assistant_message(self, delta: str) -> None:
+    async def _add_text_content_to_current_assistant_message(self, delta: str) -> None:
         """Add text delta to the current assistant message's text content."""
-        message = self._ensure_current_assistant_message()
-        # Find the first text content item and append the delta
-        for content_item in message.content:
-            if content_item.type == "text":
-                content_item.text += delta
-                return
-        # If no text content found, add new text content
-        message.content.append(AssistantTextContent(text=delta))
+        await self._message_state_manager.add_text_delta(delta)
 
-    def _finalize_assistant_message(self) -> None:
+    async def _finalize_assistant_message(self) -> None:
         """Finalize the current assistant message and add it to messages."""
-        if self._current_assistant_message is not None:
-            self.messages.append(self._current_assistant_message)
-            self._current_assistant_message = None
+        finalized_message = await self._message_state_manager.finalize_message()
+        if finalized_message is not None:
+            self.messages.append(finalized_message)
 
     def _add_tool_call_result(self, call_id: str, output: str, execution_time_ms: int | None = None) -> None:
         """Add a tool call result to the last assistant message, or create a new one if needed."""
@@ -127,10 +118,12 @@ class Runner:
         # Check for transfer_to_agent calls first
         transfer_calls = [tc for tc in tool_calls if tc.function.name == ToolName.TRANSFER_TO_AGENT]
         if transfer_calls:
+            logger.info(f"Processing {len(transfer_calls)} transfer_to_agent calls")
             # Handle all transfer calls but only execute the first one
             for i, tool_call in enumerate(transfer_calls):
                 if i == 0:
                     # Execute the first transfer
+                    logger.info(f"Executing agent transfer: {tool_call.function.arguments}")
                     call_id, output = await self._handle_agent_transfer(tool_call)
                     # Generate function_call_output event if in includes
                     if "function_call_output" in includes:
@@ -300,7 +293,7 @@ class Runner:
             if agent_kwargs:
                 reasoning = agent_kwargs.get("reasoning")
 
-            logger.debug(f"Using API: {self.api}, streaming: {self.streaming}")
+            logger.info(f"Making LLM request: API={self.api}, streaming={self.streaming}, messages={len(self.messages)}")
             match self.api:
                 case "completion":
                     logger.debug("Calling agent.completion")
@@ -331,35 +324,40 @@ class Runner:
                         logger.debug(f"Assistant message chunk: {len(chunk.message.content) if chunk.message.content else 0} content items")
                         # Start or update assistant message in new format
                         # If we already have a current assistant message, just update its metadata
-                        if self._current_assistant_message is not None:
+                        current_message = await self._message_state_manager.get_current_message()
+                        if current_message is not None:
                             # Preserve all existing metadata and only update specific fields
-                            original_meta = self._current_assistant_message.meta
-                            original_meta.sent_at = chunk.message.meta.sent_at
+                            meta_updates = {"sent_at": chunk.message.meta.sent_at}
                             if hasattr(chunk.message.meta, "latency_ms"):
-                                original_meta.latency_ms = chunk.message.meta.latency_ms
+                                meta_updates["latency_ms"] = chunk.message.meta.latency_ms
                             if hasattr(chunk.message.meta, "output_time_ms"):
-                                original_meta.total_time_ms = chunk.message.meta.output_time_ms
+                                meta_updates["total_time_ms"] = chunk.message.meta.output_time_ms
                             # Preserve other metadata fields like model, usage, etc.
                             for attr in ["model", "usage", "input_tokens", "output_tokens"]:
                                 if hasattr(chunk.message.meta, attr):
-                                    setattr(original_meta, attr, getattr(chunk.message.meta, attr))
+                                    meta_updates[attr] = getattr(chunk.message.meta, attr)
+                            await self._message_state_manager.update_meta(**meta_updates)
                         else:
-                            # For non-streaming mode, directly use the complete message from the response handler
-                            self._current_assistant_message = chunk.message
+                            # For non-streaming mode, start with complete message
+                            await self._start_assistant_message(meta=chunk.message.meta)
+                            # Add all content from the chunk message
+                            for content_item in chunk.message.content:
+                                await self._add_to_current_assistant_message(content_item)
 
                         # If model is None, try to get it from agent client
-                        if self._current_assistant_message is not None and self._current_assistant_message.meta.model is None and hasattr(self.agent.client, "model"):
-                            self._current_assistant_message.meta.model = self.agent.client.model
+                        current_message = await self._message_state_manager.get_current_message()
+                        if current_message is not None and current_message.meta.model is None and hasattr(self.agent.client, "model"):
+                            await self._message_state_manager.update_meta(model=self.agent.client.model)
                         # Only yield assistant_message chunk if it's in includes and has content
-                        if chunk.type in includes and self._current_assistant_message is not None:
+                        if chunk.type in includes and current_message is not None:
                             # Create a new chunk with the current assistant message content
                             updated_chunk = AssistantMessageEvent(
-                                message=self._current_assistant_message,
+                                message=current_message,
                             )
                             yield updated_chunk
                     case "content_delta":
                         # Accumulate text content to current assistant message
-                        self._add_text_content_to_current_assistant_message(chunk.delta)
+                        await self._add_text_content_to_current_assistant_message(chunk.delta)
                         # Always yield content_delta chunk if it's in includes
                         if chunk.type in includes:
                             yield chunk
@@ -372,7 +370,7 @@ class Runner:
                             name=chunk.name,
                             arguments=chunk.arguments or "{}",
                         )
-                        self._add_to_current_assistant_message(tool_call)
+                        await self._add_to_current_assistant_message(tool_call)
                         # Always yield function_call chunk if it's in includes
                         if chunk.type in includes:
                             yield chunk
@@ -390,9 +388,8 @@ class Runner:
                         target_message = None
 
                         # First check if we have a current assistant message
-                        if self._current_assistant_message is not None:
-                            target_message = self._current_assistant_message
-                        else:
+                        target_message = await self._message_state_manager.get_current_message()
+                        if target_message is None:
                             # Otherwise, look for the last assistant message in the list
                             for i in range(len(self.messages) - 1, -1, -1):
                                 current_message = self.messages[i]
@@ -422,9 +419,9 @@ class Runner:
                             yield chunk
                     case "timing":
                         # Update timing information in current assistant message
-                        if self._current_assistant_message is not None:
-                            self._current_assistant_message.meta.latency_ms = chunk.timing.latency_ms
-                            self._current_assistant_message.meta.total_time_ms = chunk.timing.output_time_ms
+                        current_message = await self._message_state_manager.get_current_message()
+                        if current_message is not None:
+                            await self._message_state_manager.update_meta(latency_ms=chunk.timing.latency_ms, total_time_ms=chunk.timing.output_time_ms)
                         # Also try to update the last assistant message if no current message
                         elif self.messages and isinstance(self.messages[-1], NewAssistantMessage):
                             last_message = cast("NewAssistantMessage", self.messages[-1])
@@ -437,7 +434,7 @@ class Runner:
                         yield chunk
 
             # Finalize assistant message so it can be found in pending function calls
-            self._finalize_assistant_message()
+            await self._finalize_assistant_message()
 
             # Check for pending tool calls after processing current assistant message
             pending_tool_calls = self._find_pending_tool_calls()

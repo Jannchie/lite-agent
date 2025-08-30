@@ -12,17 +12,14 @@ from lite_agent.loggers import logger
 from lite_agent.response_handlers import CompletionResponseHandler, ResponsesAPIHandler
 from lite_agent.types import (
     AgentChunk,
-    AssistantTextContent,
-    AssistantToolCall,
-    AssistantToolCallResult,
     FunctionCallEvent,
     FunctionCallOutputEvent,
     RunnerMessages,
     ToolCall,
-    message_to_llm_dict,
     system_message_to_llm_dict,
 )
-from lite_agent.types.messages import NewAssistantMessage, NewSystemMessage, NewUserMessage
+from lite_agent.types.messages import NewSystemMessage
+from lite_agent.utils.message_converter import MessageFormatConverter, ResponsesFormatConverter
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=True)
@@ -194,9 +191,8 @@ class Agent:
             # Regenerate transfer tools to include the new agent
             self._add_transfer_tools(self.handoffs)
 
-    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict]:
-        """Prepare messages for completions API (with conversion)."""
-        converted_messages = self._convert_responses_to_completions_format(messages)
+    def _build_instructions(self) -> str:
+        """Build complete instructions with templates."""
         instructions = self.instructions
         if self.handoffs:
             instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
@@ -204,6 +200,12 @@ class Agent:
             instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
         if self.completion_condition == "call":
             instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
+        return instructions
+
+    def prepare_completion_messages(self, messages: RunnerMessages) -> list[dict]:
+        """Prepare messages for completions API (with conversion)."""
+        converted_messages = MessageFormatConverter.to_completion_format(messages)
+        instructions = self._build_instructions()
         return [
             system_message_to_llm_dict(
                 NewSystemMessage(
@@ -215,86 +217,15 @@ class Agent:
 
     def prepare_responses_messages(self, messages: RunnerMessages) -> list[dict[str, Any]]:
         """Prepare messages for responses API (no conversion, just add system message if needed)."""
-        instructions = self.instructions
-        if self.handoffs:
-            instructions = HANDOFFS_SOURCE_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        if self.parent:
-            instructions = HANDOFFS_TARGET_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        if self.completion_condition == "call":
-            instructions = WAIT_FOR_USER_INSTRUCTIONS_TEMPLATE.render(extra_instructions=None) + "\n\n" + instructions
-        res: list[dict[str, Any]] = [
+        instructions = self._build_instructions()
+        converted_messages = ResponsesFormatConverter.to_responses_format(messages)
+        return [
             {
                 "role": "system",
                 "content": f"You are {self.name}. {instructions}",
             },
+            *converted_messages,
         ]
-        for message in messages:
-            if isinstance(message, NewAssistantMessage):
-                for item in message.content:
-                    if isinstance(item, AssistantTextContent):
-                        res.append(
-                            {
-                                "role": "assistant",
-                                "content": item.text,
-                            },
-                        )
-                    elif isinstance(item, AssistantToolCall):
-                        res.append(
-                            {
-                                "type": "function_call",
-                                "call_id": item.call_id,
-                                "name": item.name,
-                                "arguments": item.arguments,
-                            },
-                        )
-                    elif isinstance(item, AssistantToolCallResult):
-                        res.append(
-                            {
-                                "type": "function_call_output",
-                                "call_id": item.call_id,
-                                "output": item.output,
-                            },
-                        )
-            elif isinstance(message, NewSystemMessage):
-                res.append(
-                    {
-                        "role": "system",
-                        "content": message.content,
-                    },
-                )
-            elif isinstance(message, NewUserMessage):
-                contents = []
-                for item in message.content:
-                    match item.type:
-                        case "text":
-                            contents.append(
-                                {
-                                    "type": "input_text",
-                                    "text": item.text,
-                                },
-                            )
-                        case "image":
-                            contents.append(
-                                {
-                                    "type": "input_image",
-                                    "image_url": item.image_url,
-                                },
-                            )
-                        case "file":
-                            contents.append(
-                                {
-                                    "type": "input_file",
-                                    "file_id": item.file_id,
-                                    "file_name": item.file_name,
-                                },
-                            )
-                res.append(
-                    {
-                        "role": message.role,
-                        "content": contents,
-                    },
-                )
-        return res
 
     async def completion(
         self,
@@ -415,227 +346,6 @@ class Agent:
                         content=str(e),
                         execution_time_ms=execution_time_ms,
                     )
-
-    def _convert_responses_to_completions_format(self, messages: RunnerMessages) -> list[dict]:
-        """Convert messages from responses API format to completions API format."""
-        converted_messages = []
-        i = 0
-
-        while i < len(messages):
-            message = messages[i]
-            message_dict = message_to_llm_dict(message) if isinstance(message, (NewUserMessage, NewSystemMessage, NewAssistantMessage)) else message
-
-            message_type = message_dict.get("type")
-            role = message_dict.get("role")
-
-            if role == "assistant":
-                # For NewAssistantMessage, extract directly from the message object
-                tool_calls = []
-                tool_results = []
-
-                if isinstance(message, NewAssistantMessage):
-                    # Process content directly from NewAssistantMessage
-                    for item in message.content:
-                        if item.type == "tool_call":
-                            tool_call = {
-                                "id": item.call_id,
-                                "type": "function",
-                                "function": {
-                                    "name": item.name,
-                                    "arguments": item.arguments,
-                                },
-                                "index": len(tool_calls),
-                            }
-                            tool_calls.append(tool_call)
-                        elif item.type == "tool_call_result":
-                            # Collect tool call results to be added as separate tool messages
-                            tool_results.append({
-                                "call_id": item.call_id,
-                                "output": item.output,
-                            })
-
-                    # Create assistant message with only text content and tool calls
-                    text_content = " ".join([item.text for item in message.content if item.type == "text"])
-                    message_dict = {
-                        "role": "assistant",
-                        "content": text_content if text_content else None,
-                    }
-                    if tool_calls:
-                        message_dict["tool_calls"] = tool_calls
-                else:
-                    # Legacy handling for dict messages
-                    content = message_dict.get("content", [])
-                    # Handle both string and array content
-                    if isinstance(content, list):
-                        # Extract tool_calls and tool_call_results from content array and filter out non-text content
-                        filtered_content = []
-                        for item in content:
-                            if isinstance(item, dict):
-                                if item.get("type") == "tool_call":
-                                    tool_call = {
-                                        "id": item.get("call_id", ""),
-                                        "type": "function",
-                                        "function": {
-                                            "name": item.get("name", ""),
-                                            "arguments": item.get("arguments", "{}"),
-                                        },
-                                        "index": len(tool_calls),
-                                    }
-                                    tool_calls.append(tool_call)
-                                elif item.get("type") == "tool_call_result":
-                                    # Collect tool call results to be added as separate tool messages
-                                    tool_results.append({
-                                        "call_id": item.get("call_id", ""),
-                                        "output": item.get("output", ""),
-                                    })
-                                elif item.get("type") == "text":
-                                    filtered_content.append(item)
-
-                        # Update content to only include text items
-                        if filtered_content:
-                            message_dict = message_dict.copy()
-                            message_dict["content"] = filtered_content
-                        elif tool_calls:
-                            # If we have tool_calls but no text content, set content to None per OpenAI API spec
-                            message_dict = message_dict.copy()
-                            message_dict["content"] = None
-
-                # Look ahead for function_call messages (legacy support)
-                j = i + 1
-                while j < len(messages):
-                    next_message = messages[j]
-                    next_dict = message_to_llm_dict(next_message) if isinstance(next_message, (NewUserMessage, NewSystemMessage, NewAssistantMessage)) else next_message
-
-                    if next_dict.get("type") == "function_call":
-                        tool_call = {
-                            "id": next_dict["call_id"],  # type: ignore
-                            "type": "function",
-                            "function": {
-                                "name": next_dict["name"],  # type: ignore
-                                "arguments": next_dict["arguments"],  # type: ignore
-                            },
-                            "index": len(tool_calls),
-                        }
-                        tool_calls.append(tool_call)
-                        j += 1
-                    else:
-                        break
-
-                # For legacy dict messages, create assistant message with tool_calls if any
-                if not isinstance(message, NewAssistantMessage):
-                    assistant_msg = message_dict.copy()
-                    if tool_calls:
-                        assistant_msg["tool_calls"] = tool_calls  # type: ignore
-
-                    # Convert content format for OpenAI API compatibility
-                    content = assistant_msg.get("content", [])
-                    if isinstance(content, list):
-                        # Extract text content and convert to string using list comprehension
-                        text_parts = [item.get("text", "") for item in content if isinstance(item, dict) and item.get("type") == "text"]
-                        assistant_msg["content"] = " ".join(text_parts) if text_parts else None
-
-                    message_dict = assistant_msg
-
-                converted_messages.append(message_dict)
-
-                # Add tool messages for any tool_call_results found in the assistant message
-                converted_messages.extend([
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_result["call_id"],
-                        "content": tool_result["output"],
-                    }
-                    for tool_result in tool_results
-                ])
-
-                i = j  # Skip the function_call messages we've processed
-
-            elif message_type == "function_call_output":
-                # Convert to tool message
-                converted_messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": message_dict["call_id"],  # type: ignore
-                        "content": message_dict["output"],  # type: ignore
-                    },
-                )
-                i += 1
-
-            elif message_type == "function_call":
-                # This should have been processed with the assistant message
-                # Skip it if we encounter it standalone
-                i += 1
-
-            else:
-                # Regular message (user, system)
-                converted_msg = message_dict.copy()
-
-                # Handle new Response API format for user messages
-                content = message_dict.get("content")
-                if role == "user" and isinstance(content, list):
-                    converted_msg["content"] = self._convert_user_content_to_completions_format(content)  # type: ignore
-
-                converted_messages.append(converted_msg)
-                i += 1
-
-        return converted_messages
-
-    def _convert_user_content_to_completions_format(self, content: list) -> list:
-        """Convert user message content from Response API format to Completion API format."""
-        # Handle the case where content might not actually be a list due to test mocking
-        if type(content) is not list:  # Use type() instead of isinstance() to avoid test mocking issues
-            return content
-
-        converted_content = []
-        for item in content:
-            # Convert Pydantic objects to dict first
-            if hasattr(item, "model_dump"):
-                item_dict = item.model_dump()
-            elif hasattr(item, "dict"):  # For older Pydantic versions
-                item_dict = item.dict()
-            elif isinstance(item, dict):
-                item_dict = item
-            else:
-                # Handle non-dict items (shouldn't happen, but just in case)
-                converted_content.append(item)
-                continue
-
-            item_type = item_dict.get("type")
-            if item_type in ["input_text", "text"]:
-                # Convert ResponseInputText or new text format to completion API format
-                converted_content.append(
-                    {
-                        "type": "text",
-                        "text": item_dict["text"],
-                    },
-                )
-            elif item_type in ["input_image", "image"]:
-                # Convert ResponseInputImage to completion API format
-                if item_dict.get("file_id"):
-                    msg = "File ID input is not supported for Completion API"
-                    raise ValueError(msg)
-
-                if not item_dict.get("image_url"):
-                    msg = "ResponseInputImage must have either file_id or image_url"
-                    raise ValueError(msg)
-
-                # Build image_url object with detail inside
-                image_data = {"url": item_dict["image_url"]}
-                detail = item_dict.get("detail", "auto")
-                if detail:  # Include detail if provided
-                    image_data["detail"] = detail
-
-                converted_content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": image_data,
-                    },
-                )
-            else:
-                # Keep existing format (text, image_url)
-                converted_content.append(item_dict)
-
-        return converted_content
 
     def set_message_transfer(self, message_transfer: Callable[[RunnerMessages], RunnerMessages] | None) -> None:
         """Set or update the message transfer callback function.

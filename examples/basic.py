@@ -4,6 +4,7 @@ import logging
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
+from lite_agent.chat_display import display_messages
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -31,12 +32,12 @@ agent = Agent(
 
 
 async def main():
-    runner = Runner(agent, streaming=True, api="responses")
-    resp = await runner.run_until_complete(
+    runner = Runner(agent, streaming=True, api="completion")
+    await runner.run_until_complete(
         "What is the temperature in New York?",
         includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],
     )
-    print(resp[0])
+    display_messages(runner.messages)
 
 
 if __name__ == "__main__":

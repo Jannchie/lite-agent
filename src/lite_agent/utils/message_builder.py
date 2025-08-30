@@ -190,7 +190,7 @@ class MessageBuilder:
                 # Fallback for other content types
                 assistant_content_items = [AssistantTextContent(text=str(content))]
 
-        # Handle tool calls if present (legacy format)
+        # Handle tool calls if present
         if "tool_calls" in message:
             for tool_call in message.get("tool_calls", []):
                 try:

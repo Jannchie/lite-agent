@@ -1,5 +1,4 @@
 import json
-import warnings
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timedelta, timezone
 from os import PathLike
@@ -198,7 +197,6 @@ class Runner:
                     last_message = cast("NewAssistantMessage", self.messages[-1])
                     last_message.content.append(tool_result)
 
-                # Note: For completion API compatibility, the conversion happens when sending to LLM
 
     async def _collect_all_chunks(self, stream: AsyncGenerator[AgentChunk, None]) -> list[AgentChunk]:
         """Collect all chunks from an async generator into a list."""
@@ -286,8 +284,6 @@ class Runner:
 
         while not is_finish() and steps < max_steps:
             logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
-            # Convert to legacy format only when needed for LLM communication
-            # This allows us to keep the new format internally but ensures compatibility
             # Extract agent kwargs for reasoning configuration
             reasoning = None
             if agent_kwargs:
@@ -364,7 +360,6 @@ class Runner:
                     case "function_call":
                         logger.debug(f"Function call: {chunk.name}({chunk.arguments or '{}'})")
                         # Add tool call to current assistant message
-                        # Keep arguments as string for compatibility with funcall library
                         tool_call = AssistantToolCall(
                             call_id=chunk.call_id,
                             name=chunk.name,
@@ -460,35 +455,6 @@ class Runner:
         require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
         return bool(require_confirm_tools)
 
-    async def run_continue_until_complete(
-        self,
-        max_steps: int = 20,
-        includes: list[AgentChunkType] | None = None,
-        record_to: PathLike | str | None = None,
-    ) -> list[AgentChunk]:
-        """Deprecated: Use run_until_complete(None) instead."""
-        warnings.warn(
-            "run_continue_until_complete is deprecated. Use run_until_complete(None) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        resp = self.run_continue_stream(max_steps, includes, record_to=record_to)
-        return await self._collect_all_chunks(resp)
-
-    def run_continue_stream(
-        self,
-        max_steps: int = 20,
-        includes: list[AgentChunkType] | None = None,
-        record_to: PathLike | str | None = None,
-        context: "Any | None" = None,  # noqa: ANN401
-    ) -> AsyncGenerator[AgentChunk, None]:
-        """Deprecated: Use run(None) instead."""
-        warnings.warn(
-            "run_continue_stream is deprecated. Use run(None) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._run_continue_stream(max_steps, includes, record_to=record_to, context=context)
 
     async def _run_continue_stream(
         self,

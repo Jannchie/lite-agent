@@ -42,7 +42,7 @@ async def main():
     resp = runner.run("What is the weather in New York? And what is the temperature there?")
     async for chunk in resp:
         logger.info(chunk)
-    resp = runner.run_continue_stream()
+    resp = runner.run(None)
     async for chunk in resp:
         logger.info(chunk)
 

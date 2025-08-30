@@ -143,18 +143,18 @@ async def test_run_stream_with_max_steps():
 
 @pytest.mark.asyncio
 async def test_run_continue_stream_with_empty_messages():
-    """Test run_continue_stream when there are no messages"""
+    """Test run with None when there are no messages"""
     agent = DummyAgent()
     runner = Runner(agent=agent)
 
     with pytest.raises(ValueError, match="Cannot continue running without a valid last message from the assistant"):
-        async for _ in runner.run_continue_stream():
+        async for _ in runner.run(None):
             pass
 
 
 @pytest.mark.asyncio
 async def test_run_continue_stream_with_tool_calls():
-    """Test run_continue_stream with tool calls in last assistant message"""
+    """Test run with None with tool calls in last assistant message"""
     from lite_agent.types import AssistantTextContent, AssistantToolCall, NewAssistantMessage
 
     agent = DummyAgent()
@@ -183,7 +183,7 @@ async def test_run_continue_stream_with_tool_calls():
 
     with patch.object(agent, "handle_tool_calls", side_effect=mock_handle_tool_calls):
         results = []
-        async for chunk in runner.run_continue_stream():
+        async for chunk in runner.run(None):
             results.append(chunk)
 
         assert len(results) >= 2  # At least the tool call chunks

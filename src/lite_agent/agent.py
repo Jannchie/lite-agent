@@ -235,7 +235,7 @@ class Agent:
         *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
-        # Apply message transfer callback if provided - always use legacy format for LLM compatibility
+        # Apply message transfer callback if provided
         processed_messages = messages
         if self.message_transfer:
             logger.debug(f"Applying message transfer callback for agent {self.name}")
@@ -265,7 +265,7 @@ class Agent:
         *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
-        # Apply message transfer callback if provided - always use legacy format for LLM compatibility
+        # Apply message transfer callback if provided
         processed_messages = messages
         if self.message_transfer:
             logger.debug(f"Applying message transfer callback for agent {self.name}")

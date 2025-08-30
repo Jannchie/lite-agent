@@ -43,7 +43,6 @@ class MessageFormatConverter:
                 converted_messages.extend(tool_results)
 
             elif isinstance(message, dict):
-                # Handle legacy dict messages with fallback
                 converted_msg = MessageFormatConverter._handle_legacy_dict_message(message)
                 if converted_msg:
                     converted_messages.extend(converted_msg if isinstance(converted_msg, list) else [converted_msg])

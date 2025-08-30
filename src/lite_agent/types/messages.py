@@ -211,7 +211,7 @@ class UserMessageContentItemImageURL(BaseModel):
     image_url: UserMessageContentItemImageURLImageURL
 
 
-# Legacy compatibility wrapper classes
+# Message wrapper classes for backward compatibility
 class AgentUserMessage(NewUserMessage):
     def __init__(
         self,
@@ -250,6 +250,7 @@ class AgentAssistantMessage(NewAssistantMessage):
         )
 
 
+# AgentSystemMessage is now an alias to NewSystemMessage
 AgentSystemMessage = NewSystemMessage
 RunnerMessage = NewMessage
 

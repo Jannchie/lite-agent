@@ -17,7 +17,7 @@ from .events import (
     Usage as EventUsage,
 )
 from .messages import (
-    # Legacy compatibility aliases (temporary)
+    # Message wrapper classes
     AgentAssistantMessage,
     AgentSystemMessage,
     AgentUserMessage,

@@ -197,7 +197,6 @@ class Runner:
                     last_message = cast("NewAssistantMessage", self.messages[-1])
                     last_message.content.append(tool_result)
 
-
     async def _collect_all_chunks(self, stream: AsyncGenerator[AgentChunk, None]) -> list[AgentChunk]:
         """Collect all chunks from an async generator into a list."""
         return [chunk async for chunk in stream]
@@ -324,15 +323,18 @@ class Runner:
                         if current_message is not None:
                             # Preserve all existing metadata and only update specific fields
                             meta_updates = {"sent_at": chunk.message.meta.sent_at}
-                            if hasattr(chunk.message.meta, "latency_ms"):
-                                meta_updates["latency_ms"] = chunk.message.meta.latency_ms
-                            if hasattr(chunk.message.meta, "output_time_ms"):
-                                meta_updates["total_time_ms"] = chunk.message.meta.output_time_ms
+                            # Only include fields of type datetime in meta_updates
+                            # Update int fields separately after update_meta
                             # Preserve other metadata fields like model, usage, etc.
                             for attr in ["model", "usage", "input_tokens", "output_tokens"]:
                                 if hasattr(chunk.message.meta, attr):
                                     meta_updates[attr] = getattr(chunk.message.meta, attr)
                             await self._message_state_manager.update_meta(**meta_updates)
+                            # Now update int fields directly if present
+                            if hasattr(chunk.message.meta, "latency_ms"):
+                                await self._message_state_manager.update_meta(latency_ms=chunk.message.meta.latency_ms)
+                            if hasattr(chunk.message.meta, "output_time_ms"):
+                                await self._message_state_manager.update_meta(total_time_ms=chunk.message.meta.output_time_ms)
                         else:
                             # For non-streaming mode, start with complete message
                             await self._start_assistant_message(meta=chunk.message.meta)
@@ -454,7 +456,6 @@ class Runner:
         tool_calls = self._convert_tool_calls_to_tool_calls(pending_tool_calls)
         require_confirm_tools = await self.agent.list_require_confirm_tools(tool_calls)
         return bool(require_confirm_tools)
-
 
     async def _run_continue_stream(
         self,

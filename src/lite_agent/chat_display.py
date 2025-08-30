@@ -532,12 +532,15 @@ def _display_user_message_with_columns(
     lines = content.split("\n")
     for i, line in enumerate(lines):
         if i == 0:
-            # 第一行显示完整信息
+            # 第一行显示 User: 标签
             table.add_row(
                 f"[dim]{time_str:8}[/dim]",
                 f"[dim]{index_str:4}[/dim]",
-                f"[blue]User:[/blue] {line}",
+                "[blue]User:[/blue]",
             )
+            # 如果有内容，添加内容行
+            if line:
+                table.add_row("", "", line)
         else:
             # 续行只在内容列显示
             table.add_row("", "", line)
@@ -631,12 +634,15 @@ def _display_assistant_message_with_columns(
         lines = content.split("\n")
         for i, line in enumerate(lines):
             if i == 0:
-                # 第一行显示完整信息
+                # 第一行显示 Assistant: 标签
                 table.add_row(
                     f"[dim]{time_str:8}[/dim]",
                     f"[dim]{index_str:4}[/dim]",
-                    f"[green]Assistant:[/green]{meta_info} {line}",
+                    f"[green]Assistant:[/green]{meta_info}",
                 )
+                # 如果有内容，添加内容行
+                if line:
+                    table.add_row("", "", line)
                 first_row_added = True
             else:
                 # 续行只在内容列显示

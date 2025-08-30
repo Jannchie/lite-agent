@@ -38,17 +38,20 @@ uv run <command>         # Run command in project environment
 ### Running Examples
 
 ```bash
-uv run python examples/basic.py
-uv run python examples/handoffs.py  
-uv run python examples/chat_display_demo.py
-uv run python examples/context.py
-uv run python examples/terminal.py
-uv run python examples/translate/main.py
+uv run python examples/basic.py                    # Simple agent with tool calling
+uv run python examples/handoffs.py                 # Agent-to-agent transfers
+uv run python examples/chat_display_demo.py        # Rich console output
+uv run python examples/context.py                  # Context passing to tools
+uv run python examples/terminal.py                 # Terminal-based interaction
+uv run python examples/translate/main.py           # Translation agent example
+uv run python examples/streaming_demo.py           # Streaming responses demo
+uv run python examples/response_api_example.py     # Response API format demo
+uv run python scripts/record_chat_messages.py      # Record conversations for testing
 ```
 
 ## Project Architecture
 
-LiteAgent is a lightweight AI agent framework built on top of LiteLLM. The core architecture consists of:
+LiteAgent is a lightweight AI agent framework designed for flexibility with any LLM provider. The core architecture consists of:
 
 ### Core Components
 
@@ -127,6 +130,16 @@ The framework supports two OpenAI API modes:
 
 Set via `Runner(agent, api="completion")` or `Runner(agent, api="responses")`.
 
+### Message Types and Streaming
+
+The framework provides rich message types supporting both text and structured content:
+
+- **Text messages**: Simple string content for basic interactions
+- **Tool calls**: Structured function calls with parameters and results
+- **Agent transfers**: Built-in support for handoffs between specialized agents
+- **Rich content**: Support for complex message structures via Pydantic models
+- **Streaming chunks**: Real-time processing of LLM responses with granular event types
+
 ### Development Notes
 
 - Project uses strict ruff linting with `select = ["ALL"]` and specific ignores
@@ -135,7 +148,8 @@ Set via `Runner(agent, api="completion")` or `Runner(agent, api="responses")`.
 - Mock conversations stored in `tests/mocks/` as JSONL files for reproducible testing
 - Examples in `examples/` directory demonstrate various usage patterns
 - Template system uses Jinja2 for dynamic instruction generation (`src/lite_agent/templates/`)
-- Requires `litellm` as core dependency for LLM interactions
+- Does NOT directly depend on `litellm` - works with any compatible LLM client via `BaseLLMClient` interface
 - Chat display functionality uses `rich` library for formatted console output
+- Uses `pyright` for type checking with custom configuration excluding examples and temp directories
 
 The framework emphasizes simplicity and extensibility while maintaining full type safety and comprehensive streaming support.

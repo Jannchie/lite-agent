@@ -43,7 +43,8 @@ class MessageStateManager:
             if self._current_message is None:
                 await self._start_message_internal()
             if self._current_message is None:
-                raise RuntimeError("Failed to create current assistant message")
+                msg = "Failed to create current assistant message"
+                raise RuntimeError(msg)
             return self._current_message
 
     async def _start_message_internal(self) -> None:
@@ -66,7 +67,8 @@ class MessageStateManager:
                 await self._start_message_internal()
 
             if self._current_message is None:
-                raise RuntimeError("Failed to ensure current message exists")
+                msg = "Failed to ensure current message exists"
+                raise RuntimeError(msg)
 
             # Find existing text content or create new one
             for item in self._current_message.content:
@@ -86,7 +88,8 @@ class MessageStateManager:
                 await self._start_message_internal()
 
             if self._current_message is None:
-                raise RuntimeError("Failed to ensure current message exists")
+                msg = "Failed to ensure current message exists"
+                raise RuntimeError(msg)
 
             self._current_message.content.append(tool_call)
             logger.debug(f"Added tool call: {tool_call.name}")
@@ -98,12 +101,13 @@ class MessageStateManager:
                 await self._start_message_internal()
 
             if self._current_message is None:
-                raise RuntimeError("Failed to ensure current message exists")
+                msg = "Failed to ensure current message exists"
+                raise RuntimeError(msg)
 
             self._current_message.content.append(result)
             logger.debug(f"Added tool result for call: {result.call_id}")
 
-    async def update_meta(self, **kwargs: Any) -> None:
+    async def update_meta(self, **kwargs: Any) -> None:  # noqa: ANN401
         """Update message metadata safely."""
         async with self._lock:
             if self._current_message is None:

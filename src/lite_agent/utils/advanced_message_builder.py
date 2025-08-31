@@ -10,6 +10,7 @@ from lite_agent.types import (
     AssistantToolCall,
     AssistantToolCallResult,
     MessageMeta,
+    MessageUsage,
     NewAssistantMessage,
     NewSystemMessage,
     NewUserMessage,
@@ -64,7 +65,8 @@ class FluentMessageBuilder:
         elif self._message_type == "system":
             self._content = text
         else:
-            raise ValueError("Message type not set. Call user_message(), assistant_message(), or system_message() first.")
+            msg = "Message type not set. Call user_message(), assistant_message(), or system_message() first."
+            raise ValueError(msg)
 
         logger.debug(f"Added text content (length: {len(text)})")
         return self
@@ -72,7 +74,8 @@ class FluentMessageBuilder:
     def add_image(self, image_url: str | None = None, file_id: str | None = None, detail: str = "auto") -> "FluentMessageBuilder":
         """Add image content to user message."""
         if self._message_type != "user":
-            raise ValueError("Images can only be added to user messages")
+            msg = "Images can only be added to user messages"
+            raise ValueError(msg)
 
         self._content_items.append(UserImageContent(image_url=image_url, file_id=file_id, detail=detail))
         logger.debug(f"Added image content (url: {bool(image_url)}, file_id: {bool(file_id)})")
@@ -81,7 +84,8 @@ class FluentMessageBuilder:
     def add_tool_call(self, call_id: str, name: str, arguments: dict[str, Any] | str) -> "FluentMessageBuilder":
         """Add tool call to assistant message."""
         if self._message_type != "assistant":
-            raise ValueError("Tool calls can only be added to assistant messages")
+            msg = "Tool calls can only be added to assistant messages"
+            raise ValueError(msg)
 
         self._content_items.append(AssistantToolCall(call_id=call_id, name=name, arguments=arguments))
         logger.debug(f"Added tool call: {name} (call_id: {call_id})")
@@ -90,7 +94,8 @@ class FluentMessageBuilder:
     def add_tool_result(self, call_id: str, output: str, execution_time_ms: int | None = None) -> "FluentMessageBuilder":
         """Add tool call result to assistant message."""
         if self._message_type != "assistant":
-            raise ValueError("Tool results can only be added to assistant messages")
+            msg = "Tool results can only be added to assistant messages"
+            raise ValueError(msg)
 
         self._content_items.append(AssistantToolCallResult(call_id=call_id, output=output, execution_time_ms=execution_time_ms))
         logger.debug(f"Added tool result for call: {call_id}")
@@ -98,6 +103,9 @@ class FluentMessageBuilder:
 
     def with_timestamp(self, timestamp: datetime | None = None) -> "FluentMessageBuilder":
         """Set message timestamp."""
+        if self._meta is None:
+            msg = "Message type not set. Call user_message(), assistant_message(), or system_message() first."
+            raise ValueError(msg)
         if timestamp is None:
             timestamp = datetime.now(timezone.utc)
         self._meta.sent_at = timestamp
@@ -106,31 +114,40 @@ class FluentMessageBuilder:
     def with_usage(self, input_tokens: int | None = None, output_tokens: int | None = None) -> "FluentMessageBuilder":
         """Set usage information (assistant messages only)."""
         if self._message_type != "assistant":
-            raise ValueError("Usage information can only be set for assistant messages")
+            msg = "Usage information can only be set for assistant messages"
+            raise ValueError(msg)
+
+        if self._meta is None:
+            msg = "Message type not set. Call user_message(), assistant_message(), or system_message() first."
+            raise ValueError(msg)
 
         if not hasattr(self._meta, "usage"):
-            from lite_agent.types import MessageUsage
-
             self._meta.usage = MessageUsage()
 
-        if input_tokens is not None:
-            self._meta.usage.input_tokens = input_tokens
-        if output_tokens is not None:
-            self._meta.usage.output_tokens = output_tokens
-        if input_tokens is not None and output_tokens is not None:
-            self._meta.usage.total_tokens = input_tokens + output_tokens
+        if self._meta.usage is not None:
+            if input_tokens is not None:
+                self._meta.usage.input_tokens = input_tokens
+            if output_tokens is not None:
+                self._meta.usage.output_tokens = output_tokens
+            if input_tokens is not None and output_tokens is not None:
+                self._meta.usage.total_tokens = input_tokens + output_tokens
 
         return self
 
     def with_timing(self, latency_ms: int | None = None, total_time_ms: int | None = None) -> "FluentMessageBuilder":
         """Set timing information (assistant messages only)."""
         if self._message_type != "assistant":
-            raise ValueError("Timing information can only be set for assistant messages")
+            msg = "Timing information can only be set for assistant messages"
+            raise ValueError(msg)
+
+        if self._meta is None:
+            msg = "Message type not set. Call user_message(), assistant_message(), or system_message() first."
+            raise ValueError(msg)
 
         if latency_ms is not None:
-            self._meta.latency_ms = latency_ms
+            self._meta.latency_ms = latency_ms  # type: ignore[attr-defined]
         if total_time_ms is not None:
-            self._meta.total_time_ms = total_time_ms
+            self._meta.total_time_ms = total_time_ms  # type: ignore[attr-defined]
 
         return self
 
@@ -143,7 +160,8 @@ class FluentMessageBuilder:
         elif self._message_type == "system":
             message = NewSystemMessage(content=self._content, meta=self._meta)
         else:
-            raise ValueError("Message type not set")
+            msg = "Message type not set"
+            raise ValueError(msg)
 
         logger.debug(f"Built {self._message_type} message with {len(getattr(self, '_content_items', []))} content items")
         return message

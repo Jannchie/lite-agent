@@ -208,7 +208,6 @@ class Runner:
         includes: Sequence[AgentChunkType] | None = None,
         context: "Any | None" = None,  # noqa: ANN401
         record_to: PathLike | str | None = None,
-        agent_kwargs: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk.
 
@@ -243,7 +242,7 @@ class Runner:
                 # Handle single message (BaseModel, TypedDict, or dict)
                 self.append_message(user_input)  # type: ignore[arg-type]
         logger.debug("Messages prepared, calling _run")
-        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context, agent_kwargs=agent_kwargs)
+        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
 
     async def _run(
         self,
@@ -251,7 +250,6 @@ class Runner:
         includes: Sequence[AgentChunkType],
         record_to: Path | None = None,
         context: Any | None = None,  # noqa: ANN401
-        agent_kwargs: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
@@ -283,11 +281,6 @@ class Runner:
 
         while not is_finish() and steps < max_steps:
             logger.debug(f"Step {steps}: finish_reason={finish_reason}, is_finish()={is_finish()}")
-            # Extract agent kwargs for reasoning configuration
-            reasoning = None
-            if agent_kwargs:
-                reasoning = agent_kwargs.get("reasoning")
-
             logger.info(f"Making LLM request: API={self.api}, streaming={self.streaming}, messages={len(self.messages)}")
             match self.api:
                 case "completion":
@@ -295,7 +288,6 @@ class Runner:
                     resp = await self.agent.completion(
                         self.messages,
                         record_to_file=record_to,
-                        reasoning=reasoning,
                         streaming=self.streaming,
                     )
                 case "responses":
@@ -303,7 +295,6 @@ class Runner:
                     resp = await self.agent.responses(
                         self.messages,
                         record_to_file=record_to,
-                        reasoning=reasoning,
                         streaming=self.streaming,
                     )
                 case _:

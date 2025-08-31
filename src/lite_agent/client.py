@@ -37,7 +37,7 @@ def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort 
     Args:
         reasoning: 统一的推理配置
             - str: "minimal", "low", "medium", "high" -> reasoning_effort
-            - dict: {"type": "enabled", "budget_tokens": N} -> thinking_config
+            - dict: {"effort": "minimal"} -> reasoning_effort, 其他格式 -> thinking_config
             - bool: True -> "medium", False -> None
             - None: 不启用推理
 
@@ -46,19 +46,26 @@ def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort 
     """
     if reasoning is None:
         return None, None
+
     if isinstance(reasoning, str):
         # 字符串类型，使用 reasoning_effort
         # 确保字符串是有效的 ReasoningEffort 值
         if reasoning in ("minimal", "low", "medium", "high"):
             return reasoning, None  # type: ignore[return-value]
-        return None, None
-    if isinstance(reasoning, dict):
-        # 字典类型，使用 thinking_config
-        return None, reasoning
-    if isinstance(reasoning, bool):
+    elif isinstance(reasoning, dict):
+        # 检查是否为 {"effort": "value"} 格式
+        if "effort" in reasoning and len(reasoning) == 1:
+            effort = reasoning["effort"]
+            if isinstance(effort, str) and effort in ("minimal", "low", "medium", "high"):
+                return effort, None  # type: ignore[return-value]
+        else:
+            # 其他字典格式，作为 thinking_config
+            return None, reasoning
+    elif isinstance(reasoning, bool):
         # 布尔类型，True 使用默认的 medium，False 不启用
-        return "medium" if reasoning else None, None
-    # 其他类型，默认不启用
+        return ("medium", None) if reasoning else (None, None)
+
+    # 其他类型或无效格式，默认不启用
     return None, None
 
 

@@ -60,11 +60,11 @@ async def main():
                     validate_while_typing=False,
                 )
                 if user_input.lower() in {"y", "yes"}:
-                    response = runner.run(None, )
+                    response = runner.run(None )
                     async for chunk in response:
                         await rich_channel.handle(chunk)
                 else:
-                    response = runner.run(None, )
+                    response = runner.run(None )
             rich_channel.new_turn()
         except (EOFError, KeyboardInterrupt):
             break

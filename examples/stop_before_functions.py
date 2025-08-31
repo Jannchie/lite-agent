@@ -60,7 +60,7 @@ async def main():
     print(f"\nHas require confirm tools: {await runner.has_require_confirm_tools()}")
 
     # Continue execution
-    resp = runner.run(None, 
+    resp = runner.run(None,
         includes=["usage", "assistant_message", "function_call", "function_call_output"],
     )
     async for chunk in resp:
@@ -82,7 +82,7 @@ async def main():
     print(f"\nHas require confirm tools: {await runner2.has_require_confirm_tools()}")
 
     # Continue execution
-    resp = runner2.run(None, 
+    resp = runner2.run(None,
         includes=["usage", "assistant_message", "function_call", "function_call_output"],
     )
     async for chunk in resp:
@@ -103,7 +103,7 @@ async def main():
     print(f"\nHas require confirm tools (decorator): {await runner3.has_require_confirm_tools()}")
 
     # Continue execution
-    resp = runner3.run(None, 
+    resp = runner3.run(None,
         includes=["usage", "assistant_message", "function_call", "function_call_output"],
     )
     async for chunk in resp:

@@ -6,7 +6,7 @@ from typing import Any, Optional
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 
-from lite_agent.client import BaseLLMClient, LiteLLMClient, ReasoningConfig
+from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.constants import CompletionMode, ToolName
 from lite_agent.loggers import logger
 from lite_agent.response_handlers import CompletionResponseHandler, ResponsesAPIHandler
@@ -40,12 +40,10 @@ class Agent:
         handoffs: list["Agent"] | None = None,
         message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
         completion_condition: str = "stop",
-        reasoning: ReasoningConfig = None,
         stop_before_tools: list[str] | list[Callable] | None = None,
     ) -> None:
         self.name = name
         self.instructions = instructions
-        self.reasoning = reasoning
         # Convert stop_before_functions to function names
         if stop_before_tools:
             self.stop_before_functions = set()
@@ -67,7 +65,6 @@ class Agent:
             # Otherwise, create a LitellmClient instance
             self.client = LiteLLMClient(
                 model=model,
-                reasoning=reasoning,
             )
         self.completion_condition = completion_condition
         self.handoffs = handoffs if handoffs else []
@@ -231,7 +228,6 @@ class Agent:
         self,
         messages: RunnerMessages,
         record_to_file: Path | None = None,
-        reasoning: ReasoningConfig = None,
         *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
@@ -249,7 +245,6 @@ class Agent:
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
-            reasoning=reasoning,
             streaming=streaming,
         )
 
@@ -261,7 +256,6 @@ class Agent:
         self,
         messages: RunnerMessages,
         record_to_file: Path | None = None,
-        reasoning: ReasoningConfig = None,
         *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
@@ -278,7 +272,6 @@ class Agent:
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
-            reasoning=reasoning,
             streaming=streaming,
         )
         # Use response handler for unified processing

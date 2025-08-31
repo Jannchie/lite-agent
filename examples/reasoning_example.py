@@ -4,6 +4,7 @@ import logging
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
+from lite_agent.client import LiteLLMClient
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -25,47 +26,56 @@ async def demo_reasoning_configurations():
     """演示不同的推理配置方法。"""
     print("=== 推理配置演示 ===\n")
 
-    # 1. 使用reasoning参数设置推理强度（字符串形式）
-    print("1. 使用reasoning参数设置推理强度:")
+    # 1. 使用 LiteLLMClient 设置推理强度（字符串形式）
+    print("1. 使用 LiteLLMClient 设置推理强度:")
     agent_with_reasoning = Agent(
-        model="gpt-4o-mini",
+        model=LiteLLMClient(model="gpt-4o-mini", reasoning="high"),
         name="推理助手",
         instructions="你是一个深度分析助手，使用仔细的推理来提供全面的分析。",
-        reasoning="high",  # 高强度推理
     )
-    print(f"   Agent推理配置: {agent_with_reasoning.reasoning}")
     print(f"   客户端推理努力程度: {agent_with_reasoning.client.reasoning_effort}")
     print(f"   客户端思考配置: {agent_with_reasoning.client.thinking_config}")
 
-    # 2. 使用reasoning参数进行更精细的控制（字典形式）
-    print("\n2. 使用reasoning参数进行精细控制:")
+    # 2. 使用 LiteLLMClient 进行更精细的控制（字典形式）
+    print("\n2. 使用 LiteLLMClient 进行精细控制:")
     agent_with_thinking = Agent(
-        model="claude-3-5-sonnet-20241022",  # Anthropic模型支持thinking
+        model=LiteLLMClient(
+            model="claude-3-5-sonnet-20241022",  # Anthropic模型支持thinking
+            reasoning={"type": "enabled", "budget_tokens": 2048},
+        ),
         name="思考助手",
         instructions="你是一个深思熟虑的助手。",
-        reasoning={"type": "enabled", "budget_tokens": 2048},  # 使用字典形式
     )
-    print(f"   Agent推理配置: {agent_with_thinking.reasoning}")
     print(f"   客户端推理努力程度: {agent_with_thinking.client.reasoning_effort}")
     print(f"   客户端思考配置: {agent_with_thinking.client.thinking_config}")
 
-    # 3. 使用布尔值设置推理（会默认使用medium级别）
-    print("\n3. 使用布尔值启用推理:")
+    # 3. 使用 {"effort": "value"} 格式（推荐）
+    print('\n3. 使用 {"effort": "value"} 格式:')
+    agent_effort_reasoning = Agent(
+        model=LiteLLMClient(
+            model="o1-mini",  # OpenAI推理模型
+            reasoning={"effort": "medium"},
+        ),
+        name="努力推理助手",
+        instructions="你是一个高级推理助手。",
+    )
+    print(f"   客户端推理努力程度: {agent_effort_reasoning.client.reasoning_effort}")
+    print(f"   客户端思考配置: {agent_effort_reasoning.client.thinking_config}")
+
+    # 4. 使用布尔值设置推理（会默认使用medium级别）
+    print("\n4. 使用布尔值启用推理:")
     agent_bool_reasoning = Agent(
-        model="o1-mini",  # OpenAI推理模型
+        model=LiteLLMClient(model="o1-mini", reasoning=True),  # 布尔值，会使用默认的medium级别
         name="布尔推理助手",
         instructions="你是一个高级推理助手。",
-        reasoning=True,  # 布尔值，会使用默认的medium级别
     )
-    print(f"   Agent推理配置: {agent_bool_reasoning.reasoning}")
     print(f"   客户端推理努力程度: {agent_bool_reasoning.client.reasoning_effort}")
     print(f"   客户端思考配置: {agent_bool_reasoning.client.thinking_config}")
 
-    # 4. 演示运行时覆盖推理参数
-    print("\n4. 运行时覆盖推理参数:")
-    print("   - Agent默认使用 reasoning='high'")
-    print("   - 运行时可通过 agent_kwargs 覆盖:")
-    print("     runner.run(query, agent_kwargs={'reasoning': 'minimal'})")
+    # 5. 演示运行时推理参数配置
+    print("\n5. 运行时推理参数配置:")
+    print("   - 推理配置现在只能在 LiteLLMClient 初始化时设置")
+    print("   - 如需动态调整，请创建不同的 Agent 实例")
 
     # 注意：由于没有实际的API密钥，我们不运行真实的API调用
     print("\n✓ 所有推理配置功能已成功设置！")
@@ -79,33 +89,37 @@ async def main():
     print("推理配置使用说明:")
     print("=" * 60)
     print("""
-1. reasoning_effort 参数 (OpenAI兼容):
-   - "minimal": 最小推理，快速响应
-   - "low": 低强度推理
-   - "medium": 中等推理（推荐）
-   - "high": 高强度推理，更深入分析
+1. reasoning 参数类型 (在 LiteLLMClient 中设置):
+   - 字符串: "minimal", "low", "medium", "high" -> reasoning_effort
+   - {"effort": "value"}: {"effort": "minimal"} -> reasoning_effort (推荐)
+   - 字典: {"type": "enabled", "budget_tokens": N} -> thinking_config
+   - 布尔: True -> "medium", False -> 不启用
 
-2. thinking_config 参数 (Anthropic兼容):
-   - {"type": "enabled", "budget_tokens": N}
-   - N 可以是 1024, 2048, 4096 等
-
-3. 使用方法:
-   a) Agent初始化时设置: Agent(..., reasoning_effort="high")
-   b) 运行时覆盖: runner.run(query, agent_kwargs={"reasoning_effort": "low"})
-
-4. 模型兼容性:
-   - OpenAI: o1, o3, o4-mini 系列
-   - Anthropic: claude-3.5-sonnet 等
-   - 其他: 通过LiteLLM自动转换
-
-5. 示例代码:
+2. 使用方法:
    ```python
+   # 方法1: 字符串形式
    agent = Agent(
-       model="gpt-4o-mini",
-       reasoning_effort="medium",
-       thinking_config={"type": "enabled", "budget_tokens": 2048}
+       model=LiteLLMClient(model="gpt-4o-mini", reasoning="high")
+   )
+
+   # 方法2: {"effort": "value"} 形式（推荐）
+   agent = Agent(
+       model=LiteLLMClient(model="gpt-4o-mini", reasoning={"effort": "minimal"})
+   )
+
+   # 方法3: 字典形式 (Anthropic模型)
+   agent = Agent(
+       model=LiteLLMClient(
+           model="claude-3-5-sonnet-20241022",
+           reasoning={"type": "enabled", "budget_tokens": 2048}
+       )
    )
    ```
+
+3. 模型兼容性:
+   - OpenAI: o1, o3, gpt-4o-mini 等支持 reasoning_effort
+   - Anthropic: claude-3.5-sonnet 等支持 thinking
+   - 其他: 通过 LiteLLM 自动转换
     """)
 
 

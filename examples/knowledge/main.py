@@ -5,6 +5,7 @@ from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
 from lite_agent.chat_display import display_messages
+from lite_agent.client import LiteLLMClient
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -45,18 +46,17 @@ def read_knowledge(knowledge: str) -> str:
 
 
 agent = Agent(
-    model="gpt-5-mini",
+    model=LiteLLMClient(model="gpt-5-nano", reasoning={"effort": "minimal"}),
     name="Assistant",
     instructions="你是一个有帮助的助手。",
     tools=[list_knowledges, read_knowledge],
-    reasoning={"effort": "minimal"},
 )
 
 
 async def main():
     runner = Runner(agent, streaming=True)
     await runner.run_until_complete(
-        "苹果的价格是多少？查询知识库告诉我答案。",
+        "苹果的价格是多少？仔细检查知识库告诉我答案。",
         includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],
     )
 

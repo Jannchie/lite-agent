@@ -1,3 +1,25 @@
+## v0.10.0
+
+[v0.9.0...v0.10.0](https://github.com/Jannchie/lite-agent/compare/v0.9.0...v0.10.0)
+
+### :rocket: Breaking Changes
+
+- **reasoning-config**: streamline client reasoning config and improve error handling - By [Jannchie](mailto:jannchie@gmail.com) in [23c5d01](https://github.com/Jannchie/lite-agent/commit/23c5d01)
+- **runner**: remove deprecated run_continue methods - By [Jannchie](mailto:jannchie@gmail.com) in [37a8675](https://github.com/Jannchie/lite-agent/commit/37a8675)
+
+### :adhesive_bandage: Fixes
+
+- **chat-display**: separate label and content rows in messages - By [Jannchie](mailto:jannchie@gmail.com) in [06a6405](https://github.com/Jannchie/lite-agent/commit/06a6405)
+- **runner**: update meta fields handling in update_meta - By [Jannchie](mailto:jannchie@gmail.com) in [254f610](https://github.com/Jannchie/lite-agent/commit/254f610)
+
+### :art: Refactors
+
+- **messages**: modularize message handling and conversion - By [Jannchie](mailto:jannchie@gmail.com) in [acad106](https://github.com/Jannchie/lite-agent/commit/acad106)
+
+### :memo: Documentation
+
+- **docs**: expand examples and clarify message types - By [Jannchie](mailto:jannchie@gmail.com) in [9f3a5d7](https://github.com/Jannchie/lite-agent/commit/9f3a5d7)
+
 ## v0.9.0
 
 [v0.8.0...v0.9.0](https://github.com/Jannchie/lite-agent/compare/v0.8.0...v0.9.0)

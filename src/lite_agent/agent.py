@@ -41,6 +41,7 @@ class Agent:
         message_transfer: Callable[[RunnerMessages], RunnerMessages] | None = None,
         completion_condition: str = "stop",
         stop_before_tools: list[str] | list[Callable] | None = None,
+        termination_tools: list[str] | list[Callable] | None = None,
     ) -> None:
         self.name = name
         self.instructions = instructions
@@ -57,6 +58,20 @@ class Agent:
                     raise TypeError(msg)
         else:
             self.stop_before_functions = set()
+
+        # Convert termination_tools to function names
+        if termination_tools:
+            self.termination_tools = set()
+            for func in termination_tools:
+                if isinstance(func, str):
+                    self.termination_tools.add(func)
+                elif callable(func):
+                    self.termination_tools.add(func.__name__)
+                else:
+                    msg = f"termination_tools must contain strings or callables, got {type(func)}"
+                    raise TypeError(msg)
+        else:
+            self.termination_tools = set()
 
         if isinstance(model, BaseLLMClient):
             # If model is a BaseLLMClient instance, use it directly

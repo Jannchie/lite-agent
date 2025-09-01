@@ -270,12 +270,18 @@ class Runner:
 
         def is_finish() -> bool:
             if completion_condition == CompletionMode.CALL:
-                # Check if wait_for_user was called in the last assistant message
+                # Check if any termination tool was called in the last assistant message
                 if self.messages and isinstance(self.messages[-1], NewAssistantMessage):
                     last_message = self.messages[-1]
                     for content_item in last_message.content:
-                        if isinstance(content_item, AssistantToolCallResult) and self._get_tool_call_name_by_id(content_item.call_id) == ToolName.WAIT_FOR_USER:
-                            return True
+                        if isinstance(content_item, AssistantToolCallResult):
+                            tool_name = self._get_tool_call_name_by_id(content_item.call_id)
+                            # Check custom termination tools first, then default wait_for_user
+                            if hasattr(self.agent, "termination_tools") and self.agent.termination_tools:
+                                if tool_name in self.agent.termination_tools:
+                                    return True
+                            elif tool_name == ToolName.WAIT_FOR_USER:
+                                return True
                 return False
             return finish_reason == CompletionMode.STOP
 

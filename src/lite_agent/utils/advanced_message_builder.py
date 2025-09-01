@@ -1,7 +1,7 @@
 """Advanced message builder with fluent interface for complex message construction."""
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from lite_agent.loggers import logger
 from lite_agent.types import (
@@ -71,7 +71,7 @@ class FluentMessageBuilder:
         logger.debug(f"Added text content (length: {len(text)})")
         return self
 
-    def add_image(self, image_url: str | None = None, file_id: str | None = None, detail: str = "auto") -> "FluentMessageBuilder":
+    def add_image(self, image_url: str | None = None, file_id: str | None = None, detail: Literal["auto", "low", "high"] = "auto") -> "FluentMessageBuilder":
         """Add image content to user message."""
         if self._message_type != "user":
             msg = "Images can only be added to user messages"
@@ -121,10 +121,9 @@ class FluentMessageBuilder:
             msg = "Message type not set. Call user_message(), assistant_message(), or system_message() first."
             raise ValueError(msg)
 
-        if not hasattr(self._meta, "usage"):
-            self._meta.usage = MessageUsage()
-
-        if self._meta.usage is not None:
+        if isinstance(self._meta, AssistantMessageMeta):
+            if self._meta.usage is None:
+                self._meta.usage = MessageUsage()
             if input_tokens is not None:
                 self._meta.usage.input_tokens = input_tokens
             if output_tokens is not None:
@@ -144,20 +143,30 @@ class FluentMessageBuilder:
             msg = "Message type not set. Call user_message(), assistant_message(), or system_message() first."
             raise ValueError(msg)
 
-        if latency_ms is not None:
-            self._meta.latency_ms = latency_ms  # type: ignore[attr-defined]
-        if total_time_ms is not None:
-            self._meta.total_time_ms = total_time_ms  # type: ignore[attr-defined]
+        if isinstance(self._meta, AssistantMessageMeta):
+            if latency_ms is not None:
+                self._meta.latency_ms = latency_ms
+            if total_time_ms is not None:
+                self._meta.total_time_ms = total_time_ms
 
         return self
 
     def build(self) -> NewUserMessage | NewAssistantMessage | NewSystemMessage:
         """Build the final message."""
         if self._message_type == "user":
+            if not isinstance(self._meta, MessageMeta):
+                msg = "Invalid meta type for user message"
+                raise TypeError(msg)
             message = NewUserMessage(content=self._content_items, meta=self._meta)
         elif self._message_type == "assistant":
+            if not isinstance(self._meta, AssistantMessageMeta):
+                msg = "Invalid meta type for assistant message"
+                raise TypeError(msg)
             message = NewAssistantMessage(content=self._content_items, meta=self._meta)
         elif self._message_type == "system":
+            if not isinstance(self._meta, MessageMeta):
+                msg = "Invalid meta type for system message"
+                raise TypeError(msg)
             message = NewSystemMessage(content=self._content, meta=self._meta)
         else:
             msg = "Message type not set"
@@ -173,29 +182,53 @@ class MessageBuilderFactory:
     @staticmethod
     def create_simple_user_message(text: str) -> NewUserMessage:
         """Create a simple user text message."""
-        return FluentMessageBuilder().user_message().add_text(text).build()
+        result = FluentMessageBuilder().user_message().add_text(text).build()
+        if not isinstance(result, NewUserMessage):
+            msg = "Expected NewUserMessage"
+            raise TypeError(msg)
+        return result
 
     @staticmethod
     def create_simple_assistant_message(text: str, model: str | None = None) -> NewAssistantMessage:
         """Create a simple assistant text message."""
-        return FluentMessageBuilder().assistant_message(model).add_text(text).build()
+        result = FluentMessageBuilder().assistant_message(model).add_text(text).build()
+        if not isinstance(result, NewAssistantMessage):
+            msg = "Expected NewAssistantMessage"
+            raise TypeError(msg)
+        return result
 
     @staticmethod
     def create_system_message(text: str) -> NewSystemMessage:
         """Create a system message."""
-        return FluentMessageBuilder().system_message().add_text(text).build()
+        result = FluentMessageBuilder().system_message().add_text(text).build()
+        if not isinstance(result, NewSystemMessage):
+            msg = "Expected NewSystemMessage"
+            raise TypeError(msg)
+        return result
 
     @staticmethod
     def create_user_message_with_image(text: str, image_url: str) -> NewUserMessage:
         """Create a user message with text and image."""
-        return FluentMessageBuilder().user_message().add_text(text).add_image(image_url=image_url).build()
+        result = FluentMessageBuilder().user_message().add_text(text).add_image(image_url=image_url).build()
+        if not isinstance(result, NewUserMessage):
+            msg = "Expected NewUserMessage"
+            raise TypeError(msg)
+        return result
 
     @staticmethod
     def create_assistant_with_tool_call(text: str, call_id: str, tool_name: str, arguments: dict[str, Any], model: str | None = None) -> NewAssistantMessage:
         """Create an assistant message with text and a tool call."""
-        return FluentMessageBuilder().assistant_message(model).add_text(text).add_tool_call(call_id, tool_name, arguments).build()
+        result = FluentMessageBuilder().assistant_message(model).add_text(text).add_tool_call(call_id, tool_name, arguments).build()
+        if not isinstance(result, NewAssistantMessage):
+            msg = "Expected NewAssistantMessage"
+            raise TypeError(msg)
+        return result
 
     @staticmethod
     def create_assistant_with_tool_result(call_id: str, result: str, execution_time_ms: int | None = None, model: str | None = None) -> NewAssistantMessage:
         """Create an assistant message with just a tool result."""
-        return FluentMessageBuilder().assistant_message(model).add_tool_result(call_id, result, execution_time_ms).build()
+        build_result = FluentMessageBuilder().assistant_message(model).add_tool_result(call_id, result, execution_time_ms).build()
+        if not isinstance(build_result, NewAssistantMessage):
+            msg = "Expected NewAssistantMessage"
+            raise TypeError(msg)
+        return build_result

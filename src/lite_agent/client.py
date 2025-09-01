@@ -240,8 +240,7 @@ class LiteLLMClient(BaseLLMClient):
 
         # Add reasoning parameters if specified
         if final_reasoning_effort is not None:
-            response_params["reasoning_effort"] = final_reasoning_effort
+            response_params["reasoning"] = {"effort": final_reasoning_effort}
         if final_thinking_config is not None:
             response_params["thinking"] = final_thinking_config
-
         return await litellm.aresponses(**response_params)  # type: ignore[return-value]

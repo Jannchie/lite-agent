@@ -1,3 +1,12 @@
+## v0.12.0
+
+[v0.11.0...v0.12.0](https://github.com/Jannchie/lite-agent/compare/v0.11.0...v0.12.0)
+
+### :sparkles: Features
+
+- **context**: add history context injection for tools - By [Jannchie](mailto:jannchie@gmail.com) in [7649170](https://github.com/Jannchie/lite-agent/commit/7649170)
+- **termination**: add custom termination tools support - By [Jannchie](mailto:jannchie@gmail.com) in [5e65e38](https://github.com/Jannchie/lite-agent/commit/5e65e38)
+
 ## v0.11.0
 
 [v0.10.0...v0.11.0](https://github.com/Jannchie/lite-agent/compare/v0.10.0...v0.11.0)

@@ -5,8 +5,11 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from funcall import Context
+
 from lite_agent.agent import Agent
 from lite_agent.constants import CompletionMode, StreamIncludes, ToolName
+from lite_agent.context import HistoryContext
 from lite_agent.loggers import logger
 from lite_agent.types import (
     AgentChunk,
@@ -180,6 +183,24 @@ class Runner:
                             execution_time_ms=0,
                         )
             return  # Stop processing other tool calls after transfer
+
+        # Auto-inject history messages into context
+        if context is not None and not isinstance(context, Context):
+            # If user provided a plain object, wrap it in Context first
+            context = Context(context)
+
+        if isinstance(context, Context):
+            # Extract original value and wrap in HistoryContext
+            original_value = context.value
+            wrapped = HistoryContext(
+                history_messages=self.messages.copy(),
+                data=original_value,
+            )
+            context = Context(wrapped)
+        else:
+            # No context provided, create HistoryContext with only history messages
+            wrapped = HistoryContext(history_messages=self.messages.copy())
+            context = Context(wrapped)
 
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             # if tool_call_chunk.type == "function_call" and tool_call_chunk.type in includes:

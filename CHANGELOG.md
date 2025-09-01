@@ -1,3 +1,15 @@
+## v0.11.0
+
+[v0.10.0...v0.11.0](https://github.com/Jannchie/lite-agent/compare/v0.10.0...v0.11.0)
+
+### :sparkles: Features
+
+- **client**: add typed dicts for reasoning config and refactor parsing logic - By [Jannchie](mailto:jannchie@gmail.com) in [8d125b4](https://github.com/Jannchie/lite-agent/commit/8d125b4)
+
+### :adhesive_bandage: Fixes
+
+- **message-builder**: ensure correct meta types and safer field access - By [Jannchie](mailto:jannchie@gmail.com) in [6c29c43](https://github.com/Jannchie/lite-agent/commit/6c29c43)
+
 ## v0.10.0
 
 [v0.9.0...v0.10.0](https://github.com/Jannchie/lite-agent/compare/v0.9.0...v0.10.0)

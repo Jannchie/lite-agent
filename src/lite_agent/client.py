@@ -1,6 +1,6 @@
 import abc
 import os
-from typing import Any, Literal
+from typing import Any, Literal, NotRequired, TypedDict
 
 import litellm
 from openai.types.chat import ChatCompletionToolParam
@@ -8,12 +8,28 @@ from openai.types.responses import FunctionToolParam
 from pydantic import BaseModel
 
 ReasoningEffort = Literal["minimal", "low", "medium", "high"]
-ThinkingConfig = dict[str, Any] | None
+
+
+class ThinkingConfigDict(TypedDict):
+    """Thinking configuration for reasoning models like Claude."""
+
+    type: Literal["enabled"]  # 启用推理
+    budget_tokens: NotRequired[int]  # 推理令牌预算，可选
+
+
+class ReasoningEffortDict(TypedDict):
+    """Reasoning effort configuration."""
+
+    effort: ReasoningEffort
+
+
+ThinkingConfig = ThinkingConfigDict | None
 
 # 统一的推理配置类型
 ReasoningConfig = (
-    str
-    | dict[str, Any]  # {"type": "enabled", "budget_tokens": 2048} 或其他配置
+    ReasoningEffort  # "minimal", "low", "medium", "high"
+    | ReasoningEffortDict  # {"effort": "minimal"}
+    | ThinkingConfigDict  # {"type": "enabled", "budget_tokens": 2048}
     | bool  # True/False 简单开关
     | None  # 不启用推理
 )
@@ -36,8 +52,9 @@ def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort 
 
     Args:
         reasoning: 统一的推理配置
-            - str: "minimal", "low", "medium", "high" -> reasoning_effort
-            - dict: {"effort": "minimal"} -> reasoning_effort, 其他格式 -> thinking_config
+            - ReasoningEffort: "minimal", "low", "medium", "high" -> reasoning_effort
+            - ReasoningEffortDict: {"effort": "minimal"} -> reasoning_effort
+            - ThinkingConfigDict: {"type": "enabled", "budget_tokens": 2048} -> thinking_config
             - bool: True -> "medium", False -> None
             - None: 不启用推理
 
@@ -47,26 +64,36 @@ def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort 
     if reasoning is None:
         return None, None
 
-    if isinstance(reasoning, str):
-        # 字符串类型，使用 reasoning_effort
-        # 确保字符串是有效的 ReasoningEffort 值
-        if reasoning in ("minimal", "low", "medium", "high"):
-            return reasoning, None  # type: ignore[return-value]
-    elif isinstance(reasoning, dict):
-        # 检查是否为 {"effort": "value"} 格式
-        if "effort" in reasoning and len(reasoning) == 1:
-            effort = reasoning["effort"]
-            if isinstance(effort, str) and effort in ("minimal", "low", "medium", "high"):
-                return effort, None  # type: ignore[return-value]
-        else:
-            # 其他字典格式，作为 thinking_config
-            return None, reasoning
-    elif isinstance(reasoning, bool):
-        # 布尔类型，True 使用默认的 medium，False 不启用
+    if isinstance(reasoning, str) and reasoning in ("minimal", "low", "medium", "high"):
+        return reasoning, None  # type: ignore[return-value]
+
+    if isinstance(reasoning, bool):
         return ("medium", None) if reasoning else (None, None)
+
+    if isinstance(reasoning, dict):
+        return _parse_dict_reasoning_config(reasoning)
 
     # 其他类型或无效格式，默认不启用
     return None, None
+
+
+def _parse_dict_reasoning_config(reasoning: ReasoningEffortDict | ThinkingConfigDict | dict[str, Any]) -> tuple[ReasoningEffort | None, ThinkingConfig]:
+    """解析字典格式的推理配置。"""
+    # 检查是否为 {"effort": "value"} 格式 (ReasoningEffortDict)
+    if "effort" in reasoning and len(reasoning) == 1:
+        effort = reasoning["effort"]
+        if isinstance(effort, str) and effort in ("minimal", "low", "medium", "high"):
+            return effort, None  # type: ignore[return-value]
+
+    # 检查是否为 ThinkingConfigDict 格式
+    if "type" in reasoning and reasoning.get("type") == "enabled":
+        # 验证 ThinkingConfigDict 的结构
+        valid_keys = {"type", "budget_tokens"}
+        if all(key in valid_keys for key in reasoning):
+            return None, reasoning  # type: ignore[return-value]
+
+    # 其他未知字典格式，仍尝试作为 thinking_config
+    return None, reasoning  # type: ignore[return-value]
 
 
 class BaseLLMClient(abc.ABC):

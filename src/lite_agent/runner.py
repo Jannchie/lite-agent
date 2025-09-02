@@ -136,16 +136,34 @@ class Runner:
                     continue
                     
                 # Check if parameter is Context[...]
-                if get_origin(param.annotation) is not None and get_origin(param.annotation).__name__ == "Context":
-                    args = get_args(param.annotation)
-                    if not args:
-                        continue
-                        
-                    # Check if the Context contains HistoryContext
-                    inner_type = args[0]
-                    if get_origin(inner_type) is not None and get_origin(inner_type).__name__ == "HistoryContext":
+                origin = get_origin(param.annotation)
+                if origin is not None:
+                    # Check if it's Context type (compare by string name to handle import differences)
+                    origin_name = getattr(origin, '__name__', str(origin))
+                    if 'Context' in origin_name:
+                        args = get_args(param.annotation)
+                        if args:
+                            # Check if the Context contains HistoryContext
+                            inner_type = args[0]
+                            inner_origin = get_origin(inner_type)
+                            if inner_origin is not None:
+                                inner_name = getattr(inner_origin, '__name__', str(inner_origin))
+                                if 'HistoryContext' in inner_name:
+                                    logger.debug(f"Tool {tool_call.function.name} expects HistoryContext")
+                                    return True
+                            # Also check for direct HistoryContext class
+                            elif hasattr(inner_type, '__name__') and 'HistoryContext' in inner_type.__name__:
+                                logger.debug(f"Tool {tool_call.function.name} expects HistoryContext")
+                                return True
+                
+                # Also handle direct annotation checking
+                if hasattr(param.annotation, '__name__'):
+                    annotation_str = str(param.annotation)
+                    if 'HistoryContext' in annotation_str:
+                        logger.debug(f"Tool {tool_call.function.name} expects HistoryContext (direct)")
                         return True
                         
+        logger.debug("No tools expect HistoryContext")
         return False
 
     async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401

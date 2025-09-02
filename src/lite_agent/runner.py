@@ -1,9 +1,10 @@
 import json
+import inspect
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timedelta, timezone
 from os import PathLike
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, get_args, get_origin
 
 from funcall import Context
 
@@ -112,6 +113,41 @@ class Runner:
         """Normalize record_to parameter to Path object if provided."""
         return Path(record_to) if record_to else None
 
+    def _tool_expects_history_context(self, tool_calls: Sequence["ToolCall"]) -> bool:
+        """Check if any of the tool calls expect HistoryContext in their signatures.
+        
+        Returns True if any tool function has a Context[HistoryContext[...]] parameter,
+        False if they expect Context[...] without HistoryContext wrapper.
+        """
+        if not tool_calls:
+            return False
+            
+        for tool_call in tool_calls:
+            tool_func = self.agent.fc.function_registry.get(tool_call.function.name)
+            if not tool_func:
+                continue
+                
+            # Get function signature
+            sig = inspect.signature(tool_func)
+            
+            # Check each parameter for Context annotation
+            for param in sig.parameters.values():
+                if param.annotation == inspect.Parameter.empty:
+                    continue
+                    
+                # Check if parameter is Context[...]
+                if get_origin(param.annotation) is not None and get_origin(param.annotation).__name__ == "Context":
+                    args = get_args(param.annotation)
+                    if not args:
+                        continue
+                        
+                    # Check if the Context contains HistoryContext
+                    inner_type = args[0]
+                    if get_origin(inner_type) is not None and get_origin(inner_type).__name__ == "HistoryContext":
+                        return True
+                        
+        return False
+
     async def _handle_tool_calls(self, tool_calls: "Sequence[ToolCall] | None", includes: Sequence[AgentChunkType], context: "Any | None" = None) -> AsyncGenerator[AgentChunk, None]:  # noqa: ANN401
         """Handle tool calls and yield appropriate chunks."""
         if not tool_calls:
@@ -184,23 +220,33 @@ class Runner:
                         )
             return  # Stop processing other tool calls after transfer
 
-        # Auto-inject history messages into context
-        if context is not None and not isinstance(context, Context):
-            # If user provided a plain object, wrap it in Context first
-            context = Context(context)
+        # Check if tools expect HistoryContext wrapper
+        expects_history = self._tool_expects_history_context(tool_calls)
+        
+        if expects_history:
+            # Auto-inject history messages into context for tools that expect HistoryContext
+            if context is not None and not isinstance(context, Context):
+                # If user provided a plain object, wrap it in Context first
+                context = Context(context)
 
-        if isinstance(context, Context):
-            # Extract original value and wrap in HistoryContext
-            original_value = context.value
-            wrapped = HistoryContext(
-                history_messages=self.messages.copy(),
-                data=original_value,
-            )
-            context = Context(wrapped)
-        else:
-            # No context provided, create HistoryContext with only history messages
-            wrapped = HistoryContext(history_messages=self.messages.copy())
-            context = Context(wrapped)
+            if isinstance(context, Context):
+                # Extract original value and wrap in HistoryContext
+                original_value = context.value
+                wrapped = HistoryContext(
+                    history_messages=self.messages.copy(),
+                    data=original_value,
+                )
+                context = Context(wrapped)
+            else:
+                # No context provided, create HistoryContext with only history messages
+                wrapped = HistoryContext(history_messages=self.messages.copy())
+                context = Context(wrapped)
+        elif context is not None and not isinstance(context, Context):
+            # Tools don't expect HistoryContext, wrap user object in Context
+            context = Context(context)
+        elif context is None:
+            # Provide empty context for tools that don't expect HistoryContext
+            context = Context(None)
 
         async for tool_call_chunk in self.agent.handle_tool_calls(tool_calls, context=context):
             # if tool_call_chunk.type == "function_call" and tool_call_chunk.type in includes:
@@ -511,9 +557,10 @@ class Runner:
         max_steps: int = 20,
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
+        context: Context | None = None,
     ) -> list[AgentChunk]:
         """Run the agent until it completes and return the final message."""
-        resp = self.run(user_input, max_steps, includes, record_to=record_to)
+        resp = self.run(user_input, max_steps, includes, record_to=record_to, context=context)
         return await self._collect_all_chunks(resp)
 
     def _analyze_last_assistant_message(self) -> tuple[list[AssistantToolCall], dict[str, str]]:

@@ -1,6 +1,8 @@
 import asyncio
 import logging
 
+from funcall import Context
+from openai import BaseModel
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
@@ -19,8 +21,16 @@ logger = logging.getLogger("lite_agent")
 logger.setLevel(logging.DEBUG)
 
 
-async def get_temperature(city: str) -> str:
+class MyContext(BaseModel):
+    d: str
+
+
+ctx = Context(MyContext(d="example data"))
+
+
+async def get_temperature(city: str, ctx: Context[MyContext]) -> str:
     """Get the temperature for a city."""
+    print(ctx.value.d)
     return f"The temperature in {city} is 25°C."
 
 
@@ -37,6 +47,7 @@ async def main():
     await runner.run_until_complete(
         "What is the temperature in New York?",
         includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],
+        context=ctx,
     )
     display_messages(runner.messages)
 

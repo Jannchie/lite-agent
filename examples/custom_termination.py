@@ -35,7 +35,7 @@ async def save_report(content: str) -> str:
 
 # Example 1: Single custom termination tool
 agent1 = Agent(
-    model="gpt-4.1",
+    model="gpt-4.1-nano",
     name="Task Assistant",
     instructions="You are a task assistant. Use the weather tool if needed, then mark the task complete when done.",
     tools=[get_weather, mark_task_complete],
@@ -45,7 +45,7 @@ agent1 = Agent(
 
 # Example 2: Multiple termination tools
 agent2 = Agent(
-    model="gpt-4.1",
+    model="gpt-4.1-nano",
     name="Report Assistant",
     instructions="You are a report assistant. Get weather data and either save a report or mark the task complete.",
     tools=[get_weather, mark_task_complete, save_report],
@@ -55,7 +55,7 @@ agent2 = Agent(
 
 # Example 3: Using string names for termination tools
 agent3 = Agent(
-    model="gpt-4.1",
+    model="gpt-4.1-nano",
     name="String-based Assistant",
     instructions="You are an assistant. Get weather data and mark task complete when done.",
     tools=[get_weather, mark_task_complete],

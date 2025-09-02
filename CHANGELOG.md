@@ -1,3 +1,15 @@
+## v0.13.0
+
+[v0.12.0...v0.13.0](https://github.com/Jannchie/lite-agent/compare/v0.12.0...v0.13.0)
+
+### :sparkles: Features
+
+- **runner**: add selective history context injection based on tool signature - By [Jannchie](mailto:jannchie@gmail.com) in [15866d4](https://github.com/Jannchie/lite-agent/commit/15866d4)
+
+### :adhesive_bandage: Fixes
+
+- **runner**: improve historycontext parameter detection - By [Jannchie](mailto:jannchie@gmail.com) in [7099abc](https://github.com/Jannchie/lite-agent/commit/7099abc)
+
 ## v0.12.0
 
 [v0.11.0...v0.12.0](https://github.com/Jannchie/lite-agent/compare/v0.11.0...v0.12.0)

@@ -6,7 +6,7 @@ from openai import BaseModel
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
-from lite_agent.chat_display import display_messages
+from lite_agent.chat_display import chat_summary_to_string, messages_to_string
 from lite_agent.client import LiteLLMClient
 from lite_agent.runner import Runner
 
@@ -49,7 +49,10 @@ async def main():
         includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],
         context=ctx,
     )
-    display_messages(runner.messages)
+    messages = messages_to_string(runner.messages)
+    summary = chat_summary_to_string(runner.messages)
+    print(messages)
+    print(summary)
 
 
 if __name__ == "__main__":

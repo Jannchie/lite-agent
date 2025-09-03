@@ -47,6 +47,7 @@ class DisplayConfig:
     console: Console | None = None
     show_indices: bool = True
     show_timestamps: bool = True
+    show_metadata: bool = True
     max_content_length: int = 1000
     local_timezone: timezone | str | None = None
 
@@ -58,6 +59,7 @@ class MessageContext:
     console: Console
     index_str: str
     timestamp_str: str
+    show_metadata: bool
     max_content_length: int
     truncate_content: Callable[[str, int], str]
 
@@ -442,6 +444,7 @@ def display_messages(
             console=console,
             max_content_length=config.max_content_length,
             show_timestamp=config.show_timestamps,
+            show_metadata=config.show_metadata,
             local_timezone=local_timezone,
         )
 
@@ -453,6 +456,7 @@ def _display_single_message_compact(
     console: Console,
     max_content_length: int = 100,
     show_timestamp: bool = False,
+    show_metadata: bool = True,
     local_timezone: timezone | None = None,
 ) -> None:
     """以列式格式打印单个消息，类似 rich log。"""
@@ -470,7 +474,7 @@ def _display_single_message_compact(
         timestamp = _format_timestamp(message_time, local_timezone=local_timezone)
 
     # 创建列式显示
-    _display_message_in_columns(message, console, index, timestamp, max_content_length, truncate_content)
+    _display_message_in_columns(message, console, index, timestamp, show_metadata, max_content_length, truncate_content)
 
 
 def _display_message_in_columns(
@@ -478,6 +482,7 @@ def _display_message_in_columns(
     console: Console,
     index: int | None,
     timestamp: str | None,
+    show_metadata: bool,
     max_content_length: int,
     truncate_content: Callable[[str, int], str],
 ) -> None:
@@ -491,12 +496,12 @@ def _display_message_in_columns(
     if isinstance(message, NewUserMessage):
         _display_user_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
     elif isinstance(message, NewAssistantMessage):
-        _display_assistant_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
+        _display_assistant_message_with_columns(message, console, time_str, index_str, show_metadata, max_content_length, truncate_content)
     elif isinstance(message, NewSystemMessage):
         _display_system_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
     else:
         # 处理旧格式消息
-        _display_legacy_message_with_columns(message, console, time_str, index_str, max_content_length, truncate_content)
+        _display_legacy_message_with_columns(message, console, time_str, index_str, show_metadata, max_content_length, truncate_content)
 
 
 def _display_user_message_with_columns(
@@ -524,27 +529,48 @@ def _display_user_message_with_columns(
     content = " ".join(content_parts)
     content = truncate_content(content, max_content_length)
 
-    # 创建表格来确保对齐
+    # 创建表格来确保对齐，根据配置动态调整列宽
     table = Table.grid(padding=0)
-    table.add_column(width=8, justify="left")  # 时间列
-    table.add_column(width=4, justify="left")  # 序号列
+    
+    # 只有在显示时间戳时才添加时间列
+    time_width = 8 if time_str.strip() else 0
+    if time_width > 0:
+        table.add_column(width=time_width, justify="left")  # 时间列
+    
+    # 只有在显示序号时才添加序号列  
+    index_width = 4 if index_str.strip() else 0
+    if index_width > 0:
+        table.add_column(width=index_width, justify="left")  # 序号列
+        
     table.add_column(min_width=0)  # 内容列
+
+    # 辅助函数：根据列数构建行
+    def build_table_row(*content_parts):
+        row_parts = []
+        if time_width > 0:
+            row_parts.append(content_parts[0] if len(content_parts) > 0 else "")
+        if index_width > 0:
+            row_parts.append(content_parts[1] if len(content_parts) > 1 else "")
+        row_parts.append(content_parts[-1] if content_parts else "")  # 内容列总是最后一个
+        return tuple(row_parts)
 
     lines = content.split("\n")
     for i, line in enumerate(lines):
         if i == 0:
             # 第一行显示 User: 标签
             table.add_row(
-                f"[dim]{time_str:8}[/dim]",
-                f"[dim]{index_str:4}[/dim]",
-                "[blue]User:[/blue]",
+                *build_table_row(
+                    f"[dim]{time_str:8}[/dim]",
+                    f"[dim]{index_str:4}[/dim]",
+                    "[blue]User:[/blue]",
+                )
             )
             # 如果有内容，添加内容行
             if line:
-                table.add_row("", "", line)
+                table.add_row(*build_table_row("", "", line))
         else:
             # 续行只在内容列显示
-            table.add_row("", "", line)
+            table.add_row(*build_table_row("", "", line))
 
     console.print(table)
 
@@ -560,24 +586,45 @@ def _display_system_message_with_columns(
     """使用列布局显示系统消息。"""
     content = truncate_content(message.content, max_content_length)
 
-    # 创建表格来确保对齐
+    # 创建表格来确保对齐，根据配置动态调整列宽
     table = Table.grid(padding=0)
-    table.add_column(width=8, justify="left")  # 时间列
-    table.add_column(width=4, justify="left")  # 序号列
+    
+    # 只有在显示时间戳时才添加时间列
+    time_width = 8 if time_str.strip() else 0
+    if time_width > 0:
+        table.add_column(width=time_width, justify="left")  # 时间列
+    
+    # 只有在显示序号时才添加序号列  
+    index_width = 4 if index_str.strip() else 0
+    if index_width > 0:
+        table.add_column(width=index_width, justify="left")  # 序号列
+        
     table.add_column(min_width=0)  # 内容列
+
+    # 辅助函数：根据列数构建行
+    def build_table_row(*content_parts):
+        row_parts = []
+        if time_width > 0:
+            row_parts.append(content_parts[0] if len(content_parts) > 0 else "")
+        if index_width > 0:
+            row_parts.append(content_parts[1] if len(content_parts) > 1 else "")
+        row_parts.append(content_parts[-1] if content_parts else "")  # 内容列总是最后一个
+        return tuple(row_parts)
 
     lines = content.split("\n")
     for i, line in enumerate(lines):
         if i == 0:
             # 第一行显示完整信息
             table.add_row(
-                f"[dim]{time_str:8}[/dim]",
-                f"[dim]{index_str:4}[/dim]",
-                f"[yellow]System:[/yellow] {line}",
+                *build_table_row(
+                    f"[dim]{time_str:8}[/dim]",
+                    f"[dim]{index_str:4}[/dim]",
+                    f"[yellow]System:[/yellow] {line}",
+                )
             )
         else:
             # 续行只在内容列显示
-            table.add_row("", "", line)
+            table.add_row(*build_table_row("", "", line))
 
     console.print(table)
 
@@ -587,6 +634,7 @@ def _display_assistant_message_with_columns(
     console: Console,
     time_str: str,
     index_str: str,
+    show_metadata: bool,
     max_content_length: int,
     truncate_content: Callable[[str, int], str],
 ) -> None:
@@ -606,7 +654,7 @@ def _display_assistant_message_with_columns(
 
     # 构建元信息
     meta_info = ""
-    if message.meta:
+    if show_metadata and message.meta:
         meta_parts = []
         if message.meta.model is not None:
             meta_parts.append(f"Model:{message.meta.model}")
@@ -621,11 +669,30 @@ def _display_assistant_message_with_columns(
         if meta_parts:
             meta_info = f" [dim]({' | '.join(meta_parts)})[/dim]"
 
-    # 创建表格来确保对齐
+    # 创建表格来确保对齐，根据配置动态调整列宽
     table = Table.grid(padding=0)
-    table.add_column(width=8, justify="left")  # 时间列
-    table.add_column(width=4, justify="left")  # 序号列
+    
+    # 只有在显示时间戳时才添加时间列
+    time_width = 8 if time_str.strip() else 0
+    if time_width > 0:
+        table.add_column(width=time_width, justify="left")  # 时间列
+    
+    # 只有在显示序号时才添加序号列  
+    index_width = 4 if index_str.strip() else 0
+    if index_width > 0:
+        table.add_column(width=index_width, justify="left")  # 序号列
+        
     table.add_column(min_width=0)  # 内容列
+
+    # 辅助函数：根据列数构建行
+    def build_table_row(*content_parts):
+        row_parts = []
+        if time_width > 0:
+            row_parts.append(content_parts[0] if len(content_parts) > 0 else "")
+        if index_width > 0:
+            row_parts.append(content_parts[1] if len(content_parts) > 1 else "")
+        row_parts.append(content_parts[-1] if content_parts else "")  # 内容列总是最后一个
+        return tuple(row_parts)
 
     # 处理文本内容
     first_row_added = False
@@ -637,24 +704,28 @@ def _display_assistant_message_with_columns(
             if i == 0:
                 # 第一行显示 Assistant: 标签
                 table.add_row(
-                    f"[dim]{time_str:8}[/dim]",
-                    f"[dim]{index_str:4}[/dim]",
-                    f"[green]Assistant:[/green]{meta_info}",
+                    *build_table_row(
+                        f"[dim]{time_str:8}[/dim]",
+                        f"[dim]{index_str:4}[/dim]", 
+                        f"[green]Assistant:[/green]{meta_info}"
+                    )
                 )
                 # 如果有内容，添加内容行
                 if line:
-                    table.add_row("", "", line)
+                    table.add_row(*build_table_row("", "", line))
                 first_row_added = True
             else:
                 # 续行只在内容列显示
-                table.add_row("", "", line)
+                table.add_row(*build_table_row("", "", line))
 
     # 如果没有文本内容，只显示助手消息头
     if not first_row_added:
         table.add_row(
-            f"[dim]{time_str:8}[/dim]",
-            f"[dim]{index_str:4}[/dim]",
-            f"[green]Assistant:[/green]{meta_info}",
+            *build_table_row(
+                f"[dim]{time_str:8}[/dim]",
+                f"[dim]{index_str:4}[/dim]",
+                f"[green]Assistant:[/green]{meta_info}",
+            )
         )
 
     # 添加工具调用
@@ -668,7 +739,7 @@ def _display_assistant_message_with_columns(
                 args_str = f" {tool_call.arguments}"
 
         args_display = truncate_content(args_str, max_content_length - len(tool_call.name) - 10)
-        table.add_row("", "", f"[magenta]Call:[/magenta] {tool_call.name}{args_display}")
+        table.add_row(*build_table_row("", "", f"[magenta]Call:[/magenta] {tool_call.name}{args_display}"))
 
     # 添加工具结果
     for tool_result in tool_results:
@@ -677,10 +748,10 @@ def _display_assistant_message_with_columns(
         if tool_result.execution_time_ms is not None:
             time_info = f" [dim]({tool_result.execution_time_ms}ms)[/dim]"
 
-        table.add_row("", "", f"[cyan]Output:[/cyan]{time_info}")
+        table.add_row(*build_table_row("", "", f"[cyan]Output:[/cyan]{time_info}"))
         lines = output.split("\n")
         for line in lines:
-            table.add_row("", "", line)
+            table.add_row(*build_table_row("", "", line))
 
     console.print(table)
 
@@ -690,6 +761,7 @@ def _display_legacy_message_with_columns(
     console: Console,
     time_str: str,
     index_str: str,
+    show_metadata: bool,
     max_content_length: int,
     truncate_content: Callable[[str, int], str],
 ) -> None:
@@ -736,6 +808,7 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
     max_content_length = max_content_length_val
     truncate_content = context_config["truncate_content"]
     show_timestamp = context_config.get("show_timestamp", False)
+    show_metadata = bool(context_config.get("show_metadata", True))
     local_timezone = context_config.get("local_timezone")
 
     # 类型检查
@@ -774,6 +847,7 @@ def _create_message_context(context_config: dict[str, FlexibleRunnerMessage | Co
         console=console,
         index_str=index_str,
         timestamp_str=timestamp_str,
+        show_metadata=show_metadata,
         max_content_length=max_content_length,
         truncate_content=truncate_content,  # type: ignore[arg-type]
     )
@@ -1054,50 +1128,60 @@ def _display_new_assistant_message_compact(message: NewAssistantMessage, context
 def messages_to_string(
     messages: RunnerMessages,
     *,
-    config: DisplayConfig | None = None,
+    show_indices: bool = False,
+    show_timestamps: bool = False,
+    show_metadata: bool = False,
+    max_content_length: int = 1000,
+    local_timezone: timezone | str | None = None,
 ) -> str:
     """
-    将消息列表转换为纯文本字符串，不包含颜色和格式。
+    将消息列表转换为纯文本字符串，默认简洁格式（不显示时间、序号、元数据）。
 
     Args:
         messages: 要转换的消息列表
-        config: 显示配置（可选）
+        show_indices: 是否显示消息序号（默认False）
+        show_timestamps: 是否显示时间戳（默认False）
+        show_metadata: 是否显示元数据（如模型、延迟、token使用等，默认False）
+        max_content_length: 内容最大长度限制（默认1000）
+        local_timezone: 本地时区设置（可选）
 
     Returns:
         包含所有消息的纯文本字符串
     """
-    if config is None:
-        config = DisplayConfig()
-
     # 创建一个没有颜色的 Console 来捕获输出
     string_buffer = StringIO()
     plain_console = Console(file=string_buffer, force_terminal=False, no_color=True, width=120)
 
-    # 使用修改后的配置
-    plain_config = DisplayConfig(
+    # 使用配置
+    config = DisplayConfig(
         console=plain_console,
-        show_indices=config.show_indices,
-        show_timestamps=config.show_timestamps,
-        max_content_length=config.max_content_length,
-        local_timezone=config.local_timezone,
+        show_indices=show_indices,
+        show_timestamps=show_timestamps,
+        show_metadata=show_metadata,
+        max_content_length=max_content_length,
+        local_timezone=local_timezone,
     )
 
     # 调用现有的 display_messages 函数，但输出到字符串缓冲区
-    display_messages(messages, config=plain_config)
+    display_messages(messages, config=config)
 
-    # 获取结果并清理
+    # 获取结果并清理尾随空格
     result = string_buffer.getvalue()
     string_buffer.close()
 
-    return result
+    # 清理每行的尾随空格
+    lines = result.split('\n')
+    cleaned_lines = [line.rstrip() for line in lines]
+    return '\n'.join(cleaned_lines)
 
 
-def chat_summary_to_string(messages: RunnerMessages) -> str:
+def chat_summary_to_string(messages: RunnerMessages, *, include_performance: bool = False) -> str:
     """
-    将聊天摘要转换为纯文本字符串。
+    将聊天摘要转换为纯文本字符串，默认只显示基本统计信息。
 
     Args:
         messages: 要分析的消息列表
+        include_performance: 是否包含性能统计信息（默认False）
 
     Returns:
         包含聊天摘要的纯文本字符串
@@ -1105,11 +1189,39 @@ def chat_summary_to_string(messages: RunnerMessages) -> str:
     string_buffer = StringIO()
     plain_console = Console(file=string_buffer, force_terminal=False, no_color=True, width=120)
 
-    # 调用现有的 display_chat_summary 函数，但输出到字符串缓冲区
-    display_chat_summary(messages, console=plain_console)
+    if include_performance:
+        # 调用现有的 display_chat_summary 函数，包含所有信息
+        display_chat_summary(messages, console=plain_console)
+    else:
+        # 只显示基本的消息统计信息
+        _display_basic_message_stats(messages, plain_console)
 
     # 获取结果并清理
     result = string_buffer.getvalue()
     string_buffer.close()
 
     return result
+
+
+def _display_basic_message_stats(messages: RunnerMessages, console: Console) -> None:
+    """显示基本的消息统计信息，不包含性能数据。"""
+    from rich.table import Table
+
+    message_counts, _ = _analyze_messages(messages)
+
+    # 创建简化的统计表格
+    table = Table(title="Message Summary", show_header=True, header_style="bold blue")
+    table.add_column("Message Type", justify="left")
+    table.add_column("Count", justify="right")
+
+    # 添加消息类型统计
+    for msg_type, count in message_counts.items():
+        if msg_type != "Total":  # 跳过总计，单独处理
+            table.add_row(msg_type, str(count))
+
+    # 添加总计行
+    if "Total" in message_counts:
+        table.add_row("", "")  # 空行分隔
+        table.add_row("[bold]Total[/bold]", f"[bold]{message_counts['Total']}[/bold]")
+
+    console.print(table)

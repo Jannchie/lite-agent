@@ -1,3 +1,17 @@
+## v0.14.0
+
+[v0.13.0...v0.14.0](https://github.com/Jannchie/lite-agent/compare/v0.13.0...v0.14.0)
+
+### :sparkles: Features
+
+- **chat-display**: improve compact message table layout and add flexible string output functions - By [Jannchie](mailto:jannchie@gmail.com) in [454fe91](https://github.com/Jannchie/lite-agent/commit/454fe91)
+- **chat-display**: add messages_to_string and chat_summary_to_string - By [Jannchie](mailto:jannchie@gmail.com) in [887cdf0](https://github.com/Jannchie/lite-agent/commit/887cdf0)
+- **context**: add context modification example and tests - By [Jannchie](mailto:jannchie@gmail.com) in [3e32ac1](https://github.com/Jannchie/lite-agent/commit/3e32ac1)
+
+### :art: Refactors
+
+- **chat-display**: use keyword arguments and typing hints - By [Jannchie](mailto:jannchie@gmail.com) in [3e7a6cd](https://github.com/Jannchie/lite-agent/commit/3e7a6cd)
+
 ## v0.13.0
 
 [v0.12.0...v0.13.0](https://github.com/Jannchie/lite-agent/compare/v0.12.0...v0.13.0)

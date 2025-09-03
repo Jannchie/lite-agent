@@ -168,6 +168,7 @@ class TestMessageContext:
             console=console,
             index_str="1",
             timestamp_str="12:00:00",
+            show_metadata=False,
             max_content_length=100,
             truncate_content=lambda x, y: x[:y],
         )

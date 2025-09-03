@@ -1,6 +1,5 @@
 """Tests for message builder utility."""
 
-
 from lite_agent.types import (
     AssistantTextContent,
     AssistantToolCall,
@@ -29,6 +28,7 @@ def test_build_user_message_from_dict_string_content():
 def test_build_user_message_from_dict_with_meta():
     """Test building user message from dict with meta information."""
     from datetime import datetime, timezone
+
     test_time = datetime.now(timezone.utc)
     message_dict = {
         "role": "user",
@@ -145,6 +145,7 @@ def test_build_user_content_from_dict_fallback():
 
 def test_build_user_content_from_object_input_text():
     """Test building user content from input_text object."""
+
     class MockItem:
         type = "input_text"
         text = "Object text"
@@ -157,6 +158,7 @@ def test_build_user_content_from_object_input_text():
 
 def test_build_user_content_from_object_input_image():
     """Test building user content from input_image object."""
+
     class MockItem:
         type = "input_image"
         image_url = "https://example.com/obj.jpg"
@@ -173,6 +175,7 @@ def test_build_user_content_from_object_input_image():
 
 def test_build_user_content_from_object_fallback():
     """Test building user content from object with unknown type."""
+
     class MockItem:
         type = "unknown"
         value = "test"
@@ -210,6 +213,7 @@ def test_build_user_content_items_mixed():
 def test_build_system_message_from_dict():
     """Test building system message from dict."""
     from datetime import datetime, timezone
+
     test_time = datetime.now(timezone.utc)
     message_dict = {
         "role": "system",

@@ -10,6 +10,7 @@ import json
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 
 try:
     from zoneinfo import ZoneInfo
@@ -1048,3 +1049,67 @@ def _display_new_assistant_message_compact(message: NewAssistantMessage, context
         # Always use indented format for better hierarchy
         context.console.print(f"  [cyan]Output:[/cyan]{time_info}")
         context.console.print(f"  {output}")
+
+
+def messages_to_string(
+    messages: RunnerMessages,
+    *,
+    config: DisplayConfig | None = None,
+) -> str:
+    """
+    将消息列表转换为纯文本字符串，不包含颜色和格式。
+
+    Args:
+        messages: 要转换的消息列表
+        config: 显示配置（可选）
+
+    Returns:
+        包含所有消息的纯文本字符串
+    """
+    if config is None:
+        config = DisplayConfig()
+
+    # 创建一个没有颜色的 Console 来捕获输出
+    string_buffer = StringIO()
+    plain_console = Console(file=string_buffer, force_terminal=False, no_color=True, width=120)
+
+    # 使用修改后的配置
+    plain_config = DisplayConfig(
+        console=plain_console,
+        show_indices=config.show_indices,
+        show_timestamps=config.show_timestamps,
+        max_content_length=config.max_content_length,
+        local_timezone=config.local_timezone,
+    )
+
+    # 调用现有的 display_messages 函数，但输出到字符串缓冲区
+    display_messages(messages, config=plain_config)
+
+    # 获取结果并清理
+    result = string_buffer.getvalue()
+    string_buffer.close()
+
+    return result
+
+
+def chat_summary_to_string(messages: RunnerMessages) -> str:
+    """
+    将聊天摘要转换为纯文本字符串。
+
+    Args:
+        messages: 要分析的消息列表
+
+    Returns:
+        包含聊天摘要的纯文本字符串
+    """
+    string_buffer = StringIO()
+    plain_console = Console(file=string_buffer, force_terminal=False, no_color=True, width=120)
+
+    # 调用现有的 display_chat_summary 函数，但输出到字符串缓冲区
+    display_chat_summary(messages, console=plain_console)
+
+    # 获取结果并清理
+    result = string_buffer.getvalue()
+    string_buffer.close()
+
+    return result

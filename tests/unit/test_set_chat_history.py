@@ -183,6 +183,7 @@ class TestSetChatHistoryNew:
         assert isinstance(self.runner.messages[0], NewUserMessage)
         assert isinstance(self.runner.messages[1], NewAssistantMessage)
         from lite_agent.types import UserTextContent
+
         assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == "Hello"
 

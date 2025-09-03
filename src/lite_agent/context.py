@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from lite_agent.types import NewMessage
 
 T = TypeVar("T")
 
@@ -33,5 +36,5 @@ class HistoryContext(BaseModel, Generic[T]):
         ...     return f"用户 {user_id} 有 {len(messages)} 条消息"
     """
 
-    history_messages: list[Any]
+    history_messages: list[NewMessage]
     data: T | None = None

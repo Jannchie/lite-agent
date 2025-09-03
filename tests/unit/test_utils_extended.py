@@ -1,6 +1,5 @@
 """Extended tests for utils modules to improve coverage."""
 
-
 from lite_agent.utils.metrics import TimingMetrics
 
 

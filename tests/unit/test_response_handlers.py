@@ -250,6 +250,7 @@ async def test_completion_handler_streaming():
 
     # Mock CustomStreamWrapper
     from litellm import CustomStreamWrapper
+
     mock_response = Mock(spec=CustomStreamWrapper)
 
     # Mock the stream handler

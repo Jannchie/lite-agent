@@ -48,10 +48,12 @@ class TestAgentAdditional:
         # 包含函数调用的消息
         messages: list[FlexibleRunnerMessage] = [
             AgentUserMessage(content=[UserTextContent(text="Hello")]),
-            AgentAssistantMessage(content=[
-                AssistantToolCall(call_id="call_123", name="test_function", arguments='{"param": "value"}'),
-                AssistantToolCallResult(call_id="call_123", output="Function result"),
-            ]),
+            AgentAssistantMessage(
+                content=[
+                    AssistantToolCall(call_id="call_123", name="test_function", arguments='{"param": "value"}'),
+                    AssistantToolCallResult(call_id="call_123", output="Function result"),
+                ],
+            ),
         ]
 
         result = agent.prepare_completion_messages(messages)

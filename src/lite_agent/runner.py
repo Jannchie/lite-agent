@@ -1,5 +1,5 @@
-import json
 import inspect
+import json
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timedelta, timezone
 from os import PathLike
@@ -115,54 +115,54 @@ class Runner:
 
     def _tool_expects_history_context(self, tool_calls: Sequence["ToolCall"]) -> bool:
         """Check if any of the tool calls expect HistoryContext in their signatures.
-        
+
         Returns True if any tool function has a Context[HistoryContext[...]] parameter,
         False if they expect Context[...] without HistoryContext wrapper.
         """
         if not tool_calls:
             return False
-            
+
         for tool_call in tool_calls:
             tool_func = self.agent.fc.function_registry.get(tool_call.function.name)
             if not tool_func:
                 continue
-                
+
             # Get function signature
             sig = inspect.signature(tool_func)
-            
+
             # Check each parameter for Context annotation
             for param in sig.parameters.values():
                 if param.annotation == inspect.Parameter.empty:
                     continue
-                    
+
                 # Check if parameter is Context[...]
                 origin = get_origin(param.annotation)
                 if origin is not None:
                     # Check if it's Context type (compare by string name to handle import differences)
-                    origin_name = getattr(origin, '__name__', str(origin))
-                    if 'Context' in origin_name:
+                    origin_name = getattr(origin, "__name__", str(origin))
+                    if "Context" in origin_name:
                         args = get_args(param.annotation)
                         if args:
                             # Check if the Context contains HistoryContext
                             inner_type = args[0]
                             inner_origin = get_origin(inner_type)
                             if inner_origin is not None:
-                                inner_name = getattr(inner_origin, '__name__', str(inner_origin))
-                                if 'HistoryContext' in inner_name:
+                                inner_name = getattr(inner_origin, "__name__", str(inner_origin))
+                                if "HistoryContext" in inner_name:
                                     logger.debug(f"Tool {tool_call.function.name} expects HistoryContext")
                                     return True
                             # Also check for direct HistoryContext class
-                            elif hasattr(inner_type, '__name__') and 'HistoryContext' in inner_type.__name__:
+                            elif hasattr(inner_type, "__name__") and "HistoryContext" in inner_type.__name__:
                                 logger.debug(f"Tool {tool_call.function.name} expects HistoryContext")
                                 return True
-                
+
                 # Also handle direct annotation checking
-                if hasattr(param.annotation, '__name__'):
+                if hasattr(param.annotation, "__name__"):
                     annotation_str = str(param.annotation)
-                    if 'HistoryContext' in annotation_str:
+                    if "HistoryContext" in annotation_str:
                         logger.debug(f"Tool {tool_call.function.name} expects HistoryContext (direct)")
                         return True
-                        
+
         logger.debug("No tools expect HistoryContext")
         return False
 
@@ -240,7 +240,7 @@ class Runner:
 
         # Check if tools expect HistoryContext wrapper
         expects_history = self._tool_expects_history_context(tool_calls)
-        
+
         if expects_history:
             # Auto-inject history messages into context for tools that expect HistoryContext
             if context is not None and not isinstance(context, Context):
@@ -352,6 +352,12 @@ class Runner:
 
         # Determine completion condition based on agent configuration
         completion_condition = getattr(self.agent, "completion_condition", CompletionMode.STOP)
+
+        # If termination_tools are set but completion_condition is still STOP,
+        # automatically switch to CALL mode to enable custom termination
+        if completion_condition == CompletionMode.STOP and hasattr(self.agent, "termination_tools") and self.agent.termination_tools:
+            completion_condition = CompletionMode.CALL
+            logger.debug(f"Auto-switching to CALL mode due to termination_tools: {self.agent.termination_tools}")
 
         def is_finish() -> bool:
             if completion_condition == CompletionMode.CALL:

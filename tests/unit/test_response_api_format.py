@@ -1,6 +1,5 @@
 """Unit tests for Response API format - updated for new NewMessage-only architecture."""
 
-
 from lite_agent import Agent, Runner
 from lite_agent.types import NewUserMessage, ResponseInputImage, ResponseInputText
 
@@ -114,6 +113,7 @@ class TestResponseAPIFormatNew:
         assert len(self.runner.messages) == 1
         assert isinstance(self.runner.messages[0], NewUserMessage)
         from lite_agent.types import UserTextContent
+
         assert isinstance(self.runner.messages[0].content[0], UserTextContent)
         assert self.runner.messages[0].content[0].text == "Hello!"
 

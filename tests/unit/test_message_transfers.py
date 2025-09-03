@@ -30,11 +30,13 @@ def test_consolidate_history_transfer_with_function_calls():
     """Test consolidate_history_transfer with function calls."""
     messages = [
         NewUserMessage(content=[UserTextContent(text="Check the weather")]),
-        NewAssistantMessage(content=[
-            AssistantToolCall(call_id="call_123", name="get_weather", arguments='{"city": "Tokyo"}'),
-            AssistantToolCallResult(call_id="call_123", output="Sunny, 22°C"),
-            AssistantTextContent(text="The weather in Tokyo is sunny and 22°C."),
-        ]),
+        NewAssistantMessage(
+            content=[
+                AssistantToolCall(call_id="call_123", name="get_weather", arguments='{"city": "Tokyo"}'),
+                AssistantToolCallResult(call_id="call_123", output="Sunny, 22°C"),
+                AssistantTextContent(text="The weather in Tokyo is sunny and 22°C."),
+            ],
+        ),
     ]
 
     result = consolidate_history_transfer(messages)
@@ -72,10 +74,12 @@ def test_consolidate_history_transfer_mixed_types():
     """Test consolidate_history_transfer with mixed message types."""
     messages = [
         NewUserMessage(content=[UserTextContent(text="Pydantic message")]),
-        NewAssistantMessage(content=[
-            AssistantTextContent(text="Dict message"),
-            AssistantToolCall(call_id="test_123", name="test_func", arguments="{}"),
-        ]),
+        NewAssistantMessage(
+            content=[
+                AssistantTextContent(text="Dict message"),
+                AssistantToolCall(call_id="test_123", name="test_func", arguments="{}"),
+            ],
+        ),
     ]
 
     result = consolidate_history_transfer(messages)

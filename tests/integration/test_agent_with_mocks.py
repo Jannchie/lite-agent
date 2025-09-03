@@ -47,7 +47,8 @@ async def test_agent_with_mock_data():
             includes=["assistant_message", "usage", "function_call", "function_call_output"],
         )
     with patch("lite_agent.client.litellm.acompletion", mock2):
-        await runner.run_until_complete(None,
+        await runner.run_until_complete(
+            None,
             includes=["assistant_message", "usage", "function_call", "function_call_output"],
         )
 

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from lite_agent.types import NewMessage
+else:
+    # Runtime: use Any to avoid circular import issues
+    NewMessage = Any
 
 T = TypeVar("T")
 

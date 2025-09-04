@@ -149,7 +149,7 @@ class TestAgentAdditional:
 
         # 测试只有系统消息的情况
         messages = [{"role": "system", "content": "Custom system message"}]
-        result = agent.prepare_completion_messages(messages)
+        result = agent.prepare_completion_messages(messages)  # type: ignore[arg-type]
         assert len(result) >= 1
 
     def test_agent_basic_properties(self):

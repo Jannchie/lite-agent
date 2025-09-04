@@ -7,7 +7,7 @@ from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
 from lite_agent.chat_display import chat_summary_to_string, messages_to_string
-from lite_agent.client import LiteLLMClient
+from lite_agent.client import OpenAIClient
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -35,9 +35,9 @@ async def get_temperature(city: str, ctx: Context[MyContext]) -> str:
 
 
 agent = Agent(
-    model=LiteLLMClient(model="gpt-5-nano", reasoning={"effort": "minimal"}),
+    model=OpenAIClient(model="gpt-5-mini", reasoning={"effort": "minimal"}),
     name="Weather Assistant",
-    instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses.",
+    instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses. You should call the get_temperature tool to get the temperature for a city.",
     tools=[get_temperature],
 )
 

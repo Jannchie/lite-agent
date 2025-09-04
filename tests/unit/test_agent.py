@@ -46,7 +46,7 @@ async def test_stream_async_typeerror():
     not_a_stream = object()
 
     with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)), pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"):  # noqa: PT012
-        result = await agent.completion([{"role": "user", "content": "hi"}])
+        result = await agent.completion([{"role": "user", "content": "hi"}])  # type: ignore[arg-type]
         # Force consumption of the async generator to trigger the error
         async for _ in result:
             pass

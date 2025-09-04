@@ -61,21 +61,25 @@ class MessageFormatConverter:
             if content_item.type == "text":
                 text_parts.append(content_item.text)
             elif content_item.type == "tool_call":
-                tool_calls.append({
-                    "id": content_item.call_id,
-                    "type": "function",
-                    "function": {
-                        "name": content_item.name,
-                        "arguments": content_item.arguments if isinstance(content_item.arguments, str) else str(content_item.arguments),
+                tool_calls.append(
+                    {
+                        "id": content_item.call_id,
+                        "type": "function",
+                        "function": {
+                            "name": content_item.name,
+                            "arguments": content_item.arguments if isinstance(content_item.arguments, str) else str(content_item.arguments),
+                        },
+                        "index": len(tool_calls),
                     },
-                    "index": len(tool_calls),
-                })
+                )
             elif content_item.type == "tool_call_result":
-                tool_results.append({
-                    "role": "tool",
-                    "tool_call_id": content_item.call_id,
-                    "content": content_item.output,
-                })
+                tool_results.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": content_item.call_id,
+                        "content": content_item.output,
+                    },
+                )
 
         # Create assistant message
         assistant_msg = {
@@ -108,10 +112,12 @@ class MessageFormatConverter:
 
             item_type = item_dict.get("type")
             if item_type in ["input_text", "text"]:
-                converted_content.append({
-                    "type": "text",
-                    "text": item_dict["text"],
-                })
+                converted_content.append(
+                    {
+                        "type": "text",
+                        "text": item_dict["text"],
+                    },
+                )
             elif item_type in ["input_image", "image"]:
                 if item_dict.get("file_id"):
                     logger.warning("File ID input not supported for Completion API, skipping")
@@ -126,10 +132,12 @@ class MessageFormatConverter:
                 if detail:
                     image_data["detail"] = detail
 
-                converted_content.append({
-                    "type": "image_url",
-                    "image_url": image_data,
-                })
+                converted_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": image_data,
+                    },
+                )
             else:
                 # Keep other formats as-is
                 converted_content.append(item_dict)
@@ -178,23 +186,29 @@ class ResponsesFormatConverter:
                 contents = []
                 for item in message.content:
                     if isinstance(item, AssistantTextContent):
-                        contents.append({
-                            "role": "assistant",
-                            "content": item.text,
-                        })
+                        contents.append(
+                            {
+                                "role": "assistant",
+                                "content": item.text,
+                            },
+                        )
                     elif isinstance(item, AssistantToolCall):
-                        contents.append({
-                            "type": "function_call",
-                            "call_id": item.call_id,
-                            "name": item.name,
-                            "arguments": item.arguments,
-                        })
+                        contents.append(
+                            {
+                                "type": "function_call",
+                                "call_id": item.call_id,
+                                "name": item.name,
+                                "arguments": item.arguments,
+                            },
+                        )
                     elif isinstance(item, AssistantToolCallResult):
-                        contents.append({
-                            "type": "function_call_output",
-                            "call_id": item.call_id,
-                            "output": item.output,
-                        })
+                        contents.append(
+                            {
+                                "type": "function_call_output",
+                                "call_id": item.call_id,
+                                "output": item.output,
+                            },
+                        )
                 result.extend(contents)
 
             elif isinstance(message, NewUserMessage):
@@ -202,31 +216,41 @@ class ResponsesFormatConverter:
                 for item in message.content:
                     match item.type:
                         case "text":
-                            contents.append({
-                                "type": "input_text",
-                                "text": item.text,
-                            })
+                            contents.append(
+                                {
+                                    "type": "input_text",
+                                    "text": item.text,
+                                },
+                            )
                         case "image":
-                            contents.append({
-                                "type": "input_image",
-                                "image_url": item.image_url,
-                            })
+                            contents.append(
+                                {
+                                    "type": "input_image",
+                                    "image_url": item.image_url,
+                                },
+                            )
                         case "file":
-                            contents.append({
-                                "type": "input_file",
-                                "file_id": item.file_id,
-                                "file_name": item.file_name,
-                            })
+                            contents.append(
+                                {
+                                    "type": "input_file",
+                                    "file_id": item.file_id,
+                                    "file_name": item.file_name,
+                                },
+                            )
 
-                result.append({
-                    "role": message.role,
-                    "content": contents,
-                })
+                result.append(
+                    {
+                        "role": message.role,
+                        "content": contents,
+                    },
+                )
 
             elif isinstance(message, NewSystemMessage):
-                result.append({
-                    "role": "system",
-                    "content": message.content,
-                })
+                result.append(
+                    {
+                        "role": "system",
+                        "content": message.content,
+                    },
+                )
 
         return result

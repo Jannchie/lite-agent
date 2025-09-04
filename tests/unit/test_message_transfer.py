@@ -98,7 +98,7 @@ async def test_message_transfer_called_in_completion():
         mock_completion.return_value = mock_resp
 
         # Call completion
-        async for _ in await agent.completion(test_messages):
+        async for _ in await agent.completion(test_messages):  # type: ignore[arg-type]
             pass
 
         # Verify that completion was called
@@ -140,7 +140,7 @@ async def test_completion_without_message_transfer():
         mock_completion.return_value = mock_resp
 
         # Call completion
-        async for _ in await agent.completion(test_messages):
+        async for _ in await agent.completion(test_messages):  # type: ignore[arg-type]
             pass
 
         # Verify that completion was called
@@ -186,7 +186,7 @@ def test_message_transfer_with_different_message_types():
         {"type": "function_call", "name": "test_func", "arguments": "{}"},
     ]
 
-    result = add_prefix_transfer(test_messages)
+    result = add_prefix_transfer(test_messages)  # type: ignore[arg-type]
 
     assert result[0]["content"] == "[USER] Hello"  # type: ignore
     assert result[1]["content"] == "[ASSISTANT] Hi there"  # type: ignore

@@ -16,7 +16,7 @@ class MockAgent(Agent):
             instructions="Test instructions",
         )
 
-    async def completion(self, messages, record_to_file=None, reasoning=None, *, streaming=True):
+    async def completion(self, messages, record_to_file=None, response_format=None, reasoning=None, *, streaming=True):
         """Mock completion method that tracks streaming parameter."""
         self.last_streaming_value = streaming
 
@@ -27,7 +27,7 @@ class MockAgent(Agent):
 
         return empty_gen()
 
-    async def responses(self, messages, record_to_file=None, reasoning=None, *, streaming=True):
+    async def responses(self, messages, record_to_file=None, response_format=None, reasoning=None, *, streaming=True):
         """Mock responses method that tracks streaming parameter."""
         self.last_streaming_value = streaming
 

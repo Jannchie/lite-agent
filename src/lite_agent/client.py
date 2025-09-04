@@ -44,6 +44,7 @@ class LLMConfig(BaseModel):
     frequency_penalty: float | None = None
     presence_penalty: float | None = None
     stop: list[str] | str | None = None
+    response_format: type[BaseModel] | dict[str, Any] | None = None
 
 
 def parse_reasoning_config(reasoning: ReasoningConfig) -> tuple[ReasoningEffort | None, ThinkingConfig]:
@@ -96,6 +97,70 @@ def _parse_dict_reasoning_config(reasoning: ReasoningEffortDict | ThinkingConfig
     return None, reasoning  # type: ignore[return-value]
 
 
+def _prepare_response_format(
+    response_format: type[BaseModel] | dict[str, Any] | None,
+    *,
+    use_litellm_native: bool = False,
+) -> dict[str, Any] | type[BaseModel] | None:
+    """
+    将 response_format 转换为 LiteLLM 兼容的格式。
+
+    Args:
+        response_format: Pydantic 模型类或字典格式的 response_format
+        use_litellm_native: 是否使用 LiteLLM 的原生 Pydantic 支持（可能兼容性较差）
+
+    Returns:
+        LiteLLM 兼容的 response_format 字典、Pydantic 模型类或 None
+    """
+    if response_format is None:
+        return None
+
+    # 如果是 Pydantic 模型类
+    if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        # 如果启用原生支持，直接返回 Pydantic 模型让 LiteLLM 处理
+        if use_litellm_native:
+            return response_format
+
+        # 否则使用我们的兼容性更强的实现
+        schema = response_format.model_json_schema()
+
+        # 确保符合 OpenAI structured output 要求
+        def make_schema_strict(schema_dict: Any) -> None:  # noqa: ANN401
+            if isinstance(schema_dict, dict):
+                # 对于对象类型，设置 additionalProperties: false 和确保 required 包含所有属性
+                if schema_dict.get("type") == "object":
+                    schema_dict["additionalProperties"] = False
+                    if "properties" in schema_dict:
+                        # 确保所有属性都在 required 数组中
+                        all_properties = list(schema_dict["properties"].keys())
+                        schema_dict["required"] = all_properties
+
+                # 递归处理所有嵌套结构
+                for value in schema_dict.values():
+                    make_schema_strict(value)
+
+            elif isinstance(schema_dict, list):
+                for item in schema_dict:
+                    make_schema_strict(item)
+
+        make_schema_strict(schema)
+
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": response_format.__name__,
+                "schema": schema,
+                "strict": True,
+            },
+        }
+
+    # 如果已经是字典格式，直接返回
+    if isinstance(response_format, dict):
+        return response_format
+
+    return None
+
+
 class BaseLLMClient(abc.ABC):
     """Base class for LLM clients."""
 
@@ -134,6 +199,7 @@ class BaseLLMClient(abc.ABC):
         tools: list[ChatCompletionToolParam] | None = None,
         tool_choice: str = "auto",
         reasoning: ReasoningConfig = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
         *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
@@ -147,6 +213,7 @@ class BaseLLMClient(abc.ABC):
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
         *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
@@ -172,6 +239,7 @@ class LiteLLMClient(BaseLLMClient):
         tools: list[ChatCompletionToolParam] | None = None,
         tool_choice: str = "auto",
         reasoning: ReasoningConfig = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
         *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
@@ -210,6 +278,12 @@ class LiteLLMClient(BaseLLMClient):
         if self.llm_config.stop is not None:
             completion_params["stop"] = self.llm_config.stop
 
+        # 处理 response_format - 优先使用方法参数，然后是配置中的值
+        final_response_format = response_format or self.llm_config.response_format
+        prepared_response_format = _prepare_response_format(final_response_format)
+        if prepared_response_format is not None:
+            completion_params["response_format"] = prepared_response_format
+
         # Add reasoning parameters if specified
         if final_reasoning_effort is not None:
             completion_params["reasoning_effort"] = final_reasoning_effort
@@ -224,6 +298,7 @@ class LiteLLMClient(BaseLLMClient):
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
         *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
@@ -264,6 +339,12 @@ class LiteLLMClient(BaseLLMClient):
             response_params["presence_penalty"] = self.llm_config.presence_penalty
         if self.llm_config.stop is not None:
             response_params["stop"] = self.llm_config.stop
+
+        # 处理 response_format - 优先使用方法参数，然后是配置中的值
+        final_response_format = response_format or self.llm_config.response_format
+        prepared_response_format = _prepare_response_format(final_response_format)
+        if prepared_response_format is not None:
+            response_params["response_format"] = prepared_response_format
 
         # Add reasoning parameters if specified
         if final_reasoning_effort is not None:

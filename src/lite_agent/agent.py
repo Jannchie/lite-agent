@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
+from pydantic import BaseModel
 
 from lite_agent.client import BaseLLMClient, LiteLLMClient
 from lite_agent.constants import CompletionMode, ToolName
@@ -42,6 +43,7 @@ class Agent:
         completion_condition: str = "stop",
         stop_before_tools: list[str] | list[Callable] | None = None,
         termination_tools: list[str] | list[Callable] | None = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> None:
         self.name = name
         self.instructions = instructions
@@ -77,7 +79,7 @@ class Agent:
             # If model is a BaseLLMClient instance, use it directly
             self.client = model
         else:
-            # Otherwise, create a LitellmClient instance
+            # Otherwise, create a LiteLLMClient instance
             self.client = LiteLLMClient(
                 model=model,
             )
@@ -85,6 +87,7 @@ class Agent:
         self.handoffs = handoffs if handoffs else []
         self._parent: Agent | None = None
         self.message_transfer = message_transfer
+        self.response_format = response_format
         # Initialize Funcall with regular tools
         self.fc = Funcall(tools)
 
@@ -243,6 +246,7 @@ class Agent:
         self,
         messages: RunnerMessages,
         record_to_file: Path | None = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
         *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
@@ -256,10 +260,13 @@ class Agent:
         self.message_histories = self.prepare_completion_messages(processed_messages)
 
         tools = self.fc.get_tools(target="completion")
+        # 优先使用方法参数，然后是实例属性
+        final_response_format = response_format or self.response_format
         resp = await self.client.completion(
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
+            response_format=final_response_format,
             streaming=streaming,
         )
 
@@ -271,6 +278,7 @@ class Agent:
         self,
         messages: RunnerMessages,
         record_to_file: Path | None = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
         *,
         streaming: bool = True,
     ) -> AsyncGenerator[AgentChunk, None]:
@@ -283,10 +291,13 @@ class Agent:
         # For responses API, use prepare_responses_messages (no conversion)
         self.message_histories = self.prepare_responses_messages(processed_messages)
         tools = self.fc.get_tools()
+        # 优先使用方法参数，然后是实例属性
+        final_response_format = response_format or self.response_format
         resp = await self.client.responses(
             messages=self.message_histories,
             tools=tools,
             tool_choice="auto",  # TODO: make this configurable
+            response_format=final_response_format,
             streaming=streaming,
         )
         # Use response handler for unified processing
@@ -447,3 +458,19 @@ class Agent:
             Set of function names
         """
         return self.stop_before_functions.copy()
+
+    def set_response_format(self, response_format: type[BaseModel] | dict[str, Any] | None) -> None:
+        """Set the response format for structured output.
+
+        Args:
+            response_format: Pydantic model class, dict format, or None to disable
+        """
+        self.response_format = response_format
+
+    def get_response_format(self) -> type[BaseModel] | dict[str, Any] | None:
+        """Get the current response format.
+
+        Returns:
+            Current response format setting
+        """
+        return self.response_format

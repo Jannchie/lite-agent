@@ -151,9 +151,9 @@ class TestAppendMessage:
             self.runner.append_message(msg)
 
         assert len(self.runner.messages) == 3
-        assert self.runner.messages[0].content[0].text == "First message"
-        assert self.runner.messages[1].content[0].text == "Second message"
-        assert self.runner.messages[2].content[0].text == "Third message"
+        assert self.runner.messages[0].content[0].text == "First message"  # type: ignore[union-attr]
+        assert self.runner.messages[1].content[0].text == "Second message"  # type: ignore[union-attr]
+        assert self.runner.messages[2].content[0].text == "Third message"  # type: ignore[union-attr]
 
     def test_append_message_with_complex_assistant_dict(self):
         """测试添加包含工具调用的助手消息字典"""

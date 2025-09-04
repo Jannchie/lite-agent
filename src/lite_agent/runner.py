@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Literal, cast, get_args, get_origin
 
 from funcall import Context
+from pydantic import BaseModel
 
 from lite_agent.agent import Agent
 from lite_agent.constants import CompletionMode, StreamIncludes, ToolName
@@ -293,6 +294,7 @@ class Runner:
         includes: Sequence[AgentChunkType] | None = None,
         context: "Any | None" = None,  # noqa: ANN401
         record_to: PathLike | str | None = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk.
 
@@ -305,7 +307,7 @@ class Runner:
         # If no user input provided, use continue logic
         if user_input is None:
             logger.debug("No user input provided, using continue logic")
-            return self._run_continue_stream(max_steps, includes, self._normalize_record_path(record_to), context)
+            return self._run_continue_stream(max_steps, includes, self._normalize_record_path(record_to), context, response_format)
 
         # Cancel any pending tool calls before processing new user input
         # and yield cancellation events if they should be included
@@ -327,7 +329,7 @@ class Runner:
                 # Handle single message (BaseModel, TypedDict, or dict)
                 self.append_message(user_input)  # type: ignore[arg-type]
         logger.debug("Messages prepared, calling _run")
-        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context)
+        return self._run(max_steps, includes, self._normalize_record_path(record_to), context=context, response_format=response_format)
 
     async def _run(
         self,
@@ -335,6 +337,7 @@ class Runner:
         includes: Sequence[AgentChunkType],
         record_to: Path | None = None,
         context: Any | None = None,  # noqa: ANN401
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Run the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         logger.debug(f"Running agent with messages: {self.messages}")
@@ -385,6 +388,7 @@ class Runner:
                     resp = await self.agent.completion(
                         self.messages,
                         record_to_file=record_to,
+                        response_format=response_format,
                         streaming=self.streaming,
                     )
                 case "responses":
@@ -392,6 +396,7 @@ class Runner:
                     resp = await self.agent.responses(
                         self.messages,
                         record_to_file=record_to,
+                        response_format=response_format,
                         streaming=self.streaming,
                     )
                 case _:
@@ -551,6 +556,7 @@ class Runner:
         includes: Sequence[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
         context: "Any | None" = None,  # noqa: ANN401
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Continue running the agent and return a RunResponse object that can be asynchronously iterated for each chunk."""
         includes = self._normalize_includes(includes)
@@ -562,7 +568,7 @@ class Runner:
             tool_calls = self._convert_tool_calls_to_tool_calls(pending_tool_calls)
             async for tool_chunk in self._handle_tool_calls(tool_calls, includes, context=context):
                 yield tool_chunk
-            async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to)):
+            async for chunk in self._run(max_steps, includes, self._normalize_record_path(record_to), context=context, response_format=response_format):
                 if chunk.type in includes:
                     yield chunk
         else:
@@ -571,7 +577,7 @@ class Runner:
                 msg = "Cannot continue running without a valid last message from the assistant."
                 raise ValueError(msg)
 
-            resp = self._run(max_steps=max_steps, includes=includes, record_to=self._normalize_record_path(record_to), context=context)
+            resp = self._run(max_steps=max_steps, includes=includes, record_to=self._normalize_record_path(record_to), context=context, response_format=response_format)
             async for chunk in resp:
                 yield chunk
 
@@ -582,9 +588,10 @@ class Runner:
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
         context: Context | None = None,
+        response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> list[AgentChunk]:
         """Run the agent until it completes and return the final message."""
-        resp = self.run(user_input, max_steps, includes, record_to=record_to, context=context)
+        resp = self.run(user_input, max_steps, includes, record_to=record_to, context=context, response_format=response_format)
         return await self._collect_all_chunks(resp)
 
     def _analyze_last_assistant_message(self) -> tuple[list[AssistantToolCall], dict[str, str]]:

@@ -8,5 +8,20 @@
     "temp/**/*"
   ],
   "reportAttributeAccessIssue": "warning",
-  "reportArgumentType": "warning"
+  "reportArgumentType": "warning",
+  "pythonPath": ".",
+  "extraPaths": ["."],
+  "executionEnvironments": [
+    {
+      "root": "src",
+      "reportAttributeAccessIssue": "warning",
+      "reportArgumentType": "warning"
+    },
+    {
+      "root": "tests",
+      "reportAttributeAccessIssue": "none",
+      "reportArgumentType": "none",
+      "extraPaths": ["."]
+    }
+  ]
 }

@@ -1,6 +1,7 @@
 """Integration tests for structured output functionality."""
 
 import json
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -54,7 +55,7 @@ class TestStructuredOutputIntegration:
         event = AssistantMessageEvent(message=message)
 
         # Create async generator that yields the event
-        async def async_gen():
+        async def async_gen() -> AsyncGenerator[AssistantMessageEvent, None]:
             yield event
 
         # Wrap in CustomStreamWrapper to match expected type

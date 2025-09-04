@@ -47,7 +47,7 @@ async def weather_demo():
     weather_agent = Agent(
         model="gpt-4o-mini",
         name="WeatherAgent",
-        instructions="""You are a weather information assistant. 
+        instructions="""You are a weather information assistant.
         Provide weather information in the exact format specified by the response schema.
         Make the information realistic and helpful.""",
         response_format=WeatherInfo,

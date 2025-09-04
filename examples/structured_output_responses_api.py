@@ -119,7 +119,7 @@ async def compare_apis():
             response_format=PersonInfo,
         )
 
-        runner = Runner(agent, api=api_name)
+        runner = Runner(agent, api=api_name) # type: ignore
         chunks = runner.run(user_input)
 
         async for chunk in chunks:

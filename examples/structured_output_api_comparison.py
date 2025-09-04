@@ -7,6 +7,7 @@ completion and responses APIs, showing their differences.
 import asyncio
 import json
 import os
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -39,7 +40,7 @@ def extract_json_from_response(text: str) -> str:
     return text
 
 
-async def test_api(api_name: str) -> bool:
+async def test_api(api_name: Literal["completion", "responses"]) -> bool:
     """Test structured output with specific API."""
     print(f"\n{'=' * 20} {api_name.upper()} API {'=' * 20}")
 
@@ -87,11 +88,10 @@ async def test_api(api_name: str) -> bool:
                         print(f"   Age: {person.age}")
                         print(f"   Occupation: {person.occupation}")
                         print(f"   City: {person.city}")
-                        return True
-
                     except (json.JSONDecodeError, ValueError) as e:
                         print(f"❌ JSON parsing error: {e}")
                         return False
+                    return True
 
             except Exception as e:
                 print(f"❌ Error: {e}")

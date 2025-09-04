@@ -1,3 +1,11 @@
+## v0.14.1
+
+[v0.14.0...v0.14.1](https://github.com/Jannchie/lite-agent/compare/v0.14.0...v0.14.1)
+
+### :adhesive_bandage: Fixes
+
+- **context**: prevent circular import with newmessage - By [Jannchie](mailto:jannchie@gmail.com) in [80b3b68](https://github.com/Jannchie/lite-agent/commit/80b3b68)
+
 ## v0.14.0
 
 [v0.13.0...v0.14.0](https://github.com/Jannchie/lite-agent/compare/v0.13.0...v0.14.0)

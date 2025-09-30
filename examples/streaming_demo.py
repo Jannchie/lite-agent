@@ -39,7 +39,11 @@ async def main():
     async for chunk in runner_non_streaming.run("What is the capital of Germany?"):
         chunks.append(chunk)
         if chunk.type == "assistant_message":
-            print(chunk.message.content[0].text)
+            for part in chunk.message.content:
+                if part.type == "text":
+                    print(part.text)
+                else:
+                    print(f"[{part.type}]", end="", flush=True)
     print(f"Received {len(chunks)} chunks in non-streaming mode\n")
 
     print("=== Comparing Performance ===")

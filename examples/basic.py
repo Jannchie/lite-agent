@@ -25,7 +25,7 @@ class MyContext(BaseModel):
     d: str
 
 
-ctx = Context(MyContext(d="example data"))
+ctx = MyContext(d="example data")
 
 
 async def get_temperature(city: str, ctx: Context[MyContext]) -> str:
@@ -37,7 +37,7 @@ async def get_temperature(city: str, ctx: Context[MyContext]) -> str:
 agent = Agent(
     model=OpenAIClient(model="gpt-5-mini", reasoning={"effort": "minimal"}),
     name="Weather Assistant",
-    instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses. You should call the get_temperature tool to get the temperature for a city.",
+    instructions="You are a helpful weather assistant. Before using tools, briefly explain what you are going to do. Provide friendly and informative responses. You should call the get_temperature tool to get the temperature for a city.",  # noqa: E501
     tools=[get_temperature],
 )
 
@@ -46,7 +46,6 @@ async def main():
     runner = Runner(agent)
     await runner.run_until_complete(
         "What is the temperature in New York?",
-        includes=["usage", "assistant_message", "function_call", "function_call_output", "timing"],
         context=ctx,
     )
     messages = messages_to_string(runner.messages)

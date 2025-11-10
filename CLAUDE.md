@@ -38,14 +38,14 @@ uv run <command>         # Run command in project environment
 ### Running Examples
 
 ```bash
-uv run python examples/basic.py                    # Simple agent with tool calling
-uv run python examples/handoffs.py                 # Agent-to-agent transfers
-uv run python examples/chat_display_demo.py        # Rich console output
-uv run python examples/context.py                  # Context passing to tools
-uv run python examples/terminal.py                 # Terminal-based interaction
-uv run python examples/translate/main.py           # Translation agent example
-uv run python examples/streaming_demo.py           # Streaming responses demo
-uv run python examples/response_api_example.py     # Response API format demo
+uv run python examples/basic.py                         # Simple agent with tool calling
+uv run python examples/workflows/handoffs.py            # Agent-to-agent transfers
+uv run python examples/demos/chat_display_demo.py       # Rich console output
+uv run python examples/context/context.py               # Context passing to tools
+uv run python examples/demos/terminal.py                # Terminal-based interaction
+uv run python examples/demos/translate_app/main.py      # Translation agent example
+uv run python examples/basics/streaming_demo.py         # Streaming responses demo
+uv run python examples/basics/response_api_example.py   # Response API format demo
 uv run python scripts/record_chat_messages.py      # Record conversations for testing
 ```
 
@@ -104,13 +104,15 @@ LiteAgent is a lightweight AI agent framework designed for flexibility with any 
 
 ### Examples Directory Structure
 
-Examples demonstrate various usage patterns:
+Examples demonstrate various usage patterns and are grouped by focus:
 
-- `basic.py`: Simple agent with tool calling
-- `handoffs.py`: Agent-to-agent transfers
-- `context.py`: Context passing to tools
-- `chat_display_demo.py`: Rich console output formatting
-- `channels/`: Channel-based communication patterns
+- `basic.py`: Standalone quickstart example
+- `basics/`: Core agent, streaming, and API mode demos
+- `context/`: Context injection and history sharing patterns
+- `tools/`: Tooling, confirmation flows, and message transfers
+- `workflows/`: Agent handoffs and orchestration scenarios
+- `demos/`: UI/terminal integrations and vertical demos
+- `structured/`: Structured output comparisons for different APIs
 
 ### Testing Architecture
 

@@ -587,7 +587,7 @@ class Runner:
         max_steps: int = 20,
         includes: list[AgentChunkType] | None = None,
         record_to: PathLike | str | None = None,
-        context: Context | None = None,
+        context: Any | None = None,  # noqa: ANN401
         response_format: type[BaseModel] | dict[str, Any] | None = None,
     ) -> list[AgentChunk]:
         """Run the agent until it completes and return the final message."""

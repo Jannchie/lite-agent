@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator, AsyncIterable
+from collections.abc import AsyncGenerator, AsyncIterable, Awaitable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,11 +54,7 @@ async def openai_completion_stream_handler(
             async for result in processor.process_chunk(chunk, record_file):
                 yield result
     finally:
-        if hasattr(resp, "aclose") and callable(resp.aclose):
-            try:
-                await resp.aclose()  # type: ignore[func-returns-value]
-            except Exception:
-                logger.debug("Failed to close OpenAI stream", exc_info=True)
+        await _close_stream(resp)
         if record_file:
             await record_file.close()
 
@@ -84,10 +80,20 @@ async def openai_response_stream_handler(
             async for result in processor.process_chunk(chunk, record_file):
                 yield result
     finally:
-        if hasattr(resp, "aclose") and callable(resp.aclose):
-            try:
-                await resp.aclose()  # type: ignore[func-returns-value]
-            except Exception:
-                logger.debug("Failed to close OpenAI stream", exc_info=True)
+        await _close_stream(resp)
         if record_file:
             await record_file.close()
+
+
+async def _close_stream(stream: object) -> None:
+    """Safely close an async stream if it provides an aclose coroutine."""
+    close = getattr(stream, "aclose", None)
+    if close is None or not callable(close):
+        return
+
+    try:
+        result = close()
+        if isinstance(result, Awaitable):
+            await result
+    except Exception:
+        logger.debug("Failed to close OpenAI stream", exc_info=True)

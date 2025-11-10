@@ -1,263 +1,176 @@
-"""
-Additional tests for stream_handlers/litellm.py to improve coverage
-"""
+"""Additional tests for OpenAI stream handlers."""
 
+import json
 import tempfile
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
-import litellm
 import pytest
-from litellm.types.llms.openai import ResponsesAPIStreamingResponse
+from openai.types.chat import ChatCompletionChunk
 
-from lite_agent.stream_handlers.litellm import (
+from lite_agent.stream_handlers.openai import (
     ensure_record_file,
-    litellm_completion_stream_handler,
-    litellm_response_stream_handler,
+    openai_completion_stream_handler,
+    openai_response_stream_handler,
 )
 
 
+class MockAsyncStream:
+    """Simple async iterable to simulate OpenAI streams."""
+
+    def __init__(self, items: list[Any]) -> None:
+        self._items = items
+        self._closed = False
+
+    def __aiter__(self) -> AsyncGenerator[Any, None]:
+        async def gen() -> AsyncGenerator[Any, None]:
+            for item in self._items:
+                yield item
+
+        return gen()
+
+    async def aclose(self) -> None:
+        self._closed = True
+
+
+class DummyEvent:
+    def __init__(self, **kwargs: Any) -> None:
+        self.__dict__.update(kwargs)
+
+    def model_dump_json(self) -> str:
+        return json.dumps(self.__dict__)
+
+
+def _build_chat_chunk(delta: dict[str, Any]) -> ChatCompletionChunk:
+    """Create a minimal valid ChatCompletionChunk for testing."""
+
+    return ChatCompletionChunk.model_validate(
+        {
+            "id": "chunk-id",
+            "object": "chat.completion.chunk",
+            "created": 0,
+            "model": "gpt-4o-mini",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": delta,
+                },
+            ],
+        },
+    )
+
+
 class TestStreamHandlersAdditional:
-    """Additional tests for litellm stream handlers"""
+    """Additional tests for OpenAI stream handlers."""
 
-    def test_ensure_record_file_with_none(self):
-        """Test ensure_record_file with None input"""
-        result = ensure_record_file(None)
-        assert result is None
+    def test_ensure_record_file_variants(self) -> None:
+        """ensure_record_file should handle None, Path, and string inputs."""
 
-    def test_ensure_record_file_with_path(self):
-        """Test ensure_record_file with Path input"""
+        assert ensure_record_file(None) is None
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            result = ensure_record_file(temp_path)
-            assert result is not None
-            assert result.parent == temp_path
+            expected_file = temp_path / "conversation.jsonl"
+            assert ensure_record_file(temp_path) == expected_file
+            assert ensure_record_file(temp_dir) == expected_file
 
-    def test_ensure_record_file_with_string_path(self):
-        """Test ensure_record_file with string input"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            result = ensure_record_file(temp_dir)
-            assert result is not None
-            assert result.parent == Path(temp_dir)
-
-    def test_ensure_record_file_creates_directory(self):
-        """Test ensure_record_file creates directory if it doesn't exist"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            non_existent_dir = Path(temp_dir) / "non_existent"
-            result = ensure_record_file(non_existent_dir)
-            assert result is not None
-            assert result.parent.exists()
+            nested = temp_path / "subdir" / "file.jsonl"
+            result = ensure_record_file(nested)
+            assert result == nested
+            assert nested.parent.exists()
 
     @pytest.mark.asyncio
-    async def test_litellm_completion_stream_handler_unexpected_chunk(self):
-        """Test litellm_completion_stream_handler with unexpected chunk type"""
-        # Create a mock chunk that's not a BaseModel
-        unexpected_chunk = "not a basemodel"
+    async def test_completion_stream_handler_logs_unexpected_chunk(self) -> None:
+        """Non-ChatCompletionChunk inputs should trigger a warning and be skipped."""
 
-        async def mock_async_iter() -> AsyncGenerator[str, None]:
-            yield unexpected_chunk
+        stream = MockAsyncStream(["invalid"])
 
-        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
-        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
+        with patch("lite_agent.stream_handlers.openai.logger") as mock_logger:
+            collected = [chunk async for chunk in openai_completion_stream_handler(stream)]
 
-        with patch("lite_agent.stream_handlers.litellm.logger") as mock_logger:
-            chunks = []
-            async for chunk in litellm_completion_stream_handler(mock_resp):
-                chunks.append(chunk)
-
-            # Should log warning about unexpected chunk type
-            assert mock_logger.warning.call_count >= 1
+        assert collected == []
+        mock_logger.warning.assert_called()
 
     @pytest.mark.asyncio
-    async def test_litellm_completion_stream_handler_with_record_file(self):
-        """Test litellm_completion_stream_handler with record file"""
-        from pydantic import BaseModel
+    async def test_completion_stream_handler_with_record_file(self, tmp_path: Path) -> None:
+        """Handler should open record file and delegate to processor."""
 
-        class MockChunk(BaseModel):
-            id: str = "test"
-            content: str = "test content"
+        chunk = _build_chat_chunk({"role": "assistant", "content": "hi"})
+        stream = MockAsyncStream([chunk])
 
-        chunk = MockChunk()
+        mock_file = AsyncMock()
+        mock_file.write = AsyncMock()
+        mock_file.flush = AsyncMock()
+        mock_file.close = AsyncMock()
 
-        async def mock_async_iter() -> AsyncGenerator[Any, None]:
-            yield chunk
+        mock_open = AsyncMock(return_value=mock_file)
 
-        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
-        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
+        with patch("lite_agent.stream_handlers.openai.CompletionEventProcessor") as mock_processor_cls, patch(
+            "lite_agent.stream_handlers.openai.aiofiles.open",
+            mock_open,
+        ):
+            mock_processor_instance = Mock()
+            async def mock_process_chunk(*_args, **_kwargs):
+                if False:
+                    yield None
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            record_path = Path(temp_dir)
+            mock_processor_instance.process_chunk = mock_process_chunk
+            mock_processor_cls.return_value = mock_processor_instance
 
-            with patch("lite_agent.stream_handlers.litellm.aiofiles") as mock_aiofiles:
-                mock_file = AsyncMock()
-                mock_aiofiles.open = AsyncMock(return_value=mock_file)
-
-                with patch("lite_agent.stream_handlers.litellm.CompletionEventProcessor") as mock_processor:
-                    mock_processor_instance = Mock()
-
-                    # Create proper async generator mock
-                    async def mock_process_chunk(_chunk: object, _record_file: object) -> AsyncGenerator[None, None]:
-                        return
-                        yield  # unreachable but makes it an async generator
-
-                    mock_processor_instance.process_chunk = mock_process_chunk
-                    mock_processor.return_value = mock_processor_instance
-
-                    chunks = []
-                    async for chunk in litellm_completion_stream_handler(mock_resp, record_to=record_path):
-                        chunks.append(chunk)
-
-    @pytest.mark.asyncio
-    async def test_litellm_response_stream_handler_unexpected_chunk(self):
-        """Test litellm_response_stream_handler with unexpected chunk type"""
-
-        # Create a mock chunk that's not a proper ResponsesAPIStreamingResponse
-        async def mock_resp() -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
-            # Use type: ignore to bypass type checking for testing purposes
-            yield "not a basemodel"  # type: ignore[misc]
-
-        with patch("lite_agent.stream_handlers.litellm.logger") as mock_logger:
-            chunks = []
-            async for chunk in litellm_response_stream_handler(mock_resp()):
-                chunks.append(chunk)
-
-            # Should log warning about unexpected chunk type
-            assert mock_logger.warning.call_count >= 1
-
-    @pytest.mark.asyncio
-    async def test_litellm_response_stream_handler_with_record_file(self):
-        """Test litellm_response_stream_handler with record file"""
-        from pydantic import BaseModel
-
-        class MockResponse(BaseModel):
-            id: str = "test"
-            content: str = "test content"
-
-        response = MockResponse()
-
-        async def mock_resp() -> AsyncGenerator[ResponsesAPIStreamingResponse, None]:
-            # Use type: ignore to bypass type checking for testing purposes
-            yield response  # type: ignore[misc]
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            record_path = Path(temp_dir)
-
-            with patch("lite_agent.stream_handlers.litellm.aiofiles") as mock_aiofiles:
-                mock_file = AsyncMock()
-                mock_aiofiles.open = AsyncMock(return_value=mock_file)
-
-                with patch("lite_agent.stream_handlers.litellm.ResponseEventProcessor") as mock_processor:
-                    mock_processor_instance = Mock()
-
-                    # Create proper async generator mock
-                    async def mock_process_chunk(_chunk: object, _record_file: object) -> AsyncGenerator[None, None]:
-                        return
-                        yield  # unreachable but makes it an async generator
-
-                    mock_processor_instance.process_chunk = mock_process_chunk
-                    mock_processor.return_value = mock_processor_instance
-
-                    chunks = []
-                    async for chunk in litellm_response_stream_handler(mock_resp(), record_to=record_path):
-                        chunks.append(chunk)
-
-    @pytest.mark.asyncio
-    async def test_stream_handlers_file_operations(self):
-        """Test file operations in stream handlers"""
-        from pydantic import BaseModel
-
-        class MockChunk(BaseModel):
-            id: str = "test"
-
-        chunk = MockChunk()
-
-        async def mock_async_iter() -> AsyncGenerator[Any, None]:
-            yield chunk
-
-        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
-        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            record_path = Path(temp_dir) / "test.jsonl"
-
-            with patch("lite_agent.stream_handlers.litellm.aiofiles") as mock_aiofiles:
-                mock_file = AsyncMock()
-                mock_aiofiles.open = AsyncMock(return_value=mock_file)
-
-                with patch("lite_agent.stream_handlers.litellm.CompletionEventProcessor") as mock_processor:
-                    mock_processor_instance = Mock()
-
-                    # Mock the async generator
-                    async def mock_process_chunk(_chunk: object, record_file: Any) -> AsyncGenerator[None, None]:  # noqa: ANN401
-                        if record_file:
-                            await record_file.write('{"test": "data"}\n')
-                        return
-                        yield  # Make it an async generator
-
-                    mock_processor_instance.process_chunk = mock_process_chunk
-                    mock_processor.return_value = mock_processor_instance
-
-                    chunks = []
-                    async for chunk in litellm_completion_stream_handler(mock_resp, record_to=record_path.parent):
-                        chunks.append(chunk)
-
-    @pytest.mark.asyncio
-    async def test_stream_handlers_exception_handling(self):
-        """Test exception handling in stream handlers"""
-
-        class TestError(Exception):
-            pass
-
-        async def failing_async_iter() -> AsyncGenerator[Any, None]:
-            test_exception_msg = "Test exception"
-            raise TestError(test_exception_msg)
-            yield  # Make it an async generator
-
-        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
-        mock_resp.__aiter__ = Mock(return_value=failing_async_iter())
-
-        with pytest.raises(TestError, match="Test exception"):
-            async for _chunk in litellm_completion_stream_handler(mock_resp):
+            async for _chunk in openai_completion_stream_handler(stream, tmp_path / "record.jsonl"):
                 pass
 
+        mock_processor_cls.assert_called_once()
+        mock_open.assert_awaited_once()
+        mock_file.close.assert_awaited_once()
+
     @pytest.mark.asyncio
-    async def test_record_file_cleanup(self):
-        """Test that record files are properly closed"""
-        from pydantic import BaseModel
+    async def test_response_stream_handler_unexpected_chunk(self) -> None:
+        """Non-BaseModel events should be ignored with warning."""
 
-        class MockChunk(BaseModel):
-            id: str = "test"
+        stream = MockAsyncStream(["invalid"])
 
-        async def mock_async_iter() -> AsyncGenerator[Any, None]:
-            yield MockChunk()
+        with patch("lite_agent.stream_handlers.openai.logger") as mock_logger:
+            collected = [chunk async for chunk in openai_response_stream_handler(stream)]
 
-        mock_resp = Mock(spec=litellm.CustomStreamWrapper)
-        mock_resp.__aiter__ = Mock(return_value=mock_async_iter())
+        assert collected == []
+        mock_logger.warning.assert_called()
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            record_path = Path(temp_dir)
+    @pytest.mark.asyncio
+    async def test_response_stream_handler_processes_events(self) -> None:
+        """Handler should forward events to ResponseEventProcessor."""
 
-            with patch("lite_agent.stream_handlers.litellm.aiofiles") as mock_aiofiles:
-                mock_file = AsyncMock()
-                # Make aiofiles.open() return the mock file when awaited
-                mock_aiofiles.open = AsyncMock(return_value=mock_file)
+        output_added = DummyEvent(
+            type="response.output_item.added",
+            item={"type": "message", "content": []},
+            output_index=0,
+            sequence_number=0,
+        )
+        text_delta = DummyEvent(
+            type="response.output_text.delta",
+            delta="Hello",
+            item_id="item",
+            output_index=0,
+            content_index=0,
+            sequence_number=1,
+        )
+        output_done = DummyEvent(
+            type="response.output_item.done",
+            item={"type": "function_call", "call_id": "1", "name": "tool", "arguments": "{}"},
+            output_index=0,
+            sequence_number=2,
+        )
+        stream = MockAsyncStream([output_added, text_delta, output_done])
 
-                with patch("lite_agent.stream_handlers.litellm.CompletionEventProcessor") as mock_processor:
-                    mock_processor_instance = Mock()
+        with patch("lite_agent.stream_handlers.openai.ResponseEventProcessor") as mock_processor_cls:
+            processor_instance = Mock()
+            processor_instance.process_chunk = Mock(return_value=MockAsyncStream([]))
+            mock_processor_cls.return_value = processor_instance
 
-                    # Create a proper async generator mock
-                    async def mock_process_chunk(_chunk: object, _record_file: object) -> AsyncGenerator[None, None]:
-                        return
-                        yield  # unreachable but makes it an async generator
+            async for _chunk in openai_response_stream_handler(stream):
+                pass
 
-                    mock_processor_instance.process_chunk = mock_process_chunk
-                    mock_processor.return_value = mock_processor_instance
-
-                    chunks = []
-                    async for chunk in litellm_completion_stream_handler(mock_resp, record_to=record_path):
-                        chunks.append(chunk)
-
-                    # Verify file was closed
-                    mock_file.close.assert_called_once()
+        mock_processor_cls.assert_called_once()
+        assert processor_instance.process_chunk.call_count == 3

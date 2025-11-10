@@ -5,10 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from litellm import CustomStreamWrapper
-
 from lite_agent.response_handlers.base import ResponseHandler
-from lite_agent.stream_handlers import litellm_completion_stream_handler
+from lite_agent.stream_handlers import openai_completion_stream_handler
 from lite_agent.types import AgentChunk
 from lite_agent.types.events import AssistantMessageEvent, Usage, UsageEvent
 from lite_agent.types.messages import AssistantMessageMeta, AssistantTextContent, AssistantToolCall, NewAssistantMessage
@@ -23,11 +21,11 @@ class CompletionResponseHandler(ResponseHandler):
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming completion response."""
-        if isinstance(response, CustomStreamWrapper):
-            async for chunk in litellm_completion_stream_handler(response, record_to):
+        if hasattr(response, "__aiter__"):
+            async for chunk in openai_completion_stream_handler(response, record_to):
                 yield chunk
         else:
-            msg = "Response is not a CustomStreamWrapper, cannot stream chunks."
+            msg = "Response does not support async iteration, cannot stream chunks."
             raise TypeError(msg)
 
     async def _handle_non_streaming(

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from lite_agent.response_handlers.base import ResponseHandler
-from lite_agent.stream_handlers import litellm_response_stream_handler
+from lite_agent.stream_handlers import openai_response_stream_handler
 from lite_agent.types import AgentChunk
 from lite_agent.types.events import AssistantMessageEvent, Usage, UsageEvent
 from lite_agent.types.messages import AssistantMessageMeta, AssistantTextContent, AssistantToolCall, NewAssistantMessage
@@ -21,7 +21,11 @@ class ResponsesAPIHandler(ResponseHandler):
         record_to: Path | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         """Handle streaming responses API response."""
-        async for chunk in litellm_response_stream_handler(response, record_to):
+        if not hasattr(response, "__aiter__"):
+            msg = "Response does not support async iteration, cannot stream chunks."
+            raise TypeError(msg)
+
+        async for chunk in openai_response_stream_handler(response, record_to):
             yield chunk
 
     async def _handle_non_streaming(

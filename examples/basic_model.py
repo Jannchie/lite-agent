@@ -5,7 +5,7 @@ from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
 from lite_agent.chat_display import display_messages
-from lite_agent.client import LiteLLMClient
+from lite_agent.client import OpenAIClient
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -25,7 +25,7 @@ async def get_temperature(city: str) -> str:
 
 
 agent = Agent(
-    model=LiteLLMClient(
+    model=OpenAIClient(
         model="gpt-4o-mini",
         temperature=0.7,
         max_tokens=150,

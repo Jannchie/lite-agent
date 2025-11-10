@@ -114,10 +114,10 @@ async def test_completion_handler_streaming_invalid_response():
     """Test completion handler streaming with invalid response type."""
     handler = CompletionResponseHandler()
 
-    # Mock invalid response (not CustomStreamWrapper)
+    # Mock invalid response (no async iteration support)
     mock_response = Mock()
 
-    with pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"):
+    with pytest.raises(TypeError, match="Response does not support async iteration"):
         async for _chunk in handler._handle_streaming(mock_response):
             pass
 
@@ -226,7 +226,7 @@ async def test_responses_handler_streaming():
     handler = ResponsesAPIHandler()
 
     # Mock the stream handler to return some chunks
-    with patch("lite_agent.response_handlers.responses.litellm_response_stream_handler") as mock_stream:
+    with patch("lite_agent.response_handlers.responses.openai_response_stream_handler") as mock_stream:
         mock_chunks = [Mock(), Mock()]
 
         async def async_gen() -> any:  # type: ignore[misc]
@@ -235,8 +235,20 @@ async def test_responses_handler_streaming():
 
         mock_stream.return_value = async_gen()
 
+        class AsyncStream:
+            def __aiter__(self):
+                async def gen():
+                    if False:
+                        yield None
+
+                return gen()
+
+            async def aclose(self) -> None:
+                return None
+
+        response_stream = AsyncStream()
         chunks = []
-        async for chunk in handler._handle_streaming(Mock()):
+        async for chunk in handler._handle_streaming(response_stream):
             chunks.append(chunk)
 
         assert len(chunks) == 2
@@ -245,16 +257,24 @@ async def test_responses_handler_streaming():
 
 @pytest.mark.asyncio
 async def test_completion_handler_streaming():
-    """Test completion handler streaming with valid CustomStreamWrapper."""
+    """Test completion handler streaming with async iterable response."""
     handler = CompletionResponseHandler()
 
-    # Mock CustomStreamWrapper
-    from litellm import CustomStreamWrapper
+    class AsyncStream:
+        def __aiter__(self):
+            async def gen():
+                if False:
+                    yield None
 
-    mock_response = Mock(spec=CustomStreamWrapper)
+            return gen()
+
+        async def aclose(self) -> None:
+            return None
+
+    mock_response = AsyncStream()
 
     # Mock the stream handler
-    with patch("lite_agent.response_handlers.completion.litellm_completion_stream_handler") as mock_stream:
+    with patch("lite_agent.response_handlers.completion.openai_completion_stream_handler") as mock_stream:
         mock_chunks = [Mock(), Mock()]
 
         async def async_gen() -> any:  # type: ignore[misc]

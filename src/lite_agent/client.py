@@ -1,10 +1,10 @@
 import abc
-import os
 from typing import Any, Literal, NotRequired, TypedDict
 
-import litellm
-from openai.types.chat import ChatCompletionToolParam
-from openai.types.responses import FunctionToolParam
+from openai import AsyncOpenAI
+from openai._streaming import AsyncStream
+from openai.types.chat import ChatCompletion, ChatCompletionChunk, ChatCompletionToolParam
+from openai.types.responses import FunctionToolParam, Response, ResponseStreamEvent
 from pydantic import BaseModel
 
 ReasoningEffort = Literal["minimal", "low", "medium", "high"]
@@ -99,29 +99,13 @@ def _parse_dict_reasoning_config(reasoning: ReasoningEffortDict | ThinkingConfig
 
 def _prepare_response_format(
     response_format: type[BaseModel] | dict[str, Any] | None,
-    *,
-    use_litellm_native: bool = False,
 ) -> dict[str, Any] | type[BaseModel] | None:
-    """
-    将 response_format 转换为 LiteLLM 兼容的格式。
-
-    Args:
-        response_format: Pydantic 模型类或字典格式的 response_format
-        use_litellm_native: 是否使用 LiteLLM 的原生 Pydantic 支持（可能兼容性较差）
-
-    Returns:
-        LiteLLM 兼容的 response_format 字典、Pydantic 模型类或 None
-    """
+    """Normalize response_format to the schema accepted by the OpenAI SDK."""
     if response_format is None:
         return None
 
     # 如果是 Pydantic 模型类
     if isinstance(response_format, type) and issubclass(response_format, BaseModel):
-        # 如果启用原生支持，直接返回 Pydantic 模型让 LiteLLM 处理
-        if use_litellm_native:
-            return response_format
-
-        # 否则使用我们的兼容性更强的实现
         schema = response_format.model_json_schema()
 
         # 确保符合 OpenAI structured output 要求
@@ -221,7 +205,39 @@ class BaseLLMClient(abc.ABC):
         """Perform a response request to the LLM."""
 
 
-class LiteLLMClient(BaseLLMClient):
+class OpenAIClient(BaseLLMClient):
+    def __init__(
+        self,
+        *,
+        model: str,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        api_version: str | None = None,
+        organization: str | None = None,
+        reasoning: ReasoningConfig = None,
+        llm_config: LLMConfig | None = None,
+        **llm_params: Any,  # noqa: ANN401
+    ) -> None:
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            api_base=api_base,
+            api_version=api_version,
+            reasoning=reasoning,
+            llm_config=llm_config,
+            **llm_params,
+        )
+
+        client_kwargs: dict[str, Any] = {}
+        if self.api_key is not None:
+            client_kwargs["api_key"] = self.api_key
+        if self.api_base is not None:
+            client_kwargs["base_url"] = self.api_base
+        if organization is not None:
+            client_kwargs["organization"] = organization
+
+        self._client = AsyncOpenAI(**client_kwargs)
+
     def _resolve_reasoning_params(
         self,
         reasoning: ReasoningConfig,
@@ -243,58 +259,51 @@ class LiteLLMClient(BaseLLMClient):
         *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
-    ) -> Any:  # noqa: ANN401
-        """Perform a completion request to the Litellm API."""
+    ) -> ChatCompletion | AsyncStream[ChatCompletionChunk]:
+        """Perform a completion request using the OpenAI SDK."""
 
-        # 处理推理配置参数
-        final_reasoning_effort, final_thinking_config = self._resolve_reasoning_params(
-            reasoning,
-        )
+        final_reasoning_effort, _ = self._resolve_reasoning_params(reasoning)
 
-        # Prepare completion parameters
-        completion_params = {
+        params: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": tool_choice,
-            "api_version": self.api_version,
-            "api_key": self.api_key,
-            "api_base": self.api_base,
-            "stream": streaming,
             **kwargs,
         }
 
-        # Add LLM generation parameters if specified
-        if self.llm_config.temperature is not None:
-            completion_params["temperature"] = self.llm_config.temperature
-        if self.llm_config.max_tokens is not None:
-            completion_params["max_tokens"] = self.llm_config.max_tokens
-        if self.llm_config.top_p is not None:
-            completion_params["top_p"] = self.llm_config.top_p
-        if self.llm_config.frequency_penalty is not None:
-            completion_params["frequency_penalty"] = self.llm_config.frequency_penalty
-        if self.llm_config.presence_penalty is not None:
-            completion_params["presence_penalty"] = self.llm_config.presence_penalty
-        if self.llm_config.stop is not None:
-            completion_params["stop"] = self.llm_config.stop
+        if tools is not None:
+            params["tools"] = tools
+        if tool_choice is not None:
+            params["tool_choice"] = tool_choice
+        if streaming:
+            params["stream"] = True
 
-        # 处理 response_format - 优先使用方法参数，然后是配置中的值
-        final_response_format = response_format or self.llm_config.response_format
+        llm_config = self.llm_config
+        if llm_config.temperature is not None:
+            params["temperature"] = llm_config.temperature
+        if llm_config.max_tokens is not None:
+            params["max_tokens"] = llm_config.max_tokens
+        if llm_config.top_p is not None:
+            params["top_p"] = llm_config.top_p
+        if llm_config.frequency_penalty is not None:
+            params["frequency_penalty"] = llm_config.frequency_penalty
+        if llm_config.presence_penalty is not None:
+            params["presence_penalty"] = llm_config.presence_penalty
+        if llm_config.stop is not None:
+            params["stop"] = llm_config.stop
+
+        final_response_format = response_format or llm_config.response_format
         prepared_response_format = _prepare_response_format(final_response_format)
         if prepared_response_format is not None:
-            completion_params["response_format"] = prepared_response_format
+            params["response_format"] = prepared_response_format
 
-        # Add reasoning parameters if specified
         if final_reasoning_effort is not None:
-            completion_params["reasoning_effort"] = final_reasoning_effort
-        if final_thinking_config is not None:
-            completion_params["thinking"] = final_thinking_config
+            params["reasoning_effort"] = final_reasoning_effort
 
-        return await litellm.acompletion(**completion_params)
+        return await self._client.chat.completions.create(**params)
 
     async def responses(
         self,
-        messages: list[dict[str, Any]],  # Changed from ResponseInputParam
+        messages: list[dict[str, Any]],
         tools: list[FunctionToolParam] | None = None,
         tool_choice: Literal["none", "auto", "required"] = "auto",
         reasoning: ReasoningConfig = None,
@@ -302,53 +311,45 @@ class LiteLLMClient(BaseLLMClient):
         *,
         streaming: bool = True,
         **kwargs: Any,  # noqa: ANN401
-    ) -> Any:  # type: ignore[return]  # noqa: ANN401
-        """Perform a response request to the Litellm API."""
+    ) -> Response | AsyncStream[ResponseStreamEvent]:
+        """Perform a Responses API request using the OpenAI SDK."""
 
-        os.environ["DISABLE_AIOHTTP_TRANSPORT"] = "True"
+        final_reasoning_effort, _ = self._resolve_reasoning_params(reasoning)
 
-        # 处理推理配置参数
-        final_reasoning_effort, final_thinking_config = self._resolve_reasoning_params(
-            reasoning,
-        )
-
-        # Prepare response parameters
-        response_params = {
+        params: dict[str, Any] = {
             "model": self.model,
-            "input": messages,  # type: ignore[arg-type]
-            "tools": tools,
-            "tool_choice": tool_choice,
-            "api_version": self.api_version,
-            "api_key": self.api_key,
-            "api_base": self.api_base,
-            "stream": streaming,
+            "input": messages,
             "store": False,
             **kwargs,
         }
 
-        # Add LLM generation parameters if specified
-        if self.llm_config.temperature is not None:
-            response_params["temperature"] = self.llm_config.temperature
-        if self.llm_config.max_tokens is not None:
-            response_params["max_tokens"] = self.llm_config.max_tokens
-        if self.llm_config.top_p is not None:
-            response_params["top_p"] = self.llm_config.top_p
-        if self.llm_config.frequency_penalty is not None:
-            response_params["frequency_penalty"] = self.llm_config.frequency_penalty
-        if self.llm_config.presence_penalty is not None:
-            response_params["presence_penalty"] = self.llm_config.presence_penalty
-        if self.llm_config.stop is not None:
-            response_params["stop"] = self.llm_config.stop
+        if tools is not None:
+            params["tools"] = tools
+        if tool_choice is not None:
+            params["tool_choice"] = tool_choice
+        if streaming:
+            params["stream"] = True
 
-        # 处理 response_format - 优先使用方法参数，然后是配置中的值
-        final_response_format = response_format or self.llm_config.response_format
+        llm_config = self.llm_config
+        if llm_config.temperature is not None:
+            params["temperature"] = llm_config.temperature
+        if llm_config.max_tokens is not None:
+            params["max_tokens"] = llm_config.max_tokens
+        if llm_config.top_p is not None:
+            params["top_p"] = llm_config.top_p
+        if llm_config.frequency_penalty is not None:
+            params["frequency_penalty"] = llm_config.frequency_penalty
+        if llm_config.presence_penalty is not None:
+            params["presence_penalty"] = llm_config.presence_penalty
+        if llm_config.stop is not None:
+            params["stop"] = llm_config.stop
+
+        final_response_format = response_format or llm_config.response_format
         prepared_response_format = _prepare_response_format(final_response_format)
         if prepared_response_format is not None:
-            response_params["response_format"] = prepared_response_format
+            params["response_format"] = prepared_response_format
 
-        # Add reasoning parameters if specified
         if final_reasoning_effort is not None:
-            response_params["reasoning"] = {"effort": final_reasoning_effort}
-        if final_thinking_config is not None:
-            response_params["thinking"] = final_thinking_config
-        return await litellm.aresponses(**response_params)  # type: ignore[return-value]
+            params["reasoning"] = {"effort": final_reasoning_effort}
+
+        return await self._client.responses.create(**params)

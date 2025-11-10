@@ -5,7 +5,7 @@ from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
 from lite_agent.chat_display import display_messages
-from lite_agent.client import LiteLLMClient
+from lite_agent.client import OpenAIClient
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -46,7 +46,7 @@ def read_knowledge(knowledge: str) -> str:
 
 
 agent = Agent(
-    model=LiteLLMClient(model="gpt-5-nano", reasoning={"effort": "minimal"}),
+    model=OpenAIClient(model="gpt-5-nano", reasoning={"effort": "minimal"}),
     name="Assistant",
     instructions="你是一个有帮助的助手。",
     tools=[list_knowledges, read_knowledge],

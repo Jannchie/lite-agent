@@ -1,6 +1,6 @@
 from typing import Literal
 
-from litellm.types.utils import ModelResponseStream
+from openai.types.chat import ChatCompletionChunk
 from pydantic import BaseModel
 
 from .messages import NewAssistantMessage
@@ -22,7 +22,7 @@ class CompletionRawEvent(BaseModel):
     """
 
     type: Literal["completion_raw"] = "completion_raw"
-    raw: ModelResponseStream
+    raw: ChatCompletionChunk
 
 
 class ResponseRawEvent(BaseModel):

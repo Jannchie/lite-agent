@@ -5,7 +5,7 @@ from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
 from lite_agent.chat_display import display_messages
-from lite_agent.client import LiteLLMClient, LLMConfig
+from lite_agent.client import LLMConfig, OpenAIClient
 from lite_agent.runner import Runner
 
 logging.basicConfig(
@@ -26,7 +26,7 @@ async def get_weather(city: str) -> str:
 
 # Method 1: Using individual parameters
 agent1 = Agent(
-    model=LiteLLMClient(
+    model=OpenAIClient(
         model="gpt-4o-mini",
         temperature=0.3,
         max_tokens=100,
@@ -50,7 +50,7 @@ llm_config = LLMConfig(
 )
 
 agent2 = Agent(
-    model=LiteLLMClient(
+    model=OpenAIClient(
         model="gpt-4o-mini",
         llm_config=llm_config,
     ),

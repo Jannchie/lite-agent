@@ -3,19 +3,10 @@
 """
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from litellm.types.llms.openai import (
-    ContentPartAddedEvent,
-    FunctionCallArgumentsDeltaEvent,
-    FunctionCallArgumentsDoneEvent,
-    OutputItemAddedEvent,
-    OutputItemDoneEvent,
-    OutputTextDeltaEvent,
-    ResponseCompletedEvent,
-    ResponsesAPIStreamEvents,
-)
 
 from lite_agent.processors.response_event_processor import ResponseEventProcessor
 from lite_agent.types import (
@@ -25,6 +16,17 @@ from lite_agent.types import (
     TimingEvent,
     UsageEvent,
 )
+
+
+class ResponsesAPIStreamEvents:
+    RESPONSE_CREATED = "response.created"
+    RESPONSE_IN_PROGRESS = "response.in_progress"
+    OUTPUT_TEXT_DONE = "response.output_text.done"
+    CONTENT_PART_DONE = "response.content_part.done"
+    OUTPUT_ITEM_ADDED = "response.output_item.added"
+    CONTENT_PART_ADDED = "response.content_part.added"
+    OUTPUT_TEXT_DELTA = "response.output_text.delta"
+    OUTPUT_ITEM_DONE = "response.output_item.done"
 
 
 class TestResponseEventProcessor:
@@ -253,9 +255,10 @@ class TestResponseEventProcessor:
 
         # 创建 OutputItemAddedEvent
         mock_item = {"type": "message", "content": []}
-        event = OutputItemAddedEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.OUTPUT_ITEM_ADDED,
             output_index=0,
+            sequence_number=0,
             item=mock_item,
         )
 
@@ -274,11 +277,12 @@ class TestResponseEventProcessor:
 
         # 创建 ContentPartAddedEvent
         mock_part = {"type": "text", "text": "Hello"}
-        event = ContentPartAddedEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.CONTENT_PART_ADDED,
             item_id="item_123",
             output_index=0,
             content_index=0,
+            sequence_number=0,
             part=mock_part,
         )
 
@@ -300,11 +304,12 @@ class TestResponseEventProcessor:
         )
 
         # 创建 OutputTextDeltaEvent
-        event = OutputTextDeltaEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.OUTPUT_TEXT_DELTA,
             item_id="item_123",
             output_index=0,
             content_index=0,
+            sequence_number=0,
             delta=" World",
         )
 
@@ -327,9 +332,10 @@ class TestResponseEventProcessor:
             "name": "test_function",
             "arguments": '{"param": "value"}',
         }
-        event = OutputItemDoneEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.OUTPUT_ITEM_DONE,
             output_index=0,
+            sequence_number=0,
             item=mock_item,
         )
 
@@ -353,9 +359,10 @@ class TestResponseEventProcessor:
             "type": "message",
             "content": [{"text": "Hello", "type": "text"}],
         }
-        event = OutputItemDoneEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.OUTPUT_ITEM_DONE,
             output_index=0,
+            sequence_number=0,
             item=mock_item,
         )
 
@@ -384,10 +391,10 @@ class TestResponseEventProcessor:
         )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDeltaEvent
-        event = Mock(spec=FunctionCallArgumentsDeltaEvent)
-        event.delta = '"param":'
-        # Mock 必须有 type 属性才能通过初始检查
-        event.type = "other"
+        event = SimpleNamespace(
+            type="response.function_call.arguments.delta",
+            delta='"param":',
+        )
 
         result = processor.handle_event(event)
 
@@ -406,10 +413,10 @@ class TestResponseEventProcessor:
         )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDeltaEvent
-        event = Mock(spec=FunctionCallArgumentsDeltaEvent)
-        event.delta = '{"param": "value"}'
-        # Mock 必须有 type 属性才能通过初始检查
-        event.type = "other"
+        event = SimpleNamespace(
+            type="response.function_call.arguments.delta",
+            delta='{"param": "value"}',
+        )
 
         result = processor.handle_event(event)
 
@@ -430,10 +437,10 @@ class TestResponseEventProcessor:
         )
 
         # 使用 Mock 来模拟 FunctionCallArgumentsDoneEvent
-        event = Mock(spec=FunctionCallArgumentsDoneEvent)
-        event.arguments = '{"param": "value"}'
-        # Mock 必须有 type 属性才能通过初始检查
-        event.type = "other"
+        event = SimpleNamespace(
+            type="response.function_call.arguments.done",
+            arguments='{"param": "value"}',
+        )
 
         result = processor.handle_event(event)
 
@@ -448,18 +455,9 @@ class TestResponseEventProcessor:
         processor._first_output_time = datetime.now(timezone.utc)
         processor._output_complete_time = datetime.now(timezone.utc)
 
-        # 使用 Mock 来模拟 ResponseCompletedEvent
-        mock_usage = Mock()
-        mock_usage.input_tokens = 100
-        mock_usage.output_tokens = 50
-
-        mock_response = Mock()
-        mock_response.usage = mock_usage
-
-        event = Mock(spec=ResponseCompletedEvent)
-        event.response = mock_response
-        # Mock 必须有 type 属性才能通过初始检查
-        event.type = "other"
+        mock_usage = SimpleNamespace(input_tokens=100, output_tokens=50)
+        mock_response = SimpleNamespace(usage=mock_usage)
+        event = SimpleNamespace(type="response.completed", response=mock_response)
 
         result = processor.handle_event(event)
 
@@ -484,14 +482,8 @@ class TestResponseEventProcessor:
         """测试 ResponseCompletedEvent 无使用量数据的处理"""
         processor = ResponseEventProcessor()
 
-        # 使用 Mock 来模拟没有使用量的 ResponseCompletedEvent
-        mock_response = Mock()
-        mock_response.usage = None
-
-        event = Mock(spec=ResponseCompletedEvent)
-        event.response = mock_response
-        # Mock 必须有 type 属性才能通过初始检查
-        event.type = "other"
+        mock_response = SimpleNamespace(usage=None)
+        event = SimpleNamespace(type="response.completed", response=mock_response)
 
         result = processor.handle_event(event)
 
@@ -539,22 +531,24 @@ class TestResponseEventProcessor:
         processor = ResponseEventProcessor()
 
         # 测试在没有消息时处理内容相关事件
-        event = ContentPartAddedEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.CONTENT_PART_ADDED,
             item_id="item_123",
             output_index=0,
             content_index=0,
+            sequence_number=0,
             part={"type": "text", "text": "test"},
         )
         result = processor.handle_event(event)
         assert result == []
 
         # 测试在没有消息时处理文本增量事件
-        event = OutputTextDeltaEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.OUTPUT_TEXT_DELTA,
             item_id="item_123",
             output_index=0,
             content_index=0,
+            sequence_number=0,
             delta="test",
         )
         result = processor.handle_event(event)
@@ -568,22 +562,24 @@ class TestResponseEventProcessor:
         processor._messages.append({"content": "not a list"})
 
         # 测试处理 ContentPartAddedEvent
-        event = ContentPartAddedEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.CONTENT_PART_ADDED,
             item_id="item_123",
             output_index=0,
             content_index=0,
+            sequence_number=0,
             part={"type": "text", "text": "test"},
         )
         result = processor.handle_event(event)
         assert result == []
 
         # 测试处理 OutputTextDeltaEvent
-        event = OutputTextDeltaEvent(
+        event = SimpleNamespace(
             type=ResponsesAPIStreamEvents.OUTPUT_TEXT_DELTA,
             item_id="item_123",
             output_index=0,
             content_index=0,
+            sequence_number=0,
             delta="test",
         )
         result = processor.handle_event(event)
@@ -603,17 +599,9 @@ class TestResponseEventProcessor:
         processor._output_complete_time = output_complete_time
 
         # 使用 Mock 来模拟 ResponseCompletedEvent
-        mock_usage = Mock()
-        mock_usage.input_tokens = 100
-        mock_usage.output_tokens = 50
-
-        mock_response = Mock()
-        mock_response.usage = mock_usage
-
-        event = Mock(spec=ResponseCompletedEvent)
-        event.response = mock_response
-        # Mock 必须有 type 属性才能通过初始检查
-        event.type = "other"
+        mock_usage = SimpleNamespace(input_tokens=100, output_tokens=50)
+        mock_response = SimpleNamespace(usage=mock_usage)
+        event = SimpleNamespace(type="response.completed", response=mock_response)
 
         result = processor.handle_event(event)
 
@@ -628,8 +616,7 @@ class TestResponseEventProcessor:
         processor = ResponseEventProcessor()
 
         # 创建一个未知类型的事件
-        unknown_event = Mock(spec=[])
-        unknown_event.type = "unknown_type"
+        unknown_event = SimpleNamespace(type="unknown_type")
 
         result = processor.handle_event(unknown_event)
         assert result == []

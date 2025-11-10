@@ -5,11 +5,10 @@ from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from litellm import CustomStreamWrapper
 from pydantic import BaseModel, Field
 
 from lite_agent import Agent, Runner
-from lite_agent.client import LiteLLMClient
+from lite_agent.client import OpenAIClient
 from lite_agent.types import (
     AssistantMessageEvent,
     AssistantMessageMeta,
@@ -31,8 +30,8 @@ class TestStructuredOutputIntegration:
 
     @pytest.fixture
     def mock_client(self):
-        """Create a mock LiteLLM client."""
-        client = MagicMock(spec=LiteLLMClient)
+        """Create a mock OpenAI client."""
+        client = MagicMock(spec=OpenAIClient)
         client.model = "gpt-4o-mini"
         return client
 
@@ -58,15 +57,11 @@ class TestStructuredOutputIntegration:
         async def async_gen() -> AsyncGenerator[AssistantMessageEvent, None]:
             yield event
 
-        # Wrap in CustomStreamWrapper to match expected type
-        class MockCustomStreamWrapper(CustomStreamWrapper):
-            def __init__(self, async_iterable):
-                self._async_iterable = async_iterable
+        async def stream():  # Async iterable for streaming mode
+            async for item in async_gen():
+                yield item
 
-            def __aiter__(self):
-                return self._async_iterable.__aiter__()
-
-        return MockCustomStreamWrapper(async_gen())
+        return stream()
 
     @pytest.fixture
     def agent_with_structured_output(self, mock_client):

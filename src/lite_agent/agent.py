@@ -7,7 +7,7 @@ from funcall import Funcall
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
-from lite_agent.client import BaseLLMClient, LiteLLMClient
+from lite_agent.client import BaseLLMClient, OpenAIClient
 from lite_agent.constants import CompletionMode, ToolName
 from lite_agent.loggers import logger
 from lite_agent.response_handlers import CompletionResponseHandler, ResponsesAPIHandler
@@ -79,8 +79,8 @@ class Agent:
             # If model is a BaseLLMClient instance, use it directly
             self.client = model
         else:
-            # Otherwise, create a LiteLLMClient instance
-            self.client = LiteLLMClient(
+            # Otherwise, create an OpenAIClient instance
+            self.client = OpenAIClient(
                 model=model,
             )
         self.completion_condition = completion_condition

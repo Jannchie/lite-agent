@@ -148,7 +148,7 @@ The framework provides rich message types supporting both text and structured co
 - Mock conversations stored in `tests/mocks/` as JSONL files for reproducible testing
 - Examples in `examples/` directory demonstrate various usage patterns
 - Template system uses Jinja2 for dynamic instruction generation (`src/lite_agent/templates/`)
-- Does NOT directly depend on `litellm` - works with any compatible LLM client via `BaseLLMClient` interface
+- Uses the official OpenAI Python SDK via the shared `BaseLLMClient` interface
 - Chat display functionality uses `rich` library for formatted console output
 - Uses `pyright` for type checking with custom configuration excluding examples and temp directories
 

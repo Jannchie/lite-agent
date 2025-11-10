@@ -1,19 +1,33 @@
-"""Tests for client module."""
+"""Tests for OpenAI client module."""
 
-import os
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from lite_agent.client import (
-    LiteLLMClient,
-    LLMConfig,
-    parse_reasoning_config,
-)
+from lite_agent.client import LLMConfig, OpenAIClient, parse_reasoning_config
 
 
-def test_llm_config_creation():
+def _build_openai_mock() -> Mock:
+    """Create a mock AsyncOpenAI client with async methods."""
+
+    mock_client = Mock()
+
+    chat_interface = Mock()
+    chat_completions = Mock()
+    chat_completions.create = AsyncMock(return_value=Mock())
+    chat_interface.completions = chat_completions
+    mock_client.chat = chat_interface
+
+    responses_interface = Mock()
+    responses_interface.create = AsyncMock(return_value=Mock())
+    mock_client.responses = responses_interface
+
+    return mock_client
+
+
+def test_llm_config_creation() -> None:
     """Test LLMConfig creation with various parameters."""
+
     config = LLMConfig(
         temperature=0.7,
         max_tokens=1000,
@@ -31,8 +45,9 @@ def test_llm_config_creation():
     assert config.stop == ["END"]
 
 
-def test_llm_config_defaults():
+def test_llm_config_defaults() -> None:
     """Test LLMConfig creation with default values."""
+
     config = LLMConfig()
 
     assert config.temperature is None
@@ -43,284 +58,226 @@ def test_llm_config_defaults():
     assert config.stop is None
 
 
-def test_parse_reasoning_config_none():
-    """Test parsing None reasoning config."""
+def test_parse_reasoning_config_variants() -> None:
+    """Verify parse_reasoning_config handles supported input forms."""
+
     effort, config = parse_reasoning_config(None)
     assert effort is None
     assert config is None
 
-
-def test_parse_reasoning_config_string_valid():
-    """Test parsing valid string reasoning config."""
     for value in ["minimal", "low", "medium", "high"]:
         effort, config = parse_reasoning_config(value)
         assert effort == value
         assert config is None
 
+    bool_effort, bool_config = parse_reasoning_config(True)
+    assert bool_effort == "medium"
+    assert bool_config is None
 
-def test_parse_reasoning_config_string_invalid():
-    """Test parsing invalid string reasoning config."""
-    effort, config = parse_reasoning_config("invalid_string")
-    assert effort is None
-    assert config is None
+    bool_effort, bool_config = parse_reasoning_config(False)
+    assert bool_effort is None
+    assert bool_config is None
 
-
-def test_parse_reasoning_config_dict():
-    """Test parsing dict reasoning config."""
     test_dict = {"type": "enabled", "budget_tokens": 2048}
-    effort, config = parse_reasoning_config(test_dict)
-    assert effort is None
-    assert config == test_dict
+    dict_effort, dict_config = parse_reasoning_config(test_dict)
+    assert dict_effort is None
+    assert dict_config == test_dict
+
+    invalid_effort, invalid_config = parse_reasoning_config(123)  # type: ignore[arg-type]
+    assert invalid_effort is None
+    assert invalid_config is None
 
 
-def test_parse_reasoning_config_bool_true():
-    """Test parsing True boolean reasoning config."""
-    effort, config = parse_reasoning_config(True)
-    assert effort == "medium"
-    assert config is None
+def test_openai_client_init() -> None:
+    """OpenAIClient should configure AsyncOpenAI with provided credentials."""
 
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
 
-def test_parse_reasoning_config_bool_false():
-    """Test parsing False boolean reasoning config."""
-    effort, config = parse_reasoning_config(False)
-    assert effort is None
-    assert config is None
+        client = OpenAIClient(
+            model="gpt-4",
+            api_key="test-key",
+            api_base="https://api.test.com",
+            reasoning="medium",
+            temperature=0.8,
+            max_tokens=500,
+        )
 
-
-def test_parse_reasoning_config_invalid_type():
-    """Test parsing invalid type reasoning config."""
-    effort, config = parse_reasoning_config(123)  # Invalid type
-    assert effort is None
-    assert config is None
-
-
-def test_litellm_client_init():
-    """Test LiteLLMClient initialization."""
-    client = LiteLLMClient(
-        model="gpt-4",
-        api_key="test-key",
-        api_base="https://api.test.com",
-        api_version="2023-12-01",
-        reasoning="medium",
-        temperature=0.8,
-        max_tokens=500,
-    )
-
+    mock_async_openai.assert_called_once_with(api_key="test-key", base_url="https://api.test.com")
     assert client.model == "gpt-4"
-    assert client.api_key == "test-key"
-    assert client.api_base == "https://api.test.com"
-    assert client.api_version == "2023-12-01"
     assert client.reasoning_effort == "medium"
     assert client.thinking_config is None
     assert client.llm_config.temperature == 0.8
     assert client.llm_config.max_tokens == 500
 
 
-def test_litellm_client_init_with_llm_config():
-    """Test LiteLLMClient initialization with explicit LLMConfig."""
+def test_openai_client_init_with_llm_config() -> None:
+    """LLMConfig can be supplied directly."""
+
     llm_config = LLMConfig(temperature=0.5, max_tokens=800)
-    client = LiteLLMClient(
-        model="gpt-4",
-        llm_config=llm_config,
-    )
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-4", llm_config=llm_config)
 
     assert client.llm_config.temperature == 0.5
     assert client.llm_config.max_tokens == 800
 
 
-def test_litellm_client_init_reasoning_dict():
-    """Test LiteLLMClient initialization with dict reasoning config."""
+def test_openai_client_init_reasoning_dict() -> None:
+    """Reasoning dict should populate thinking_config."""
+
     reasoning_config = {"type": "enabled", "budget_tokens": 1000}
-    client = LiteLLMClient(
-        model="gpt-4",
-        reasoning=reasoning_config,
-    )
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-4", reasoning=reasoning_config)
 
     assert client.reasoning_effort is None
     assert client.thinking_config == reasoning_config
 
 
-def test_litellm_client_resolve_reasoning_params_override():
-    """Test _resolve_reasoning_params with override."""
-    client = LiteLLMClient(
-        model="gpt-4",
-        reasoning="low",  # instance default
-    )
+def test_openai_client_resolve_reasoning_params_override() -> None:
+    """Method should respect overrides and fall back to defaults."""
 
-    # Override with different reasoning
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-4", reasoning="low")
+
     effort, config = client._resolve_reasoning_params("high")
     assert effort == "high"
     assert config is None
 
-    # Override with None should use instance default
     effort, config = client._resolve_reasoning_params(None)
     assert effort == "low"
     assert config is None
 
 
-def test_litellm_client_resolve_reasoning_params_dict():
-    """Test _resolve_reasoning_params with dict reasoning."""
-    test_dict = {"type": "enabled", "budget_tokens": 512}
-    client = LiteLLMClient(
-        model="gpt-4",
-        reasoning=test_dict,
-    )
+def test_openai_client_resolve_reasoning_params_dict() -> None:
+    """Dict reasoning should be returned when no override is provided."""
 
-    # Use instance default
+    reasoning_config = {"type": "enabled", "budget_tokens": 512}
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-4", reasoning=reasoning_config)
+
     effort, config = client._resolve_reasoning_params(None)
     assert effort is None
-    assert config == test_dict
+    assert config == reasoning_config
 
 
 @pytest.mark.asyncio
-async def test_litellm_client_completion():
-    """Test LiteLLMClient completion method."""
-    client = LiteLLMClient(
-        model="gpt-4",
-        api_key="test-key",
-        reasoning="medium",
-        temperature=0.7,
-        max_tokens=1000,
-    )
+async def test_openai_client_completion() -> None:
+    """completion should forward parameters to the OpenAI SDK."""
+
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        openai_mock = _build_openai_mock()
+        mock_async_openai.return_value = openai_mock
+        client = OpenAIClient(
+            model="gpt-4",
+            reasoning="medium",
+            temperature=0.7,
+            max_tokens=1000,
+        )
 
     messages = [{"role": "user", "content": "Hello"}]
     tools = [{"type": "function", "function": {"name": "test"}}]
 
-    with patch("lite_agent.client.litellm.acompletion") as mock_completion:
-        mock_completion.return_value = Mock()
+    await client.completion(messages=messages, tools=tools, tool_choice="auto", streaming=True)
 
-        await client.completion(
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
-            streaming=True,
-        )
+    mock_async_openai.return_value.chat.completions.create.assert_awaited_once()
+    call_kwargs = mock_async_openai.return_value.chat.completions.create.await_args.kwargs
 
-        # Verify the call
-        mock_completion.assert_called_once()
-        call_kwargs = mock_completion.call_args[1]
-
-        assert call_kwargs["model"] == "gpt-4"
-        assert call_kwargs["messages"] == messages
-        assert call_kwargs["tools"] == tools
-        assert call_kwargs["tool_choice"] == "auto"
-        assert call_kwargs["api_key"] == "test-key"
-        assert call_kwargs["stream"] is True
-        assert call_kwargs["reasoning_effort"] == "medium"
-        assert call_kwargs["temperature"] == 0.7
-        assert call_kwargs["max_tokens"] == 1000
+    assert call_kwargs["model"] == "gpt-4"
+    assert call_kwargs["messages"] == messages
+    assert call_kwargs["tools"] == tools
+    assert call_kwargs["tool_choice"] == "auto"
+    assert call_kwargs["stream"] is True
+    assert call_kwargs["reasoning_effort"] == "medium"
+    assert call_kwargs["temperature"] == 0.7
+    assert call_kwargs["max_tokens"] == 1000
 
 
 @pytest.mark.asyncio
-async def test_litellm_client_completion_reasoning_override():
-    """Test LiteLLMClient completion with reasoning override."""
-    client = LiteLLMClient(
-        model="gpt-4",
-        reasoning="low",  # Default
-    )
+async def test_openai_client_completion_reasoning_override() -> None:
+    """Method-level reasoning override should win."""
 
-    messages = [{"role": "user", "content": "Hello"}]
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-4", reasoning="low")
 
-    with patch("lite_agent.client.litellm.acompletion") as mock_completion:
-        mock_completion.return_value = Mock()
+    await client.completion(messages=[{"role": "user", "content": "Hi"}], reasoning="high")
 
-        await client.completion(
-            messages=messages,
-            reasoning="high",  # Override
-        )
-
-        call_kwargs = mock_completion.call_args[1]
-        assert call_kwargs["reasoning_effort"] == "high"
+    call_kwargs = mock_async_openai.return_value.chat.completions.create.await_args.kwargs
+    assert call_kwargs["reasoning_effort"] == "high"
 
 
 @pytest.mark.asyncio
-async def test_litellm_client_responses():
-    """Test LiteLLMClient responses method."""
-    client = LiteLLMClient(
-        model="gpt-4",
-        api_key="test-key",
-        api_base="https://api.test.com",
-        reasoning={"type": "enabled"},
-        temperature=0.9,
-    )
+async def test_openai_client_responses() -> None:
+    """responses should forward configuration to the Responses API."""
+
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        openai_mock = _build_openai_mock()
+        mock_async_openai.return_value = openai_mock
+        client = OpenAIClient(
+            model="gpt-4",
+            reasoning={"type": "enabled"},
+            temperature=0.9,
+        )
 
     messages = [{"role": "user", "input": [{"type": "input_text", "text": "Hello"}]}]
     tools = [{"type": "function", "name": "test"}]
 
-    with patch("lite_agent.client.litellm.aresponses") as mock_responses:
-        mock_responses.return_value = Mock()
+    await client.responses(messages=messages, tools=tools, tool_choice="required", streaming=False)
 
-        await client.responses(
-            messages=messages,
-            tools=tools,
-            tool_choice="required",
-            streaming=False,
-        )
+    mock_async_openai.return_value.responses.create.assert_awaited_once()
+    call_kwargs = mock_async_openai.return_value.responses.create.await_args.kwargs
 
-        # Verify environment variable is set
-        assert os.environ["DISABLE_AIOHTTP_TRANSPORT"] == "True"
-
-        # Verify the call
-        mock_responses.assert_called_once()
-        call_kwargs = mock_responses.call_args[1]
-
-        assert call_kwargs["model"] == "gpt-4"
-        assert call_kwargs["input"] == messages
-        assert call_kwargs["tools"] == tools
-        assert call_kwargs["tool_choice"] == "required"
-        assert call_kwargs["api_key"] == "test-key"
-        assert call_kwargs["api_base"] == "https://api.test.com"
-        assert call_kwargs["stream"] is False
-        assert call_kwargs["store"] is False
-        assert call_kwargs["thinking"] == {"type": "enabled"}
-        assert call_kwargs["temperature"] == 0.9
+    assert call_kwargs["model"] == "gpt-4"
+    assert call_kwargs["input"] == messages
+    assert call_kwargs["tools"] == tools
+    assert call_kwargs["tool_choice"] == "required"
+    assert "stream" not in call_kwargs
+    assert call_kwargs["store"] is False
+    assert "reasoning" not in call_kwargs
+    assert call_kwargs["temperature"] == 0.9
 
 
 @pytest.mark.asyncio
-async def test_litellm_client_completion_minimal_config():
-    """Test LiteLLMClient completion with minimal configuration."""
-    client = LiteLLMClient(model="gpt-3.5-turbo")
+async def test_openai_client_completion_minimal_config() -> None:
+    """Minimal configuration should not send optional parameters."""
 
-    messages = [{"role": "user", "content": "Test"}]
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-3.5-turbo")
 
-    with patch("lite_agent.client.litellm.acompletion") as mock_completion:
-        mock_completion.return_value = Mock()
+    await client.completion(messages=[{"role": "user", "content": "Test"}])
 
-        await client.completion(messages=messages)
+    call_kwargs = mock_async_openai.return_value.chat.completions.create.await_args.kwargs
 
-        call_kwargs = mock_completion.call_args[1]
-
-        assert call_kwargs["model"] == "gpt-3.5-turbo"
-        assert call_kwargs["messages"] == messages
-        assert call_kwargs["tools"] is None
-        assert call_kwargs["tool_choice"] == "auto"
-        assert call_kwargs["stream"] is True
-        # These shouldn't be present when not configured
-        assert "reasoning_effort" not in call_kwargs
-        assert "thinking" not in call_kwargs
-        assert "temperature" not in call_kwargs
+    assert call_kwargs["model"] == "gpt-3.5-turbo"
+    assert call_kwargs["tool_choice"] == "auto"
+    assert call_kwargs["stream"] is True
+    assert "tools" not in call_kwargs
+    assert "reasoning_effort" not in call_kwargs
+    assert "temperature" not in call_kwargs
 
 
 @pytest.mark.asyncio
-async def test_litellm_client_responses_minimal_config():
-    """Test LiteLLMClient responses with minimal configuration."""
-    client = LiteLLMClient(model="gpt-4")
+async def test_openai_client_responses_minimal_config() -> None:
+    """Minimal configuration for responses should only set required fields."""
 
-    messages = [{"role": "user", "input": []}]
+    with patch("lite_agent.client.AsyncOpenAI") as mock_async_openai:
+        mock_async_openai.return_value = _build_openai_mock()
+        client = OpenAIClient(model="gpt-4")
 
-    with patch("lite_agent.client.litellm.aresponses") as mock_responses:
-        mock_responses.return_value = Mock()
+    await client.responses(messages=[{"role": "user", "input": []}])
 
-        await client.responses(messages=messages)
+    call_kwargs = mock_async_openai.return_value.responses.create.await_args.kwargs
 
-        call_kwargs = mock_responses.call_args[1]
-
-        assert call_kwargs["model"] == "gpt-4"
-        assert call_kwargs["input"] == messages
-        assert call_kwargs["tools"] is None
-        assert call_kwargs["tool_choice"] == "auto"
-        assert call_kwargs["stream"] is True
-        assert call_kwargs["store"] is False
-        # These shouldn't be present when not configured
-        assert "reasoning_effort" not in call_kwargs
-        assert "thinking" not in call_kwargs
+    assert call_kwargs["model"] == "gpt-4"
+    assert call_kwargs["input"] == [{"role": "user", "input": []}]
+    assert call_kwargs["tool_choice"] == "auto"
+    assert call_kwargs["stream"] is True
+    assert call_kwargs["store"] is False
+    assert "tools" not in call_kwargs
+    assert "reasoning" not in call_kwargs
+    assert "temperature" not in call_kwargs

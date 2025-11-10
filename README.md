@@ -4,14 +4,14 @@
 
 ## Introduction
 
-LiteAgent is an easy-to-learn, lightweight, and extensible AI agent framework built on top of [LiteLLM](https://github.com/BerriAI/litellm). It is designed as a minimal yet practical implementation for quickly building intelligent assistants and chatbots with robust tool-calling capabilities. The codebase is intentionally simple, making it ideal for learning, extension, and rapid prototyping.
+LiteAgent is an easy-to-learn, lightweight, and extensible AI agent framework built on top of the official [OpenAI Python SDK](https://github.com/openai/openai-python). It is designed as a minimal yet practical implementation for quickly building intelligent assistants and chatbots with robust tool-calling capabilities. The codebase is intentionally simple, making it ideal for learning, extension, and rapid prototyping.
 
 **Key Advantages:**
 
 - **Minimal and approachable:** The simplest agent implementation for fast learning and hacking.
 - **Accurate and complete type hints:** All function signatures are fully type-hinted and never faked, ensuring reliable developer experience and static analysis.
 - **Flexible parameter definition:** Supports defining tool function parameters using basic types, Pydantic models, or Python dataclasses—even in combination.
-- **Streaming responses:** Seamless support for LiteLLM streaming output.
+- **Streaming responses:** Seamless support for OpenAI streaming output.
 - **Custom tool functions:** Easily integrate your own Python functions (e.g., weather, temperature queries).
 - **Rich type annotations, Pydantic-based.**
 - **Easy to extend and test.**

@@ -22,21 +22,21 @@ async def test_stream_async_success():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     fake_resp = MagicMock()
-    with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=fake_resp)):
-        # Mock the response handler
-        from collections.abc import AsyncGenerator
-        from typing import Any
+    agent.client._client.chat.completions.create = AsyncMock(return_value=fake_resp)
 
-        async def fake_async_gen(*_args, **_kwargs) -> AsyncGenerator[Any, None]:  # type: ignore
-            yield "GENERATOR"
+    from collections.abc import AsyncGenerator
+    from typing import Any
 
-        with patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=fake_async_gen):
-            result = await agent.completion([AgentUserMessage(content=[UserTextContent(text="hi")])])
-            assert hasattr(result, "__aiter__")
-            items = []
-            async for item in result:
-                items.append(item)
-            assert items == ["GENERATOR"]
+    async def fake_async_gen(*_args, **_kwargs) -> AsyncGenerator[Any, None]:  # type: ignore
+        yield "GENERATOR"
+
+    with patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=fake_async_gen):
+        result = await agent.completion([AgentUserMessage(content=[UserTextContent(text="hi")])])
+        assert hasattr(result, "__aiter__")
+        items = []
+        async for item in result:
+            items.append(item)
+        assert items == ["GENERATOR"]
 
 
 @pytest.mark.asyncio
@@ -44,10 +44,10 @@ async def test_stream_async_typeerror():
     agent = Agent(model="gpt-3", name="TestBot", instructions="Be helpful.", tools=None)
     agent.fc.get_tools = MagicMock(return_value=[{"name": "tool1"}])
     not_a_stream = object()
+    agent.client._client.chat.completions.create = AsyncMock(return_value=not_a_stream)
 
-    with patch("lite_agent.client.litellm.acompletion", new=AsyncMock(return_value=not_a_stream)), pytest.raises(TypeError, match="Response is not a CustomStreamWrapper"):  # noqa: PT012
+    with pytest.raises(TypeError, match="Response does not support async iteration"):  # noqa: PT012
         result = await agent.completion([{"role": "user", "content": "hi"}])  # type: ignore[arg-type]
-        # Force consumption of the async generator to trigger the error
         async for _ in result:
             pass
 

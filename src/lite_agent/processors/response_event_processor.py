@@ -3,17 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from aiofiles.threadpool.text import AsyncTextIOWrapper
-from litellm.types.llms.openai import (
-    ContentPartAddedEvent,
-    FunctionCallArgumentsDeltaEvent,
-    FunctionCallArgumentsDoneEvent,
-    OutputItemAddedEvent,
-    OutputItemDoneEvent,
-    OutputTextDeltaEvent,
-    ResponseCompletedEvent,
-    ResponsesAPIStreamEvents,
-    ResponsesAPIStreamingResponse,
-)
+from openai.types.responses import ResponseStreamEvent
 
 from lite_agent.types import (
     AgentChunk,
@@ -45,7 +35,7 @@ class ResponseEventProcessor:
 
     async def process_chunk(
         self,
-        chunk: ResponsesAPIStreamingResponse,
+        chunk: ResponseStreamEvent,
         record_file: AsyncTextIOWrapper | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         # Mark start time on first chunk
@@ -62,27 +52,21 @@ class ResponseEventProcessor:
         for event in events:
             yield event
 
-    def handle_event(self, event: ResponsesAPIStreamingResponse) -> list[AgentChunk]:  # noqa: PLR0911
+    def handle_event(self, event: ResponseStreamEvent) -> list[AgentChunk]:  # noqa: PLR0911
         """Handle individual response events"""
-        if event.type in (
-            ResponsesAPIStreamEvents.RESPONSE_CREATED,
-            ResponsesAPIStreamEvents.RESPONSE_IN_PROGRESS,
-            ResponsesAPIStreamEvents.OUTPUT_TEXT_DONE,
-            ResponsesAPIStreamEvents.CONTENT_PART_DONE,
-        ):
-            return []
+        event_type = getattr(event, "type", None)
 
-        if isinstance(event, OutputItemAddedEvent):
+        if event_type == "response.output_item.added":
             self._messages.append(event.item)  # type: ignore
             return []
 
-        if isinstance(event, ContentPartAddedEvent):
+        if event_type == "response.content_part.added":
             latest_message = self._messages[-1] if self._messages else None
             if latest_message and isinstance(latest_message.get("content"), list):
                 latest_message["content"].append(event.part)
             return []
 
-        if isinstance(event, OutputTextDeltaEvent):
+        if event_type == "response.output_text.delta":
             # Mark first output time if not already set
             if self._first_output_time is None:
                 self._first_output_time = datetime.now(timezone.utc)
@@ -95,7 +79,7 @@ class ResponseEventProcessor:
                     return [ContentDeltaEvent(delta=event.delta)]
             return []
 
-        if isinstance(event, OutputItemDoneEvent):
+        if event_type == "response.output_item.done":
             item = event.item
             if item.get("type") == "function_call":
                 return [
@@ -142,7 +126,7 @@ class ResponseEventProcessor:
                         ),
                     ]
 
-        elif isinstance(event, FunctionCallArgumentsDeltaEvent):
+        elif event_type == "response.function_call.arguments.delta":
             if self._messages:
                 latest_message = self._messages[-1]
                 if latest_message.get("type") == "function_call":
@@ -151,14 +135,14 @@ class ResponseEventProcessor:
                     latest_message["arguments"] += event.delta
             return []
 
-        elif isinstance(event, FunctionCallArgumentsDoneEvent):
+        elif event_type == "response.function_call.arguments.done":
             if self._messages:
                 latest_message = self._messages[-1]
                 if latest_message.get("type") == "function_call":
                     latest_message["arguments"] = event.arguments
             return []
 
-        elif isinstance(event, ResponseCompletedEvent):
+        elif event_type == "response.completed":
             usage = event.response.usage
             if usage:
                 # Mark usage time

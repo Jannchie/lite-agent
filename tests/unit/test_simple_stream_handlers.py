@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from lite_agent.stream_handlers.litellm import ensure_record_file
+from lite_agent.stream_handlers.openai import ensure_record_file
 
 
 class TestEnsureRecordFile:
@@ -41,7 +41,7 @@ class TestEnsureRecordFile:
             assert new_dir.exists()
             assert result == record_file
 
-    @patch("lite_agent.stream_handlers.litellm.logger")
+    @patch("lite_agent.stream_handlers.openai.logger")
     def test_ensure_record_file_logs_warning(self, mock_logger):
         """测试创建目录时记录警告日志"""
         with tempfile.TemporaryDirectory() as temp_dir:

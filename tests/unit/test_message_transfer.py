@@ -84,29 +84,27 @@ async def test_message_transfer_called_in_completion():
 
     test_messages = [{"role": "user", "content": "Hello world"}]
 
-    # Mock the litellm.acompletion to avoid actual API calls
-    from litellm import CustomStreamWrapper
-
-    mock_resp = AsyncMock(spec=CustomStreamWrapper)
-
     async def mock_stream_handler(*_args, **_kwargs) -> AsyncGenerator[AgentChunk, None]:  # type: ignore[misc]
         """Mock async generator for stream handler."""
         return
         yield  # pragma: no cover
 
-    with patch("lite_agent.client.litellm.acompletion") as mock_completion, patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=mock_stream_handler):
-        mock_completion.return_value = mock_resp
+    fake_response = AsyncMock()
+    fake_response.__aiter__.return_value = iter([])
+    agent.client._client.chat.completions.create = AsyncMock(return_value=fake_response)
+
+    with patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=mock_stream_handler):
 
         # Call completion
         async for _ in await agent.completion(test_messages):  # type: ignore[arg-type]
             pass
 
         # Verify that completion was called
-        mock_completion.assert_called_once()
+        agent.client._client.chat.completions.create.assert_awaited_once()
 
         # Get the messages that were passed to the completion
-        call_args = mock_completion.call_args
-        passed_messages = call_args[1]["messages"]
+        call_args = agent.client._client.chat.completions.create.await_args
+        passed_messages = call_args.kwargs["messages"]
 
         # The first message should be the system message
         # The second message should be our processed user message
@@ -126,29 +124,27 @@ async def test_completion_without_message_transfer():
 
     test_messages = [{"role": "user", "content": "Hello world"}]
 
-    # Mock the litellm.acompletion to avoid actual API calls
-    from litellm import CustomStreamWrapper
-
-    mock_resp = AsyncMock(spec=CustomStreamWrapper)
-
     async def mock_stream_handler(*_args, **_kwargs) -> AsyncGenerator[AgentChunk, None]:  # type: ignore[misc]
         """Mock async generator for stream handler."""
         return
         yield  # pragma: no cover
 
-    with patch("lite_agent.client.litellm.acompletion") as mock_completion, patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=mock_stream_handler):
-        mock_completion.return_value = mock_resp
+    fake_response = AsyncMock()
+    fake_response.__aiter__.return_value = iter([])
+    agent.client._client.chat.completions.create = AsyncMock(return_value=fake_response)
+
+    with patch("lite_agent.response_handlers.completion.CompletionResponseHandler.handle", new=mock_stream_handler):
 
         # Call completion
         async for _ in await agent.completion(test_messages):  # type: ignore[arg-type]
             pass
 
         # Verify that completion was called
-        mock_completion.assert_called_once()
+        agent.client._client.chat.completions.create.assert_awaited_once()
 
         # Get the messages that were passed to the completion
-        call_args = mock_completion.call_args
-        passed_messages = call_args[1]["messages"]
+        call_args = agent.client._client.chat.completions.create.await_args
+        passed_messages = call_args.kwargs["messages"]
 
         # The first message should be the system message
         # The second message should be our original user message (unchanged)

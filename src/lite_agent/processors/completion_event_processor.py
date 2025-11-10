@@ -1,10 +1,11 @@
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
-import litellm
 from aiofiles.threadpool.text import AsyncTextIOWrapper
-from litellm.types.utils import ChatCompletionDeltaToolCall, ModelResponseStream, StreamingChoices
+from openai.types.chat import ChatCompletionChunk
+from openai.types.chat.chat_completion_chunk import Choice as ChatCompletionChoice
+from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 
 from lite_agent.loggers import logger
 from lite_agent.types import (
@@ -36,7 +37,7 @@ class CompletionEventProcessor:
         self._current_message: AssistantMessage | None = None
         self.processing_chunk: Literal["content", "tool_calls"] | None = None
         self.processing_function: str | None = None
-        self.last_processed_chunk: ModelResponseStream | None = None
+        self.last_processed_chunk: ChatCompletionChunk | None = None
         self.yielded_content = False
         self.yielded_function = set()
         self._start_time: datetime | None = None
@@ -47,7 +48,7 @@ class CompletionEventProcessor:
 
     async def process_chunk(
         self,
-        chunk: ModelResponseStream,
+        chunk: ChatCompletionChunk,
         record_file: AsyncTextIOWrapper | None = None,
     ) -> AsyncGenerator[AgentChunk, None]:
         # Mark start time on first chunk
@@ -130,10 +131,13 @@ class CompletionEventProcessor:
             if delta.tool_calls and self.current_message.tool_calls:
                 tool_call = delta.tool_calls[0]
                 message_tool_call = self.current_message.tool_calls[-1]
+                arguments_delta = ""
+                if tool_call.function and tool_call.function.arguments:
+                    arguments_delta = tool_call.function.arguments
                 yield FunctionCallDeltaEvent(
                     tool_call_id=message_tool_call.id,
                     name=message_tool_call.function.name,
-                    arguments_delta=tool_call.function.arguments or "",
+                    arguments_delta=arguments_delta,
                 )
         if choice.finish_reason:
             # Mark output complete time when finish_reason appears
@@ -179,19 +183,33 @@ class CompletionEventProcessor:
                 )
         self.last_processed_chunk = chunk
 
-    def handle_usage_chunk(self, chunk: ModelResponseStream) -> list[AgentChunk]:
+    def handle_usage_chunk(self, chunk: ChatCompletionChunk) -> list[AgentChunk]:
         usage = getattr(chunk, "usage", None)
         if usage:
             # Mark usage time
             self._usage_time = datetime.now(timezone.utc)
             # Store usage data for meta information
-            self._usage_data["input_tokens"] = usage["prompt_tokens"]
-            self._usage_data["output_tokens"] = usage["completion_tokens"]
+            prompt_tokens = getattr(usage, "prompt_tokens", None)
+            completion_tokens = getattr(usage, "completion_tokens", None)
+            if prompt_tokens is None and isinstance(usage, dict):
+                prompt_tokens = usage.get("prompt_tokens")
+            if completion_tokens is None and isinstance(usage, dict):
+                completion_tokens = usage.get("completion_tokens")
+
+            self._usage_data["input_tokens"] = prompt_tokens
+            self._usage_data["output_tokens"] = completion_tokens
 
             results = []
 
             # First yield usage event
-            results.append(UsageEvent(usage=EventUsage(input_tokens=usage["prompt_tokens"], output_tokens=usage["completion_tokens"])))
+            results.append(
+                UsageEvent(
+                    usage=EventUsage(
+                        input_tokens=prompt_tokens,
+                        output_tokens=completion_tokens,
+                    ),
+                ),
+            )
 
             # Then yield timing event if we have timing data
             latency_ms = TimingMetrics.calculate_latency_ms(self._start_time, self._first_output_time)
@@ -209,7 +227,7 @@ class CompletionEventProcessor:
             return results
         return []
 
-    def initialize_message(self, chunk: ModelResponseStream, choice: StreamingChoices) -> None:
+    def initialize_message(self, chunk: ChatCompletionChunk, choice: ChatCompletionChoice) -> None:
         """Initialize the message object"""
         delta = choice.delta
         if delta.role != "assistant":
@@ -228,7 +246,7 @@ class CompletionEventProcessor:
         if self._current_message and content:
             self._current_message.content += content
 
-    def _initialize_tool_calls(self, tool_calls: list[litellm.ChatCompletionMessageToolCall]) -> None:
+    def _initialize_tool_calls(self, tool_calls: list[Any]) -> None:
         """Initialize tool calls"""
         if not self._current_message:
             return
@@ -237,7 +255,7 @@ class CompletionEventProcessor:
         for call in tool_calls:
             logger.debug("Create new tool call: %s", call.id)
 
-    def _update_tool_calls(self, tool_calls: list[litellm.ChatCompletionMessageToolCall]) -> None:
+    def _update_tool_calls(self, tool_calls: list[Any]) -> None:
         """Update existing tool calls"""
         if not self._current_message:
             return
@@ -255,19 +273,22 @@ class CompletionEventProcessor:
             elif new_call.type:
                 logger.warning("Unexpected tool call type: %s", new_call.type)
 
-    def update_tool_calls(self, tool_calls: list[ChatCompletionDeltaToolCall]) -> None:
+    def update_tool_calls(self, tool_calls: list[ChoiceDeltaToolCall]) -> None:
         """Handle tool call updates"""
         if not tool_calls:
             return
         for call in tool_calls:
             if call.id:
                 if call.type == "function":
+                    function = call.function
+                    name = (function.name if function and function.name else "")
+                    arguments = (function.arguments if function and function.arguments else "")
                     new_tool_call = ToolCall(
                         id=call.id,
                         type=call.type,
                         function=ToolCallFunction(
-                            name=call.function.name or "",
-                            arguments=call.function.arguments,
+                            name=name,
+                            arguments=arguments,
                         ),
                         index=call.index,
                     )
@@ -279,7 +300,7 @@ class CompletionEventProcessor:
                     logger.warning("Unexpected tool call type: %s", call.type)
             elif self._current_message is not None and self._current_message.tool_calls is not None and call.index is not None and 0 <= call.index < len(self._current_message.tool_calls):
                 existing_call = self._current_message.tool_calls[call.index]
-                if call.function.arguments:
+                if call.function and call.function.arguments:
                     if existing_call.function.arguments is None:
                         existing_call.function.arguments = ""
                     existing_call.function.arguments += call.function.arguments

@@ -10,6 +10,9 @@ from funcall import Context
 from pydantic import BaseModel
 
 from lite_agent.agent import Agent
+from lite_agent.chat_display import DisplayConfig
+from lite_agent.chat_display import display_messages as render_chat_messages
+from lite_agent.chat_display import messages_to_string as chat_messages_to_string
 from lite_agent.constants import CompletionMode, StreamIncludes, ToolName
 from lite_agent.context import HistoryContext
 from lite_agent.loggers import logger
@@ -105,6 +108,14 @@ class Runner:
         # For completion API compatibility, create a separate assistant message
         # Note: In the new architecture, we store everything as NewMessage format
         # The conversion to completion format happens when sending to LLM
+
+    def message_history_text(self) -> str:
+        """Return the collected messages as a plain-text transcript."""
+        return chat_messages_to_string(self.messages)
+
+    def display_message_history(self, *, config: DisplayConfig | None = None) -> None:
+        """Render the collected messages using the terminal-friendly display."""
+        render_chat_messages(self.messages, config=config)
 
     def _normalize_includes(self, includes: Sequence[AgentChunkType] | None) -> Sequence[AgentChunkType]:
         """Normalize includes parameter to default if None."""

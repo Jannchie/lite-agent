@@ -57,13 +57,13 @@ class ResponseEventProcessor:
         event_type = getattr(event, "type", None)
 
         if event_type == "response.output_item.added":
-            self._messages.append(event.item)  # type: ignore
+            self._messages.append(self._convert_model(event.item))
             return []
 
         if event_type == "response.content_part.added":
             latest_message = self._messages[-1] if self._messages else None
             if latest_message and isinstance(latest_message.get("content"), list):
-                latest_message["content"].append(event.part)
+                latest_message["content"].append(self._convert_model(event.part))
             return []
 
         if event_type == "response.output_text.delta":
@@ -80,7 +80,7 @@ class ResponseEventProcessor:
             return []
 
         if event_type == "response.output_item.done":
-            item = event.item
+            item = self._convert_model(event.item)
             if item.get("type") == "function_call":
                 return [
                     FunctionCallEvent(
@@ -195,3 +195,13 @@ class ResponseEventProcessor:
         self._output_complete_time = None
         self._usage_time = None
         self._usage_data = {}
+
+    @staticmethod
+    def _convert_model(value: Any) -> Any:
+        if hasattr(value, "model_dump"):
+            return value.model_dump()
+        if isinstance(value, list):
+            return [ResponseEventProcessor._convert_model(item) for item in value]
+        if isinstance(value, dict):
+            return {key: ResponseEventProcessor._convert_model(item) for key, item in value.items()}
+        return value

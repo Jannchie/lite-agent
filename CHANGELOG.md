@@ -1,3 +1,30 @@
+## v0.15.0
+
+[v0.14.1...v0.15.0](https://github.com/Jannchie/lite-agent/compare/v0.14.1...v0.15.0)
+
+### :sparkles: Features
+
+- **examples**: add translate_board demo and list in README - By [Jannchie](mailto:jannchie@gmail.com) in [0309864](https://github.com/Jannchie/lite-agent/commit/0309864)
+- **runner**: add message history display and export - By [Jannchie](mailto:jannchie@gmail.com) in [e7d5c52](https://github.com/Jannchie/lite-agent/commit/e7d5c52)
+- **structured-output**: add structured output support with response_format parameter and pydantic schema enforcement - By [Jannchie](mailto:jannchie@gmail.com) in [0d9c82d](https://github.com/Jannchie/lite-agent/commit/0d9c82d)
+- **translate-board**: replace simple translation workspace with richer project model - By [Jannchie](mailto:jannchie@gmail.com) in [8653a96](https://github.com/Jannchie/lite-agent/commit/8653a96)
+
+### :adhesive_bandage: Fixes
+
+- **examples**: fix return order in test_api && update type annotations - By [Jannchie](mailto:jannchie@gmail.com) in [0b1dd2b](https://github.com/Jannchie/lite-agent/commit/0b1dd2b)
+- **response-processor**: convert pydantic models to primitives - By [Jannchie](mailto:jannchie@gmail.com) in [dcd1706](https://github.com/Jannchie/lite-agent/commit/dcd1706)
+- **streaming-demo**: print all message content parts - By [Jannchie](mailto:jannchie@gmail.com) in [3d35449](https://github.com/Jannchie/lite-agent/commit/3d35449)
+
+### :art: Refactors
+
+- **client**: replace litellm integration with OpenAI SDK - By [Jannchie](mailto:jannchie@gmail.com) in [275a7c3](https://github.com/Jannchie/lite-agent/commit/275a7c3)
+- **examples**: reorganize and update examples layout - By [Jannchie](mailto:jannchie@gmail.com) in [4acb039](https://github.com/Jannchie/lite-agent/commit/4acb039)
+- **imports**: update client import in example && consolidate imports in test_runner - By [Jannchie](mailto:jannchie@gmail.com) in [6783bd7](https://github.com/Jannchie/lite-agent/commit/6783bd7)
+
+### :memo: Documentation
+
+- add repository guidelines and development instructions - By [Jannchie](mailto:jannchie@gmail.com) in [6c36366](https://github.com/Jannchie/lite-agent/commit/6c36366)
+
 ## v0.14.1
 
 [v0.14.0...v0.14.1](https://github.com/Jannchie/lite-agent/compare/v0.14.0...v0.14.1)

@@ -1,46 +1,405 @@
+from __future__ import annotations
+
 import asyncio
+import json
 import logging
-from datetime import datetime, timezone
+import re
 
 from funcall import Context
-from openai import BaseModel
-from pydantic import Field
+from pydantic import BaseModel, Field
 from rich.logging import RichHandler
 
 from lite_agent.agent import Agent
-from lite_agent.chat_display import messages_to_string
 from lite_agent.client import OpenAIClient
-from lite_agent.context import HistoryContext
 from lite_agent.runner import Runner
 
+LANGUAGE_LABELS = {
+    "zh-Hans": "Simplified Chinese",
+    "ja": "Japanese",
+    "es": "Spanish",
+}
 
-class TranslationItem(BaseModel):
-    item_id: str
-    source: str
-    metadata: dict[str, str] | None = None
+
+class LanguageRecord(BaseModel):
+    language: str
+    content: str
 
 
-class TranslationRecord(BaseModel):
-    translations: dict[str, str] = Field(default_factory=dict)
-    issues: list[str] = Field(default_factory=list)
-    suggestions: list[str] = Field(default_factory=list)
-    last_editor: str | None = None
-    last_updated_at: datetime | None = None
+class ProjectItem(BaseModel):
+    key: str
+    meta: dict[str, str] = Field(default_factory=dict)
+    records: list[LanguageRecord] = Field(default_factory=list)
+
+    def content_for(self, language: str) -> str | None:
+        for record in self.records:
+            if record.language == language:
+                return record.content
+        return None
+
+    def set_content(self, language: str, text: str) -> None:
+        for record in self.records:
+            if record.language == language:
+                record.content = text
+                return
+        self.records.append(LanguageRecord(language=language, content=text))
 
 
 class SelectionState(BaseModel):
-    item_id: str | None = None
-    field: str | None = None
-    segment_index: int | None = None
-    target_language: str | None = None
+    item_keys: list[str] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=list)
+
+    def describe(self, project: Project) -> str:
+        """Return a readable summary of the current selection."""
+        if not self.item_keys:
+            return "No items are currently selected."
+        languages = self.languages or ([project.target_language] if project.target_language else [])
+        if not languages:
+            languages = [project.source_language]
+        item_map = _build_item_map(project)
+        lines: list[str] = []
+        for key in self.item_keys:
+            item = item_map.get(key)
+            if item is None:
+                continue
+            meta_part = _format_meta(item.meta)
+            lines.append(f"{key} ({meta_part})")
+            for language in languages:
+                text = item.content_for(language)
+                cell = text if text else "[pending]"
+                lines.append(f"  - {language}: {cell}")
+        return "\n".join(lines) if lines else "Selection references unknown items."
+
+
+class Project(BaseModel):
+    source_language: str
+    target_language: str
+    items: list[ProjectItem] = Field(default_factory=list)
 
 
 class TranslationWorkspace(BaseModel):
-    items: list[TranslationItem]
-    records: dict[str, TranslationRecord]
-    selection: SelectionState
-    source_language: str
-    target_languages: list[str]
+    user_selection: SelectionState
+    project: Project
+
+
+def _build_item_map(project: Project) -> dict[str, ProjectItem]:
+    return {item.key: item for item in project.items}
+
+
+def _format_meta(meta: dict[str, str]) -> str:
+    if not meta:
+        return "no meta"
+    return json.dumps(meta, ensure_ascii=False)
+
+
+def _workspace_from_context(ctx: Context[TranslationWorkspace]) -> TranslationWorkspace | None:
+    return ctx.value
+
+
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            ordered.append(value)
+    return ordered
+
+
+def _project_language_roster(project: Project) -> list[str]:
+    roster: list[str] = []
+    if project.source_language:
+        roster.append(project.source_language)
+    if project.target_language:
+        roster.append(project.target_language)
+    for item in project.items:
+        roster.extend(record.language for record in item.records)
+    return _unique(roster)
+
+
+def _resolve_display_languages(project: Project, languages: list[str] | None) -> list[str]:
+    if languages:
+        return _unique(languages)
+    return _project_language_roster(project)
+
+
+def _resolve_target_languages(project: Project, languages: list[str] | None) -> list[str]:
+    if languages:
+        return [language for language in _unique(languages) if language]
+    if project.target_language:
+        return [project.target_language]
+    return [language for language in _project_language_roster(project) if language != project.source_language]
+
+
+def _mock_translate(text: str, target_language: str) -> str:
+    label = LANGUAGE_LABELS.get(target_language, target_language)
+    return f"{text} [{label}]"
+
+
+async def list_items(ctx: Context[TranslationWorkspace], languages: list[str] | None = None) -> str:
+    """List every item together with the requested languages."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    project = workspace.project
+    languages_to_show = _resolve_display_languages(project, languages)
+    lines: list[str] = []
+    for item in sorted(project.items, key=lambda entry: entry.key):
+        meta_part = _format_meta(item.meta)
+        segments = [f"{item.key} ({meta_part})"]
+        for language in languages_to_show:
+            text = item.content_for(language)
+            cell = text if text else "[pending]"
+            segments.append(f"{language}: {cell}")
+        lines.append(" | ".join(segments))
+    return "\n".join(lines)
+
+
+async def find_untranslated(ctx: Context[TranslationWorkspace], languages: list[str] | None = None) -> str:
+    """Return which items are still missing a specific language."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    project = workspace.project
+    languages_to_check = _resolve_target_languages(project, languages)
+    if not languages_to_check:
+        return "No target languages configured."
+    lines: list[str] = []
+    for language in languages_to_check:
+        missing = [item.key for item in project.items if not item.content_for(language)]
+        if missing:
+            lines.append(f"{language}: {', '.join(missing)}")
+        else:
+            lines.append(f"{language}: all translated")
+    return "\n".join(lines)
+
+
+async def find_items_by_content(
+    ctx: Context[TranslationWorkspace],
+    query: str,
+    *,
+    use_regex: bool = False,
+) -> str:
+    """Search items whose content matches the given text (substring or regex) in any language."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    if not query:
+        return "Please provide a non-empty query."
+    project = workspace.project
+    if use_regex:
+        try:
+            pattern = re.compile(query, flags=re.IGNORECASE)
+        except re.error as exc:
+            return f"Invalid regular expression: {exc}"
+
+        def matches(text: str) -> bool:
+            return bool(pattern.search(text))
+
+    else:
+        query_lower = query.lower()
+
+        def matches(text: str) -> bool:
+            return query_lower in text.lower()
+
+    matched_items: list[str] = []
+    for item in project.items:
+        for record in item.records:
+            if record.content and matches(record.content):
+                matched_items.append(f"{item.key} ({record.language}): {record.content}")
+                break
+    if not matched_items:
+        return f"No items contain '{query}'."
+    return "\n".join(matched_items)
+
+
+async def get_user_selection(ctx: Context[TranslationWorkspace]) -> str:
+    """Inspect the selection coming from the UI."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    return workspace.user_selection.describe(workspace.project)
+
+
+async def update_agent_selection(
+    ctx: Context[TranslationWorkspace],
+    item_keys: list[str] | None = None,
+    languages: list[str] | None = None,
+    mode: str = "replace",
+) -> str:
+    """Update the agent-side selection (replace, append, or clear)."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    selection = workspace.user_selection
+    project = workspace.project
+    normalized_mode = mode.lower()
+    if normalized_mode == "clear":
+        selection.item_keys = []
+        selection.languages = []
+        return "Selection cleared."
+    item_map = _build_item_map(project)
+    valid_keys: list[str] | None = None
+    if item_keys is not None:
+        valid_keys = [key for key in item_keys if key in item_map]
+    normalized_languages: list[str] | None = None
+    if languages is not None:
+        normalized_languages = _unique(languages)
+    if normalized_mode == "replace":
+        if valid_keys is not None:
+            selection.item_keys = valid_keys
+        if normalized_languages is not None:
+            selection.languages = normalized_languages
+    elif normalized_mode == "append":
+        if valid_keys is not None:
+            for key in valid_keys:
+                if key not in selection.item_keys:
+                    selection.item_keys.append(key)
+        if normalized_languages is not None:
+            for language in normalized_languages:
+                if language not in selection.languages:
+                    selection.languages.append(language)
+    else:
+        return "Unsupported mode. Use replace, append, or clear."
+    return f"Selection updated:\n{selection.describe(project)}"
+
+
+async def translate_agent_selection(
+    ctx: Context[TranslationWorkspace],
+    languages: list[str] | None = None,
+    source_language: str | None = None,
+) -> str:
+    """
+    Translate the current selection using the provided languages.
+
+    If languages are not provided, use the selection languages first, then fall back to the
+    project's default target language.
+    """
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    project = workspace.project
+    selection = workspace.user_selection
+    if not selection.item_keys:
+        return "No items are currently selected."
+    candidate_languages = languages or selection.languages
+    resolved_targets = _resolve_target_languages(project, candidate_languages)
+    target_languages = [language for language in resolved_targets if language != project.source_language]
+    if not target_languages:
+        return "No target languages specified."
+    source_lang = source_language or project.source_language
+    item_map = _build_item_map(project)
+    applied: list[str] = []
+    skipped_missing_source: list[str] = []
+    for key in selection.item_keys:
+        item = item_map.get(key)
+        if item is None:
+            continue
+        source_text = item.content_for(source_lang)
+        if not source_text:
+            skipped_missing_source.append(f"{key} lacks {source_lang}")
+            continue
+        for language in target_languages:
+            item.set_content(language, _mock_translate(source_text, language))
+            applied.append(f"{key}:{language}")
+    if not applied:
+        return "No translations applied because sources were missing: " + ", ".join(skipped_missing_source) if skipped_missing_source else "No translations applied."
+    message = f"Updated {len(applied)} cells: {', '.join(applied)}."
+    if skipped_missing_source:
+        message += f" Missing sources: {', '.join(skipped_missing_source)}."
+    return message
+
+
+async def set_content(
+    ctx: Context[TranslationWorkspace],
+    item_key: str,
+    language: str,
+    new_text: str,
+) -> str:
+    """Manually replace the content of a specific cell."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    project = workspace.project
+    item_map = _build_item_map(project)
+    item = item_map.get(item_key)
+    if item is None:
+        return f"Item {item_key} does not exist."
+    item.set_content(language, new_text)
+    return f"Updated {item_key} ({language})."
+
+
+sample_items = [
+    ProjectItem(
+        key="landing.banner.title",
+        meta={"module": "landing", "category": "marketing"},
+        records=[
+            LanguageRecord(language="en", content="Bold ideas for modern teams"),
+            LanguageRecord(language="zh-Hans", content=""),
+            LanguageRecord(language="ja", content=""),
+            LanguageRecord(language="es", content=""),
+        ],
+    ),
+    ProjectItem(
+        key="landing.banner.subtitle",
+        meta={"module": "landing", "category": "marketing"},
+        records=[
+            LanguageRecord(language="en", content="Product updates delivered live from the summit."),
+            LanguageRecord(language="zh-Hans", content="来自峰会的产品更新直播。"),
+            LanguageRecord(language="ja", content=""),
+            LanguageRecord(language="es", content=""),
+        ],
+    ),
+    ProjectItem(
+        key="dashboard.empty_state.title",
+        meta={"module": "dashboard", "category": "empty_state"},
+        records=[
+            LanguageRecord(language="en", content="There are no workflows yet."),
+            LanguageRecord(language="zh-Hans", content="暂无工作流。"),
+            LanguageRecord(language="ja", content=""),
+            LanguageRecord(language="es", content=""),
+        ],
+    ),
+    ProjectItem(
+        key="dashboard.empty_state.helper",
+        meta={"module": "dashboard", "category": "empty_state"},
+        records=[
+            LanguageRecord(language="en", content="Set up your first workflow to unlock automation."),
+            LanguageRecord(language="zh-Hans", content=""),
+            LanguageRecord(language="ja", content=""),
+            LanguageRecord(language="es", content="Configura tu primer flujo para activar la automatización."),
+        ],
+    ),
+    ProjectItem(
+        key="onboarding.checklist.title",
+        meta={"module": "onboarding", "category": "onboarding"},
+        records=[
+            LanguageRecord(language="en", content="Complete the rollout checklist"),
+            LanguageRecord(language="zh-Hans", content="完成上线清单"),
+            LanguageRecord(language="ja", content=""),
+            LanguageRecord(language="es", content=""),
+        ],
+    ),
+    ProjectItem(
+        key="automation.workspace.blurb",
+        meta={"module": "automation", "category": "product"},
+        records=[
+            LanguageRecord(language="en", content="Automation keeps every workflow in sync."),
+            LanguageRecord(language="zh-Hans", content="自动化保持每个工作流同步。"),
+            LanguageRecord(language="ja", content=""),
+            LanguageRecord(language="es", content="La automatización mantiene sincronizado cada flujo de trabajo."),
+        ],
+    ),
+]
+
+
+initial_workspace = TranslationWorkspace(
+    user_selection=SelectionState(item_keys=["landing.banner.title"], languages=["zh-Hans"]),
+    project=Project(
+        source_language="en",
+        target_language="zh-Hans",
+        items=sample_items,
+    ),
+)
 
 
 logging.basicConfig(
@@ -54,174 +413,27 @@ logger = logging.getLogger("lite_agent")
 logger.setLevel(logging.DEBUG)
 
 
-def _resolve_target_language(workspace: TranslationWorkspace, override: str | None = None) -> str | None:
-    if override:
-        return override
-    if workspace.selection.target_language:
-        return workspace.selection.target_language
-    if workspace.target_languages:
-        return workspace.target_languages[0]
-    return None
-
-
-def _get_or_create_record(workspace: TranslationWorkspace, item_id: str) -> TranslationRecord:
-    record = workspace.records.get(item_id)
-    if record is None:
-        record = TranslationRecord()
-        workspace.records[item_id] = record
-    return record
-
-
-async def list_pending_items(ctx: Context[HistoryContext[TranslationWorkspace]]) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    pending_entries: list[str] = []
-    for item in workspace.items:
-        record = workspace.records.get(item.item_id)
-        if record is None:
-            pending_entries.append(f"{item.item_id} (missing all targets)")
-            continue
-        missing = [language for language in workspace.target_languages if not record.translations.get(language)]
-        if missing:
-            pending_entries.append(f"{item.item_id} (missing {', '.join(missing)})")
-    if not pending_entries:
-        return "All items currently have translations for every target language."
-    return "\n".join(f"{index + 1}. {entry}" for index, entry in enumerate(pending_entries))
-
-
-async def get_record_details(item_id: str, ctx: Context[HistoryContext[TranslationWorkspace]]) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    record = workspace.records.get(item_id)
-    if record is None:
-        return f"No record found for {item_id}."
-    lines = [
-        f"Source language: {workspace.source_language}",
-        f"Target languages: {', '.join(workspace.target_languages)}",
-    ]
-    for language in workspace.target_languages:
-        translation = record.translations.get(language)
-        lines.append(f"{language}: {translation or '[pending]'}")
-    if record.issues:
-        lines.append("Issues:" + "\n - ".join(["", *record.issues]))
-    if record.suggestions:
-        lines.append("Suggestions:" + "\n - ".join(["", *record.suggestions]))
-    return "\n".join(lines)
-
-
-async def set_selection(
-    item_id: str,
-    field: str | None,
-    ctx: Context[HistoryContext[TranslationWorkspace]],
-    target_language: str | None = None,
-) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    workspace.selection.item_id = item_id
-    workspace.selection.field = field
-    workspace.selection.segment_index = None
-    resolved_language = _resolve_target_language(workspace, override=target_language)
-    workspace.selection.target_language = resolved_language
-    field_label = field or "translation"
-    language_note = f" ({resolved_language})" if resolved_language else ""
-    return f"Focused on item {item_id} field {field_label}{language_note}."
-
-
-async def suggest_revision(item_id: str, ctx: Context[HistoryContext[TranslationWorkspace]]) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    record = _get_or_create_record(workspace, item_id)
-    target_language = _resolve_target_language(workspace)
-    if target_language is None:
-        return "No target language available for suggestions."
-    suggestion_text = "Consider clarifying the tone and ensure terminology consistency."
-    entry = f"[{target_language}] {suggestion_text}"
-    record.suggestions.append(entry)
-    record.last_updated_at = datetime.now(timezone.utc)
-    record.last_editor = "agent"
-    return entry
-
-
-async def apply_translation(item_id: str, new_text: str, ctx: Context[HistoryContext[TranslationWorkspace]]) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    record = _get_or_create_record(workspace, item_id)
-    target_language = _resolve_target_language(workspace)
-    if target_language is None:
-        return "No target language selected. Use set_selection to specify one."
-    record.translations[target_language] = new_text
-    record.last_updated_at = datetime.now(timezone.utc)
-    record.last_editor = "agent"
-    return f"Updated translation for {item_id} ({target_language})."
-
-
-async def flag_issue(item_id: str, issue_description: str, ctx: Context[HistoryContext[TranslationWorkspace]]) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    record = _get_or_create_record(workspace, item_id)
-    target_language = _resolve_target_language(workspace)
-    prefix = f"[{target_language}] " if target_language else ""
-    record.issues.append(prefix + issue_description)
-    record.last_updated_at = datetime.now(timezone.utc)
-    record.last_editor = "agent"
-    return f"Logged issue for {item_id}."
-
-
-async def confirm_translation(item_id: str, ctx: Context[HistoryContext[TranslationWorkspace]]) -> str:
-    workspace = ctx.value.data
-    if workspace is None:
-        return "Workspace is missing."
-    record = _get_or_create_record(workspace, item_id)
-    target_language = _resolve_target_language(workspace)
-    if target_language is None:
-        return "No target language selected. Use set_selection to specify one."
-    translation = record.translations.get(target_language)
-    if not translation:
-        return f"No translation found for {item_id} in {target_language}."
-    record.last_updated_at = datetime.now(timezone.utc)
-    record.last_editor = "agent"
-    return f"Translation for {item_id} ({target_language}) confirmed."
-
-
-initial_workspace = TranslationWorkspace(
-    source_language="en",
-    target_languages=["zh-Hans"],
-    items=[
-        TranslationItem(item_id="headline", source="Breaking news from the conference."),
-        TranslationItem(item_id="tagline", source="Innovate, Integrate, Inspire."),
-    ],
-    records={
-        "headline": TranslationRecord(translations={"zh-Hans": "Conference breaking news."}),
-        "tagline": TranslationRecord(),
-    },
-    selection=SelectionState(item_id="headline", field="translation", target_language="zh-Hans"),
-)
-
 agent = Agent(
     model=OpenAIClient(model="gpt-5-mini"),
-    name="Translation Board Manager",
+    name="Translation Board Controller",
     instructions=(
-        "You operate on a translation workspace. The source language is stored in context.data.source_language, "
-        "and target languages appear in context.data.target_languages. Always check the current selection before "
-        "editing and use set_selection to switch items or target languages. Use list_pending_items to see which entries "
-        "lack translations, get_record_details for detailed status, suggest_revision before major edits, apply_translation "
-        "to write updates, flag_issue when something needs attention, and confirm_translation to acknowledge that the "
-        "current translation is acceptable. Treat empty translations as incomplete."
+        "You manage a translation board whose context object always looks like "
+        "{user_selection: {...}, project: {source_language, target_language, items}}. "
+        "Each project item only exposes key, meta, and records[{language, content}]. "
+        "The UI may contain an active selection that the user will not restate, so decide when to inspect it via get_user_selection before acting. "
+        "Use update_agent_selection "
+        "to change the agent-side selection (modes: replace, append, clear), list_items/find_untranslated/find_items_by_content "
+        "to inspect the grid, translate_agent_selection to fill selected cells, "
+        "and set_content when you must override a single cell manually."
     ),
     tools=[
-        list_pending_items,
-        get_record_details,
-        set_selection,
-        suggest_revision,
-        apply_translation,
-        flag_issue,
-        confirm_translation,
+        list_items,
+        find_untranslated,
+        find_items_by_content,
+        get_user_selection,
+        update_agent_selection,
+        translate_agent_selection,
+        set_content,
     ],
 )
 
@@ -229,11 +441,22 @@ agent = Agent(
 async def main() -> None:
     runner = Runner(agent)
     shared_context = Context(initial_workspace)
-    await runner.run_until_complete("列出所有待翻译的条目，并检查正在关注的内容。", context=shared_context)
-    await runner.run_until_complete("针对 headline 的译文提出改进建议，并更新内容。", context=shared_context)
-    await runner.run_until_complete("把 tagline 设置为当前关注项，并执行初步翻译。", context=shared_context)
-    await runner.run_until_complete("确认所有条目状态。", context=shared_context)
-    print(messages_to_string(runner.messages))
+
+    await runner.run_until_complete("请概述当前翻译进度，也帮我看看界面里有没有需要立即关注的部分。", context=shared_context)
+
+    initial_workspace.user_selection = SelectionState(
+        item_keys=["landing.banner.title", "landing.banner.subtitle"],
+        languages=["zh-Hans"],
+    )
+    await runner.run_until_complete("我想继续处理刚才正在编辑的中文内容，请直接把它们补齐。", context=shared_context)
+
+    initial_workspace.user_selection = SelectionState()
+    await runner.run_until_complete("接下来需要把缺少日语内容的条目全部翻译完成。", context=shared_context)
+
+    initial_workspace.user_selection = SelectionState()
+    await runner.run_until_complete("请找到文案里包含 workflow 的条目，并重新翻译它们的西语列覆盖旧内容。", context=shared_context)
+
+    runner.display_message_history()
 
 
 if __name__ == "__main__":

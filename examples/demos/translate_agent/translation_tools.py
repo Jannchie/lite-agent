@@ -1,23 +1,29 @@
-from __future__ import annotations
-
-import asyncio
 import json
 import logging
 import re
+from functools import cache
+from textwrap import dedent
+from typing import TYPE_CHECKING, cast
 
 from funcall import Context
 from pydantic import BaseModel, Field
-from rich.logging import RichHandler
 
-from lite_agent.agent import Agent
-from lite_agent.client import OpenAIClient
-from lite_agent.runner import Runner
+from lite_agent.client import LLMConfig, OpenAIClient
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletion
 
 LANGUAGE_LABELS = {
     "zh-Hans": "Simplified Chinese",
     "ja": "Japanese",
     "es": "Spanish",
 }
+
+TRANSLATION_MODEL = "gpt-4o-mini"
+
+PLAN_STATUSES = {"pending", "in_progress", "completed"}
+
+logger = logging.getLogger("lite_agent")
 
 
 class LanguageRecord(BaseModel):
@@ -48,7 +54,7 @@ class SelectionState(BaseModel):
     item_keys: list[str] = Field(default_factory=list)
     languages: list[str] = Field(default_factory=list)
 
-    def describe(self, project: Project) -> str:
+    def describe(self, project: "Project") -> str:
         """Return a readable summary of the current selection."""
         if not self.item_keys:
             return "No items are currently selected."
@@ -76,9 +82,20 @@ class Project(BaseModel):
     items: list[ProjectItem] = Field(default_factory=list)
 
 
+class PlanStep(BaseModel):
+    step: str
+    status: str
+
+
+class PlanState(BaseModel):
+    explanation: str | None = None
+    steps: list[PlanStep] = Field(default_factory=list)
+
+
 class TranslationWorkspace(BaseModel):
     user_selection: SelectionState
     project: Project
+    plan: PlanState = Field(default_factory=PlanState)
 
 
 def _build_item_map(project: Project) -> dict[str, ProjectItem]:
@@ -93,6 +110,17 @@ def _format_meta(meta: dict[str, str]) -> str:
 
 def _workspace_from_context(ctx: Context[TranslationWorkspace]) -> TranslationWorkspace | None:
     return ctx.value
+
+
+def _format_plan(plan: PlanState) -> str:
+    if not plan.steps:
+        return "Plan is currently empty."
+    lines: list[str] = []
+    if plan.explanation:
+        lines.append(f"Note: {plan.explanation}")
+    for index, entry in enumerate(plan.steps, start=1):
+        lines.append(f"{index}. {entry.step} ({entry.status})")
+    return "\n".join(lines)
 
 
 def _unique(values: list[str]) -> list[str]:
@@ -133,6 +161,46 @@ def _resolve_target_languages(project: Project, languages: list[str] | None) -> 
 def _mock_translate(text: str, target_language: str) -> str:
     label = LANGUAGE_LABELS.get(target_language, target_language)
     return f"{text} [{label}]"
+
+
+@cache
+def _get_translation_client() -> OpenAIClient:
+    return OpenAIClient(
+        model=TRANSLATION_MODEL,
+        llm_config=LLMConfig(temperature=0.2, max_tokens=200),
+    )
+
+
+async def _translate_with_llm(text: str, source_language: str, target_language: str) -> str:
+    if not text.strip():
+        return text
+    client = _get_translation_client()
+    system_prompt = "You are a precise localization engine. Translate the provided text exactly once without commentary."
+    user_prompt = dedent(
+        f"""\
+        Source language: {source_language}
+        Target language: {target_language}
+        Text:
+        {text}
+        """,
+    ).strip()
+    try:
+        response = await client.completion(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            streaming=False,
+        )
+    except Exception as exc:
+        logger.warning("Falling back to mock translation due to error: %s", exc)
+        return _mock_translate(text, target_language)
+    chat_completion = cast("ChatCompletion", response)
+    message = chat_completion.choices[0].message.content if chat_completion.choices else None
+    if not message:
+        logger.warning("Empty translation response; using mock output.")
+        return _mock_translate(text, target_language)
+    return message.strip()
 
 
 async def list_items(ctx: Context[TranslationWorkspace], languages: list[str] | None = None) -> str:
@@ -220,13 +288,54 @@ async def get_user_selection(ctx: Context[TranslationWorkspace]) -> str:
     return workspace.user_selection.describe(workspace.project)
 
 
-async def update_agent_selection(
+async def update_plan(
+    ctx: Context[TranslationWorkspace],
+    plan: list[PlanStep],
+    explanation: str | None = None,
+) -> str:
+    """Update or clear the multi-step plan rendered to the user."""
+    workspace = _workspace_from_context(ctx)
+    if workspace is None:
+        return "Workspace is missing."
+    trimmed_steps: list[PlanStep] = []
+    error_message: str | None = None
+    initial_plan_empty = not workspace.plan.steps
+    for entry in plan:
+        step_text = entry.step.strip()
+        status = entry.status.strip().lower()
+        if not step_text:
+            error_message = "Plan steps must include descriptive text."
+            break
+        if status not in PLAN_STATUSES:
+            allowed = ", ".join(sorted(PLAN_STATUSES))
+            error_message = f"Invalid status '{entry.status}'. Allowed statuses: {allowed}."
+            break
+        trimmed_steps.append(PlanStep(step=step_text, status=status))
+    if error_message:
+        return error_message
+    if not trimmed_steps:
+        workspace.plan.steps = []
+        workspace.plan.explanation = explanation
+        return "Plan cleared." if not explanation else f"Plan cleared. Note: {explanation}"
+    if len(trimmed_steps) < 2:
+        return "Plans must include at least two steps."
+    if initial_plan_empty:
+        for entry in trimmed_steps:
+            entry.status = "pending"
+    if sum(1 for entry in trimmed_steps if entry.status == "in_progress") > 1:
+        return "Only one step can be in_progress at a time."
+    workspace.plan.steps = trimmed_steps
+    workspace.plan.explanation = explanation
+    return f"Plan updated:\n{_format_plan(workspace.plan)}"
+
+
+async def update_selection(
     ctx: Context[TranslationWorkspace],
     item_keys: list[str] | None = None,
     languages: list[str] | None = None,
     mode: str = "replace",
 ) -> str:
-    """Update the agent-side selection (replace, append, or clear)."""
+    """Update the user-side selection (replace, append, or clear)."""
     workspace = _workspace_from_context(ctx)
     if workspace is None:
         return "Workspace is missing."
@@ -263,13 +372,13 @@ async def update_agent_selection(
     return f"Selection updated:\n{selection.describe(project)}"
 
 
-async def translate_agent_selection(
+async def translate_selection(
     ctx: Context[TranslationWorkspace],
     languages: list[str] | None = None,
     source_language: str | None = None,
 ) -> str:
     """
-    Translate the current selection using the provided languages.
+    Translate the current user selection using the provided languages.
 
     If languages are not provided, use the selection languages first, then fall back to the
     project's default target language.
@@ -299,7 +408,8 @@ async def translate_agent_selection(
             skipped_missing_source.append(f"{key} lacks {source_lang}")
             continue
         for language in target_languages:
-            item.set_content(language, _mock_translate(source_text, language))
+            translated = await _translate_with_llm(source_text, source_lang, language)
+            item.set_content(language, translated)
             applied.append(f"{key}:{language}")
     if not applied:
         return "No translations applied because sources were missing: " + ", ".join(skipped_missing_source) if skipped_missing_source else "No translations applied."
@@ -328,136 +438,21 @@ async def set_content(
     return f"Updated {item_key} ({language})."
 
 
-sample_items = [
-    ProjectItem(
-        key="landing.banner.title",
-        meta={"module": "landing", "category": "marketing"},
-        records=[
-            LanguageRecord(language="en", content="Bold ideas for modern teams"),
-            LanguageRecord(language="zh-Hans", content=""),
-            LanguageRecord(language="ja", content=""),
-            LanguageRecord(language="es", content=""),
-        ],
-    ),
-    ProjectItem(
-        key="landing.banner.subtitle",
-        meta={"module": "landing", "category": "marketing"},
-        records=[
-            LanguageRecord(language="en", content="Product updates delivered live from the summit."),
-            LanguageRecord(language="zh-Hans", content="来自峰会的产品更新直播。"),
-            LanguageRecord(language="ja", content=""),
-            LanguageRecord(language="es", content=""),
-        ],
-    ),
-    ProjectItem(
-        key="dashboard.empty_state.title",
-        meta={"module": "dashboard", "category": "empty_state"},
-        records=[
-            LanguageRecord(language="en", content="There are no workflows yet."),
-            LanguageRecord(language="zh-Hans", content="暂无工作流。"),
-            LanguageRecord(language="ja", content=""),
-            LanguageRecord(language="es", content=""),
-        ],
-    ),
-    ProjectItem(
-        key="dashboard.empty_state.helper",
-        meta={"module": "dashboard", "category": "empty_state"},
-        records=[
-            LanguageRecord(language="en", content="Set up your first workflow to unlock automation."),
-            LanguageRecord(language="zh-Hans", content=""),
-            LanguageRecord(language="ja", content=""),
-            LanguageRecord(language="es", content="Configura tu primer flujo para activar la automatización."),
-        ],
-    ),
-    ProjectItem(
-        key="onboarding.checklist.title",
-        meta={"module": "onboarding", "category": "onboarding"},
-        records=[
-            LanguageRecord(language="en", content="Complete the rollout checklist"),
-            LanguageRecord(language="zh-Hans", content="完成上线清单"),
-            LanguageRecord(language="ja", content=""),
-            LanguageRecord(language="es", content=""),
-        ],
-    ),
-    ProjectItem(
-        key="automation.workspace.blurb",
-        meta={"module": "automation", "category": "product"},
-        records=[
-            LanguageRecord(language="en", content="Automation keeps every workflow in sync."),
-            LanguageRecord(language="zh-Hans", content="自动化保持每个工作流同步。"),
-            LanguageRecord(language="ja", content=""),
-            LanguageRecord(language="es", content="La automatización mantiene sincronizado cada flujo de trabajo."),
-        ],
-    ),
+__all__ = [
+    "PLAN_STATUSES",
+    "LanguageRecord",
+    "PlanState",
+    "PlanStep",
+    "Project",
+    "ProjectItem",
+    "SelectionState",
+    "TranslationWorkspace",
+    "find_items_by_content",
+    "find_untranslated",
+    "get_user_selection",
+    "list_items",
+    "set_content",
+    "translate_selection",
+    "update_plan",
+    "update_selection",
 ]
-
-
-initial_workspace = TranslationWorkspace(
-    user_selection=SelectionState(item_keys=["landing.banner.title"], languages=["zh-Hans"]),
-    project=Project(
-        source_language="en",
-        target_language="zh-Hans",
-        items=sample_items,
-    ),
-)
-
-
-logging.basicConfig(
-    level=logging.WARNING,
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True)],
-)
-
-logger = logging.getLogger("lite_agent")
-logger.setLevel(logging.DEBUG)
-
-
-agent = Agent(
-    model=OpenAIClient(model="gpt-5-mini"),
-    name="Translation Board Controller",
-    instructions=(
-        "You manage a translation board whose context object always looks like "
-        "{user_selection: {...}, project: {source_language, target_language, items}}. "
-        "Each project item only exposes key, meta, and records[{language, content}]. "
-        "The UI may contain an active selection that the user will not restate, so decide when to inspect it via get_user_selection before acting. "
-        "Use update_agent_selection "
-        "to change the agent-side selection (modes: replace, append, clear), list_items/find_untranslated/find_items_by_content "
-        "to inspect the grid, translate_agent_selection to fill selected cells, "
-        "and set_content when you must override a single cell manually."
-    ),
-    tools=[
-        list_items,
-        find_untranslated,
-        find_items_by_content,
-        get_user_selection,
-        update_agent_selection,
-        translate_agent_selection,
-        set_content,
-    ],
-)
-
-
-async def main() -> None:
-    runner = Runner(agent)
-    shared_context = Context(initial_workspace)
-
-    await runner.run_until_complete("请概述当前翻译进度，也帮我看看界面里有没有需要立即关注的部分。", context=shared_context)
-
-    initial_workspace.user_selection = SelectionState(
-        item_keys=["landing.banner.title", "landing.banner.subtitle"],
-        languages=["zh-Hans"],
-    )
-    await runner.run_until_complete("我想继续处理刚才正在编辑的中文内容，请直接把它们补齐。", context=shared_context)
-
-    initial_workspace.user_selection = SelectionState()
-    await runner.run_until_complete("接下来需要把缺少日语内容的条目全部翻译完成。", context=shared_context)
-
-    initial_workspace.user_selection = SelectionState()
-    await runner.run_until_complete("请找到文案里包含 workflow 的条目，并重新翻译它们的西语列覆盖旧内容。", context=shared_context)
-
-    runner.display_message_history()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

@@ -1,6 +1,7 @@
+import json
 from collections.abc import AsyncGenerator, AsyncIterable, Awaitable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import aiofiles
 from openai._streaming import AsyncStream
@@ -13,7 +14,6 @@ from lite_agent.types import AgentChunk
 
 if TYPE_CHECKING:
     from aiofiles.threadpool.text import AsyncTextIOWrapper
-
 
 def ensure_record_file(record_to: Path | str | None) -> Path | None:
     if not record_to:
@@ -48,9 +48,12 @@ async def openai_completion_stream_handler(
     try:
         async for chunk in resp:
             if not isinstance(chunk, ChatCompletionChunk):
-                logger.warning("unexpected chunk type: %s", type(chunk))
-                logger.warning("chunk content: %s", chunk)
-                continue
+                converted = _coerce_chat_completion_chunk(chunk)
+                if converted is None:
+                    logger.warning("unexpected chunk type: %s", type(chunk))
+                    logger.debug("chunk content: %s", chunk)
+                    continue
+                chunk = converted
             async for result in processor.process_chunk(chunk, record_file):
                 yield result
     finally:
@@ -97,3 +100,32 @@ async def _close_stream(stream: object) -> None:
             await result
     except Exception:
         logger.debug("Failed to close OpenAI stream", exc_info=True)
+
+
+def _coerce_chat_completion_chunk(chunk: Any) -> ChatCompletionChunk | None:
+    """Convert objects from LiteLLM/OpenAI into ChatCompletionChunk when possible."""
+    if isinstance(chunk, ChatCompletionChunk):
+        return chunk
+
+    data: Any | None = None
+    if hasattr(chunk, "model_dump"):
+        try:
+            data = chunk.model_dump()
+        except Exception:
+            data = None
+    elif hasattr(chunk, "model_dump_json"):
+        try:
+            data = json.loads(chunk.model_dump_json())
+        except Exception:
+            data = None
+    elif isinstance(chunk, dict):
+        data = chunk
+
+    if data is None:
+        return None
+
+    try:
+        return ChatCompletionChunk.model_validate(data)
+    except Exception:
+        logger.debug("failed to coerce completion chunk", exc_info=True)
+        return None

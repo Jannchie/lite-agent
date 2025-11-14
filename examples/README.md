@@ -60,7 +60,7 @@ All scripts can be executed with `uv run python <path-to-example>.py`, unless no
 - `chat_display_demo.py` – Rich console rendering.
 - `image.py` – Image generation walkthrough.
 - `terminal.py` – Terminal-style chat loop.
-- `translate_board.py` – Translation board agent with context and tools.
+- `translate_agent/translate_agent.py` – Translation agent with context and tools.
 - `channels/` – Channel render helpers (e.g., Rich output).
 - `knowledge/` – End-to-end knowledge base demo (`main.py`).
 - `translate_app/` – Prompt-based translation workflow (`main.py`).

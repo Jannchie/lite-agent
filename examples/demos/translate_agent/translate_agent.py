@@ -167,7 +167,7 @@ async def scripted_walkthrough() -> None:
     shared_context = Context(initial_workspace)
 
     await runner.run_until_complete(
-        "Please summarize the current translation progress and call out anything urgent on the agent.",
+        "请总结当前的翻译进度，并指出任何需要立即处理的事项。",
         context=shared_context,
     )
 
@@ -176,19 +176,19 @@ async def scripted_walkthrough() -> None:
         languages=["zh-Hans"],
     )
     await runner.run_until_complete(
-        "I want to continue filling in the Chinese entries I was editing just now—please finish them.",
+        "我想继续完成刚刚编辑的中文条目，请帮我补齐这些内容。",
         context=shared_context,
     )
 
     initial_workspace.user_selection = SelectionState()
     await runner.run_until_complete(
-        "Next, translate every item that is still missing Japanese content.",
+        "接下来，请翻译所有仍然缺少日文内容的条目。",
         context=shared_context,
     )
 
     initial_workspace.user_selection = SelectionState()
     await runner.run_until_complete(
-        "Find the entries containing the word 'workflow' and refresh their Spanish columns with new translations.",
+        "查找包含“workflow”一词的条目，并用新的西班牙语翻译更新这些字段。",
         context=shared_context,
     )
 
@@ -211,7 +211,7 @@ async def run_interactive_cli() -> None:
     while True:
         try:
             user_input = await session.prompt_async(
-                "> ",
+                "💬 ",
                 default="",
                 complete_while_typing=True,
                 validator=not_empty_validator,

@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from pathlib import Path
 
 from funcall import Context
-from prompt_template import TRANSLATE_AGENT_PROMPT
+from jinja2 import Template
 from prompt_toolkit import PromptSession
 from prompt_toolkit.validation import Validator
 from rich.logging import RichHandler
@@ -95,6 +96,18 @@ SAMPLE_ITEMS = [
         ],
     ),
 ]
+
+
+def load_translate_agent_prompt(agent_description: str = "a localization agent", workspace_label: str = "agent") -> str:
+    template_path = Path(__file__).parent / "prompts" / "translation_agent_prompt.md.j2"
+    prompt_template = Template(template_path.read_text(encoding="utf-8"))
+    return prompt_template.render(
+        agent_description=agent_description,
+        workspace_label=workspace_label,
+    )
+
+
+TRANSLATE_AGENT_PROMPT = load_translate_agent_prompt()
 
 
 def _clone_project_items(items: list[ProjectItem]) -> list[ProjectItem]:

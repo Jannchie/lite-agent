@@ -47,6 +47,7 @@ All scripts can be executed with `uv run python <path-to-example>.py`, unless no
 - `debug_with_logging.py` – Enable verbose logging for troubleshooting.
 - `inspect_runner_modes.py` – Compare completion vs responses APIs.
 - `simple_debug.py` – Lightweight sanity-check harness.
+- `streaming_usage_check.py` – Verify usage tokens are emitted while streaming.
 
 ### structured/
 

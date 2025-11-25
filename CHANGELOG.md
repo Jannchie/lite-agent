@@ -1,3 +1,12 @@
+## v0.16.2
+
+[v0.16.1...v0.16.2](https://github.com/Jannchie/lite-agent/compare/v0.16.1...v0.16.2)
+
+### :sparkles: Features
+
+- **examples**: add streaming usage check example - By [Jannchie](mailto:jannchie@gmail.com) in [56cebcb](https://github.com/Jannchie/lite-agent/commit/56cebcb)
+- **lite-agent**: include usage in streaming options - By [Jannchie](mailto:jannchie@gmail.com) in [c0367d0](https://github.com/Jannchie/lite-agent/commit/c0367d0)
+
 ## v0.16.1
 
 [v0.16.0...v0.16.1](https://github.com/Jannchie/lite-agent/compare/v0.16.0...v0.16.1)

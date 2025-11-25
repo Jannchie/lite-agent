@@ -1,6 +1,6 @@
 [project]
 name = "lite-agent"
-version = "0.16.1"
+version = "0.16.2"
 description = "A lightweight, extensible framework for building AI agent."
 readme = "README.md"
 authors = [{ name = "Jianqi Pan", email = "jannchie@gmail.com" }]

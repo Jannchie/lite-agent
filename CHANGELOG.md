@@ -1,3 +1,11 @@
+## v0.16.3
+
+[v0.16.2...v0.16.3](https://github.com/Jannchie/lite-agent/compare/v0.16.2...v0.16.3)
+
+### :wrench: Chores
+
+- **ci**: add python 3.14 classifier - By [Jannchie](mailto:jannchie@gmail.com) in [2a6efa5](https://github.com/Jannchie/lite-agent/commit/2a6efa5)
+
 ## v0.16.2
 
 [v0.16.1...v0.16.2](https://github.com/Jannchie/lite-agent/compare/v0.16.1...v0.16.2)

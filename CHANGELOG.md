@@ -1,3 +1,19 @@
+## v0.16.0
+
+[v0.15.0...v0.16.0](https://github.com/Jannchie/lite-agent/compare/v0.15.0...v0.16.0)
+
+### :sparkles: Features
+
+- **examples**: add translate_agent demo and lite llm client - By [Jannchie](mailto:jannchie@gmail.com) in [0791dd9](https://github.com/Jannchie/lite-agent/commit/0791dd9)
+
+### :art: Refactors
+
+- **translate-agent**: move prompt template loader into main script - By [Jannchie](mailto:jannchie@gmail.com) in [e861703](https://github.com/Jannchie/lite-agent/commit/e861703)
+
+### :memo: Documentation
+
+- **translate-agent**: translate demo prompts and update CLI prompt emoji - By [Jannchie](mailto:jannchie@gmail.com) in [9995080](https://github.com/Jannchie/lite-agent/commit/9995080)
+
 ## v0.15.0
 
 [v0.14.1...v0.15.0](https://github.com/Jannchie/lite-agent/compare/v0.14.1...v0.15.0)

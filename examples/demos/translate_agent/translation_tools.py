@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from fnmatch import fnmatchcase
 from functools import cache
 from textwrap import dedent
 from typing import TYPE_CHECKING, cast
@@ -222,26 +223,7 @@ async def list_items(ctx: Context[TranslationWorkspace], languages: list[str] | 
     return "\n".join(lines)
 
 
-async def find_untranslated(ctx: Context[TranslationWorkspace], languages: list[str] | None = None) -> str:
-    """Return which items are still missing a specific language."""
-    workspace = _workspace_from_context(ctx)
-    if workspace is None:
-        return "Workspace is missing."
-    project = workspace.project
-    languages_to_check = _resolve_target_languages(project, languages)
-    if not languages_to_check:
-        return "No target languages configured."
-    lines: list[str] = []
-    for language in languages_to_check:
-        missing = [item.key for item in project.items if not item.content_for(language)]
-        if missing:
-            lines.append(f"{language}: {', '.join(missing)}")
-        else:
-            lines.append(f"{language}: all translated")
-    return "\n".join(lines)
-
-
-async def find_items_by_content(
+async def find_items(
     ctx: Context[TranslationWorkspace],
     query: str,
     *,
@@ -334,8 +316,19 @@ async def update_selection(
     item_keys: list[str] | None = None,
     languages: list[str] | None = None,
     mode: str = "replace",
+    key_patterns: list[str] | None = None,
+    missing_languages: list[str] | None = None,
+    missing_languages_mode: str = "any",
+    missing_languages_scope: str = "explicit",
 ) -> str:
-    """Update the user-side selection (replace, append, or clear)."""
+    """Update the user-side selection (replace, append, or clear).
+
+    Besides explicit keys, callers can now provide glob-style key patterns or select all items
+    missing content for specific languages. The missing language mode accepts ``any`` (default) or
+    ``all`` to control how strictly the languages need to be absent. `missing_languages_scope`
+    accepts ``explicit`` (default), ``target`` (project target only), or ``all`` (any non-source
+    language observed in the project) to cover the "find untranslated anywhere" scenario.
+    """
     workspace = _workspace_from_context(ctx)
     if workspace is None:
         return "Workspace is missing."
@@ -346,10 +339,44 @@ async def update_selection(
         selection.item_keys = []
         selection.languages = []
         return "Selection cleared."
+    missing_mode = missing_languages_mode.strip().lower() or "any"
+    if missing_mode not in {"any", "all"}:
+        return "missing_languages_mode must be 'any' or 'all'."
+    scope = missing_languages_scope.strip().lower() or "explicit"
+    if scope not in {"explicit", "target", "all"}:
+        return "missing_languages_scope must be 'explicit', 'target', or 'all'."
     item_map = _build_item_map(project)
+    normalized_missing: list[str] = []
+    if missing_languages is not None:
+        normalized_missing = [language for language in _unique(missing_languages) if language]
+    elif scope == "target":
+        normalized_missing = _resolve_target_languages(project, None)
+    elif scope == "all":
+        normalized_missing = [
+            language for language in _project_language_roster(project) if language != project.source_language
+        ]
     valid_keys: list[str] | None = None
-    if item_keys is not None:
-        valid_keys = [key for key in item_keys if key in item_map]
+    keys_provided = bool(item_keys) or bool(key_patterns) or bool(normalized_missing)
+    if keys_provided:
+        candidate_keys: list[str] = []
+        if item_keys is not None:
+            candidate_keys.extend(key for key in item_keys if key in item_map)
+        if key_patterns:
+            for pattern in key_patterns:
+                normalized_pattern = pattern.strip()
+                if not normalized_pattern:
+                    continue
+                candidate_keys.extend(
+                    item.key for item in project.items if fnmatchcase(item.key, normalized_pattern)
+                )
+        if normalized_missing:
+            require_all = missing_mode == "all"
+            for item in project.items:
+                results = [not item.content_for(language) for language in normalized_missing]
+                if (all(results) if require_all else any(results)) and item.key not in candidate_keys:
+                    candidate_keys.append(item.key)
+        if candidate_keys:
+            valid_keys = _unique(candidate_keys)
     normalized_languages: list[str] | None = None
     if languages is not None:
         normalized_languages = _unique(languages)
@@ -447,8 +474,7 @@ __all__ = [
     "ProjectItem",
     "SelectionState",
     "TranslationWorkspace",
-    "find_items_by_content",
-    "find_untranslated",
+    "find_items",
     "get_user_selection",
     "list_items",
     "set_content",

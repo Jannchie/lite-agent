@@ -16,8 +16,7 @@ from translation_tools import (
     ProjectItem,
     SelectionState,
     TranslationWorkspace,
-    find_items_by_content,
-    find_untranslated,
+    find_items,
     get_user_selection,
     list_items,
     set_content,
@@ -151,14 +150,14 @@ agent = Agent(
     instructions=TRANSLATE_AGENT_PROMPT,
     tools=[
         list_items,
-        find_untranslated,
-        find_items_by_content,
+        find_items,
         get_user_selection,
         update_plan,
         update_selection,
         translate_selection,
         set_content,
     ],
+    stop_before_tools=[set_content, translate_selection],
 )
 
 

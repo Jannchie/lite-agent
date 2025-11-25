@@ -1,3 +1,11 @@
+## v0.16.1
+
+[v0.16.0...v0.16.1](https://github.com/Jannchie/lite-agent/compare/v0.16.0...v0.16.1)
+
+### :sparkles: Features
+
+- **client**: include usage in streaming responses - By [Jannchie](mailto:jannchie@gmail.com) in [46c6e0a](https://github.com/Jannchie/lite-agent/commit/46c6e0a)
+
 ## v0.16.0
 
 [v0.15.0...v0.16.0](https://github.com/Jannchie/lite-agent/compare/v0.15.0...v0.16.0)

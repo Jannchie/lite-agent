@@ -386,6 +386,9 @@ class LiteLLMClient(BaseLLMClient):
             params["tools"] = tools
             if tool_choice is not None:
                 params["tool_choice"] = tool_choice
+        if streaming:
+            params["stream"] = True
+            params["stream_options"] = {**params.get("stream_options", {}), "include_usage": True}
 
         llm_config = self.llm_config
         if llm_config.temperature is not None:
@@ -444,6 +447,9 @@ class LiteLLMClient(BaseLLMClient):
             params["tools"] = tools
             if tool_choice is not None:
                 params["tool_choice"] = tool_choice
+        if streaming:
+            params["stream"] = True
+            params["stream_options"] = {**params.get("stream_options", {}), "include_usage": True}
 
         llm_config = self.llm_config
         if llm_config.temperature is not None:

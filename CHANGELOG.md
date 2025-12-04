@@ -1,3 +1,11 @@
+## v0.16.4
+
+[v0.16.3...v0.16.4](https://github.com/Jannchie/lite-agent/compare/v0.16.3...v0.16.4)
+
+### :art: Refactors
+
+- improve typing and code clarity across modules - By [Jannchie](mailto:panjianqi@preferred.jp) in [12ec754](https://github.com/Jannchie/lite-agent/commit/12ec754)
+
 ## v0.16.3
 
 [v0.16.2...v0.16.3](https://github.com/Jannchie/lite-agent/compare/v0.16.2...v0.16.3)

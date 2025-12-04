@@ -10,20 +10,20 @@ from lite_agent import chat_display as cd
 from lite_agent.chat_display import (
     DisplayConfig,
     _create_message_context,
+    _dispatch_message_display,
     _display_basic_message_stats,
     _display_legacy_message_with_columns,
-    _dispatch_message_display,
     display_messages,
     messages_to_string,
 )
 from lite_agent.types import (
+    AgentAssistantMessage,
+    AgentSystemMessage,
+    AgentUserMessage,
     AssistantMessageMeta,
     AssistantTextContent,
     AssistantToolCall,
     AssistantToolCallResult,
-    AgentAssistantMessage,
-    AgentSystemMessage,
-    AgentUserMessage,
     LLMResponseMeta,
     MessageUsage,
     NewAssistantMessage,
@@ -116,11 +116,11 @@ def test_get_timezone_by_name_zoneinfo(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self, name: str) -> None:
             self.name = name
 
-        def utcoffset(self, dt: datetime) -> timedelta | None:  # noqa: ARG002
+        def utcoffset(self, dt: datetime) -> timedelta | None:
             return timedelta(hours=2)
 
     monkeypatch.setattr(cd, "ZoneInfo", lambda name: FakeZoneInfo(name))
-    tz = cd._get_timezone_by_name("Europe/Test")  # noqa: SLF001
+    tz = cd._get_timezone_by_name("Europe/Test")
     assert tz.utcoffset(datetime.now(timezone.utc)) == timedelta(hours=2)
 
 
@@ -153,7 +153,7 @@ def test_dispatch_message_display_variants() -> None:
         ],
     )
     context, buffer = _make_context(rich_user)
-    _dispatch_message_display(rich_user, context)  # noqa: SLF001
+    _dispatch_message_display(rich_user, context)
     assert "User:" in buffer.getvalue()
 
     # New assistant message with tool calls and metadata
@@ -172,7 +172,7 @@ def test_dispatch_message_display_variants() -> None:
         ),
     )
     context, buffer = _make_context(assistant_message)
-    _dispatch_message_display(assistant_message, context)  # noqa: SLF001
+    _dispatch_message_display(assistant_message, context)
     output = buffer.getvalue()
     assert "Assistant:" in output
     assert "Tokens:" in output
@@ -182,7 +182,7 @@ def test_dispatch_message_display_variants() -> None:
     # New system message
     system_message = NewSystemMessage(content="system text")
     context, buffer = _make_context(system_message)
-    _dispatch_message_display(system_message, context)  # noqa: SLF001
+    _dispatch_message_display(system_message, context)
     assert "System:" in buffer.getvalue()
 
     # Legacy user message
@@ -193,7 +193,7 @@ def test_dispatch_message_display_variants() -> None:
         ],
     )
     context, buffer = _make_context(legacy_user)
-    _dispatch_message_display(legacy_user, context)  # noqa: SLF001
+    _dispatch_message_display(legacy_user, context)
     assert "legacy user" in buffer.getvalue()
 
     # Legacy assistant message with full metadata
@@ -207,7 +207,7 @@ def test_dispatch_message_display_variants() -> None:
         ),
     )
     context, buffer = _make_context(legacy_assistant)
-    _dispatch_message_display(legacy_assistant, context)  # noqa: SLF001
+    _dispatch_message_display(legacy_assistant, context)
     legacy_output = buffer.getvalue()
     assert "legacy assistant" in legacy_output
     assert "Model:legacy-model" in legacy_output
@@ -215,19 +215,19 @@ def test_dispatch_message_display_variants() -> None:
     # Legacy system message (alias of NewSystemMessage)
     legacy_system = AgentSystemMessage(content="legacy system")
     context, buffer = _make_context(legacy_system)
-    _dispatch_message_display(legacy_system, context)  # noqa: SLF001
+    _dispatch_message_display(legacy_system, context)
     assert "legacy system" in buffer.getvalue()
 
     # Dict-based function call
     dict_call = {"type": "function_call", "name": "lookup", "arguments": '{"q": 1}'}
     context, buffer = _make_context(dict_call)
-    _dispatch_message_display(dict_call, context)  # noqa: SLF001
+    _dispatch_message_display(dict_call, context)
     assert "Call:" in buffer.getvalue()
 
     # Dict-based function output with execution time
     dict_output = {"type": "function_call_output", "output": "value", "execution_time_ms": 9}
     context, buffer = _make_context(dict_output)
-    _dispatch_message_display(dict_output, context)  # noqa: SLF001
+    _dispatch_message_display(dict_output, context)
     assert "Output:" in buffer.getvalue()
 
     # Dict-based assistant with meta tokens
@@ -237,7 +237,7 @@ def test_dispatch_message_display_variants() -> None:
         "meta": {"model": "dict", "latency_ms": 5, "output_time_ms": 7, "input_tokens": 2, "output_tokens": 3},
     }
     context, buffer = _make_context(dict_assistant)
-    _dispatch_message_display(dict_assistant, context)  # noqa: SLF001
+    _dispatch_message_display(dict_assistant, context)
     dict_output = buffer.getvalue()
     assert "dict assistant" in dict_output
     assert "Tokens:" in dict_output
@@ -245,26 +245,27 @@ def test_dispatch_message_display_variants() -> None:
     # Dict-based system
     dict_system = {"role": "system", "content": "dict system"}
     context, buffer = _make_context(dict_system)
-    _dispatch_message_display(dict_system, context)  # noqa: SLF001
+    _dispatch_message_display(dict_system, context)
     assert "dict system" in buffer.getvalue()
 
     # Unknown dict type
     dict_unknown = {"role": "other", "content": "unknown"}
     context, buffer = _make_context(dict_unknown)
-    _dispatch_message_display(dict_unknown, context)  # noqa: SLF001
+    _dispatch_message_display(dict_unknown, context)
     assert "Unknown" in buffer.getvalue()
 
     # Unknown object with failing model_dump
     class BrokenMessage:
         def model_dump(self) -> dict:
-            raise ValueError("boom")
+            error_message = "boom"
+            raise ValueError(error_message)
 
         def __str__(self) -> str:
             return "broken"
 
     strange_object = BrokenMessage()
     context, buffer = _make_context(strange_object)
-    _dispatch_message_display(strange_object, context)  # noqa: SLF001
+    _dispatch_message_display(strange_object, context)
     assert "Unknown" in buffer.getvalue()
 
 
@@ -333,7 +334,7 @@ def test_display_basic_message_stats_with_total(monkeypatch: pytest.MonkeyPatch)
         )
 
     monkeypatch.setattr(cd, "_analyze_messages", fake_analyze_messages)
-    _display_basic_message_stats([], console)  # noqa: SLF001
+    _display_basic_message_stats([], console)
     assert "Total" in console_buffer.getvalue()
 
 
@@ -344,7 +345,7 @@ def test_display_messages_creates_default_console(monkeypatch: pytest.MonkeyPatc
         def __init__(self) -> None:
             self.records: list[str] = []
 
-        def print(self, *args: object, **kwargs: object) -> None:  # noqa: D401
+        def print(self, *args: object, **kwargs: object) -> None:
             self.records.append(" ".join(str(arg) for arg in args))
 
     dummy_console = DummyConsole()
@@ -389,5 +390,5 @@ def test_build_chat_summary_table_with_misc_meta() -> None:
 
     unknown_message = 42  # type: ignore[arg-type]
 
-    table = cd.build_chat_summary_table([legacy_message, dict_message, llm_message, unknown_message])  # noqa: SLF001
+    table = cd.build_chat_summary_table([legacy_message, dict_message, llm_message, unknown_message])
     assert table.title == "Chat Summary"

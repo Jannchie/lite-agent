@@ -46,14 +46,12 @@ async def openai_completion_stream_handler(
         record_file = await aiofiles.open(record_path, "w", encoding="utf-8")
 
     try:
-        async for chunk in resp:
-            if not isinstance(chunk, ChatCompletionChunk):
-                converted = _coerce_chat_completion_chunk(chunk)
-                if converted is None:
-                    logger.warning("unexpected chunk type: %s", type(chunk))
-                    logger.debug("chunk content: %s", chunk)
-                    continue
-                chunk = converted
+        async for raw_chunk in resp:
+            chunk = raw_chunk if isinstance(raw_chunk, ChatCompletionChunk) else _coerce_chat_completion_chunk(raw_chunk)
+            if chunk is None:
+                logger.warning("unexpected chunk type: %s", type(raw_chunk))
+                logger.debug("chunk content: %s", raw_chunk)
+                continue
             async for result in processor.process_chunk(chunk, record_file):
                 yield result
     finally:
@@ -102,7 +100,7 @@ async def _close_stream(stream: object) -> None:
         logger.debug("Failed to close OpenAI stream", exc_info=True)
 
 
-def _coerce_chat_completion_chunk(chunk: Any) -> ChatCompletionChunk | None:
+def _coerce_chat_completion_chunk(chunk: object) -> ChatCompletionChunk | None:
     """Convert objects from LiteLLM/OpenAI into ChatCompletionChunk when possible."""
     if isinstance(chunk, ChatCompletionChunk):
         return chunk

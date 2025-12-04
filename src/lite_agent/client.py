@@ -267,13 +267,12 @@ class OpenAIClient(BaseLLMClient):
         params: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
+            "tool_choice": tool_choice,
             **kwargs,
         }
 
         if tools is not None:
             params["tools"] = tools
-            if tool_choice is not None:
-                params["tool_choice"] = tool_choice
         if streaming:
             params["stream"] = True
             params["stream_options"] = {**params.get("stream_options", {}), "include_usage": True}
@@ -320,14 +319,13 @@ class OpenAIClient(BaseLLMClient):
         params: dict[str, Any] = {
             "model": self.model,
             "input": messages,
+            "tool_choice": tool_choice,
             "store": False,
             **kwargs,
         }
 
         if tools is not None:
             params["tools"] = tools
-            if tool_choice is not None:
-                params["tool_choice"] = tool_choice
         if streaming:
             params["stream"] = True
             params["stream_options"] = {**params.get("stream_options", {}), "include_usage": True}
@@ -381,13 +379,12 @@ class LiteLLMClient(BaseLLMClient):
             "api_version": self.api_version,
             "api_key": self.api_key,
             "api_base": self.api_base,
+            "tool_choice": tool_choice,
             "stream": streaming,
             **kwargs,
         }
         if tools is not None:
             params["tools"] = tools
-            if tool_choice is not None:
-                params["tool_choice"] = tool_choice
         if streaming:
             params["stream"] = True
             params["stream_options"] = {**params.get("stream_options", {}), "include_usage": True}
@@ -441,14 +438,13 @@ class LiteLLMClient(BaseLLMClient):
             "api_version": self.api_version,
             "api_key": self.api_key,
             "api_base": self.api_base,
+            "tool_choice": tool_choice,
             "stream": streaming,
             "store": False,
             **kwargs,
         }
         if tools is not None:
             params["tools"] = tools
-            if tool_choice is not None:
-                params["tool_choice"] = tool_choice
         if streaming:
             params["stream"] = True
             params["stream_options"] = {**params.get("stream_options", {}), "include_usage": True}

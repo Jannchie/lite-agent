@@ -57,7 +57,7 @@ class TestStructuredOutputIntegration:
         async def async_gen() -> AsyncGenerator[AssistantMessageEvent, None]:
             yield event
 
-        async def stream():  # Async iterable for streaming mode
+        async def stream() -> AsyncGenerator[AssistantMessageEvent, None]:  # Async iterable for streaming mode
             async for item in async_gen():
                 yield item
 

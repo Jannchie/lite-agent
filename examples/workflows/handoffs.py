@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Example showing how to use handoffs between agents.
 
 This example demonstrates how agents can transfer conversations to each other

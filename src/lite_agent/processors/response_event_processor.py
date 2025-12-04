@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeAlias, cast
 
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from openai.types.responses import ResponseStreamEvent
@@ -21,12 +21,14 @@ from lite_agent.types import (
 )
 from lite_agent.utils.metrics import TimingMetrics
 
+JSONValue: TypeAlias = dict[str, "JSONValue"] | list["JSONValue"] | str | int | float | bool | None
+
 
 class ResponseEventProcessor:
     """Processor for handling response events"""
 
     def __init__(self) -> None:
-        self._messages: list[dict[str, Any]] = []
+        self._messages: list[dict[str, JSONValue]] = []
         self._start_time: datetime | None = None
         self._first_output_time: datetime | None = None
         self._output_complete_time: datetime | None = None
@@ -57,13 +59,14 @@ class ResponseEventProcessor:
         event_type = getattr(event, "type", None)
 
         if event_type == "response.output_item.added":
-            self._messages.append(self._convert_model(event.item))
+            self._messages.append(cast("dict[str, JSONValue]", self._convert_model(event.item)))
             return []
 
         if event_type == "response.content_part.added":
             latest_message = self._messages[-1] if self._messages else None
-            if latest_message and isinstance(latest_message.get("content"), list):
-                latest_message["content"].append(self._convert_model(event.part))
+            content = latest_message.get("content") if latest_message else None
+            if isinstance(content, list):
+                content.append(self._convert_model(event.part))
             return []
 
         if event_type == "response.output_text.delta":
@@ -72,23 +75,25 @@ class ResponseEventProcessor:
                 self._first_output_time = datetime.now(timezone.utc)
 
             latest_message = self._messages[-1] if self._messages else None
-            if latest_message and isinstance(latest_message.get("content"), list):
-                latest_content = latest_message["content"][-1]
-                if "text" in latest_content:
-                    latest_content["text"] += event.delta
-                    return [ContentDeltaEvent(delta=event.delta)]
+            if latest_message:
+                content = latest_message.get("content")
+                if isinstance(content, list) and content:
+                    latest_content = content[-1]
+                    if isinstance(latest_content, dict) and isinstance(latest_content.get("text"), str):
+                        delta_text = cast("str", event.delta)
+                        latest_content["text"] = f"{latest_content['text']}{delta_text}"
+                        return [ContentDeltaEvent(delta=event.delta)]
             return []
 
         if event_type == "response.output_item.done":
-            item = self._convert_model(event.item)
+            item = cast("dict[str, JSONValue]", self._convert_model(event.item))
             if item.get("type") == "function_call":
-                return [
-                    FunctionCallEvent(
-                        call_id=item["call_id"],
-                        name=item["name"],
-                        arguments=item["arguments"],
-                    ),
-                ]
+                function_event: AgentChunk = FunctionCallEvent(
+                    call_id=cast("str", item["call_id"]),
+                    name=cast("str", item["name"]),
+                    arguments=item["arguments"],
+                )
+                return [function_event]
             if item.get("type") == "message":
                 # Mark output complete time when message is done
                 if self._output_complete_time is None:
@@ -130,9 +135,10 @@ class ResponseEventProcessor:
             if self._messages:
                 latest_message = self._messages[-1]
                 if latest_message.get("type") == "function_call":
-                    if "arguments" not in latest_message:
-                        latest_message["arguments"] = ""
-                    latest_message["arguments"] += event.delta
+                    arguments = latest_message.get("arguments")
+                    if not isinstance(arguments, str):
+                        arguments = ""
+                    latest_message["arguments"] = f"{arguments}{event.delta}"
             return []
 
         elif event_type == "response.function_call.arguments.done":
@@ -197,11 +203,14 @@ class ResponseEventProcessor:
         self._usage_data = {}
 
     @staticmethod
-    def _convert_model(value: Any) -> Any:
+    def _convert_model(value: object) -> JSONValue:
         if hasattr(value, "model_dump"):
             return value.model_dump()
         if isinstance(value, list):
             return [ResponseEventProcessor._convert_model(item) for item in value]
         if isinstance(value, dict):
             return {key: ResponseEventProcessor._convert_model(item) for key, item in value.items()}
-        return value
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+
+        return cast("JSONValue", value)

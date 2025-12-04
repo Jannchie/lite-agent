@@ -9,7 +9,8 @@
   ],
   "reportAttributeAccessIssue": "warning",
   "reportArgumentType": "warning",
-  "pythonPath": ".",
+  "venvPath": ".",
+  "venv": ".venv",
   "extraPaths": ["."],
   "executionEnvironments": [
     {

@@ -104,6 +104,7 @@ async def test_message_transfer_called_in_completion():
 
         # Get the messages that were passed to the completion
         call_args = agent.client._client.chat.completions.create.await_args
+        assert call_args is not None
         passed_messages = call_args.kwargs["messages"]
 
         # The first message should be the system message
@@ -144,6 +145,7 @@ async def test_completion_without_message_transfer():
 
         # Get the messages that were passed to the completion
         call_args = agent.client._client.chat.completions.create.await_args
+        assert call_args is not None
         passed_messages = call_args.kwargs["messages"]
 
         # The first message should be the system message

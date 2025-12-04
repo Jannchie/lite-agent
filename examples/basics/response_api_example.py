@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Example demonstrating the new Response API format for mixed text and image content.
 

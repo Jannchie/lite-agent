@@ -1,10 +1,14 @@
 """Integration tests for OpenAI streaming mocks."""
 
+from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock, patch
 
 import pytest
 
 from tests.utils.mock_openai import create_chat_completion_stream_mock
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @pytest.mark.asyncio
@@ -31,7 +35,7 @@ async def test_mock_chat_completion_with_patch() -> None:
 
         client = OpenAIClient(model="gpt-4o-mini")
         stream = await client.completion(messages=[{"role": "user", "content": "Hi"}])
-        async for _chunk in stream:
+        async for _chunk in cast("AsyncIterator[object]", stream):
             pass
 
 

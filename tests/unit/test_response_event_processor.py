@@ -289,8 +289,10 @@ class TestResponseEventProcessor:
         result = processor.handle_event(event)
 
         assert result == []
-        assert len(processor._messages[0]["content"]) == 1
-        assert processor._messages[0]["content"][0] == mock_part
+        content = processor._messages[0]["content"]
+        assert isinstance(content, list)
+        assert len(content) == 1
+        assert content[0] == mock_part
 
     def test_handle_output_text_delta_event(self):
         """测试 OutputTextDeltaEvent 处理"""
@@ -318,7 +320,10 @@ class TestResponseEventProcessor:
         assert len(result) == 1
         assert isinstance(result[0], ContentDeltaEvent)
         assert result[0].delta == " World"
-        assert processor._messages[0]["content"][0]["text"] == "Hello World"
+        content = processor._messages[0]["content"]
+        assert isinstance(content, list)
+        assert isinstance(content[0], dict)
+        assert content[0]["text"] == "Hello World"
         assert processor._first_output_time is not None
 
     def test_handle_output_item_done_event_function_call(self):

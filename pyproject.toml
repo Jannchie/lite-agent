@@ -10,7 +10,8 @@ dependencies = [
     "funcall>=0.11.0",
     "prompt-toolkit>=3.0.51",
     "rich>=14.0.0",
-    "openai<=1.99.5",
+    "openai>=2.8.1",
+    "litellm>=1.80.7",
 ]
 keywords = [
     "function call",

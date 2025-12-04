@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Example demonstrating the set_chat_history functionality.
 
 This example shows how to set a complete chat history and automatically track

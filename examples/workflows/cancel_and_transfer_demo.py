@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Demo showing two new features:
 1. Cancellation of pending tool calls when user provides new input

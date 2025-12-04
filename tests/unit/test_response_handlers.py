@@ -1,5 +1,6 @@
 """Tests for response handlers."""
 
+from collections.abc import AsyncGenerator
 from unittest.mock import Mock, patch
 
 import pytest
@@ -229,15 +230,15 @@ async def test_responses_handler_streaming():
     with patch("lite_agent.response_handlers.responses.openai_response_stream_handler") as mock_stream:
         mock_chunks = [Mock(), Mock()]
 
-        async def async_gen() -> any:  # type: ignore[misc]
+        async def async_gen() -> AsyncGenerator[Mock, None]:
             for chunk in mock_chunks:
                 yield chunk
 
         mock_stream.return_value = async_gen()
 
         class AsyncStream:
-            def __aiter__(self):
-                async def gen():
+            def __aiter__(self) -> AsyncGenerator[None, None]:
+                async def gen() -> AsyncGenerator[None, None]:
                     if False:
                         yield None
 
@@ -261,8 +262,8 @@ async def test_completion_handler_streaming():
     handler = CompletionResponseHandler()
 
     class AsyncStream:
-        def __aiter__(self):
-            async def gen():
+        def __aiter__(self) -> AsyncGenerator[None, None]:
+            async def gen() -> AsyncGenerator[None, None]:
                 if False:
                     yield None
 
@@ -277,7 +278,7 @@ async def test_completion_handler_streaming():
     with patch("lite_agent.response_handlers.completion.openai_completion_stream_handler") as mock_stream:
         mock_chunks = [Mock(), Mock()]
 
-        async def async_gen() -> any:  # type: ignore[misc]
+        async def async_gen() -> AsyncGenerator[Mock, None]:
             for chunk in mock_chunks:
                 yield chunk
 

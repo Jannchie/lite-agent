@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +19,8 @@ class MockAsyncStream:
     def __init__(self, items: list[Any]) -> None:
         self._items = items
 
-    def __aiter__(self):
-        async def gen():
+    def __aiter__(self) -> AsyncGenerator[Any, None]:
+        async def gen() -> AsyncGenerator[Any, None]:
             for item in self._items:
                 yield item
 

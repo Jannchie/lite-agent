@@ -36,7 +36,7 @@ class MockAsyncStream:
 
 
 class DummyEvent:
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: object) -> None:
         self.__dict__.update(kwargs)
 
     def model_dump_json(self) -> str:
@@ -112,7 +112,7 @@ class TestStreamHandlersAdditional:
             mock_open,
         ):
             mock_processor_instance = Mock()
-            async def mock_process_chunk(*_args, **_kwargs):
+            async def mock_process_chunk(*_args: object, **_kwargs: object) -> AsyncGenerator[None, None]:
                 if False:
                     yield None
 

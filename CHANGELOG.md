@@ -1,3 +1,11 @@
+## v0.16.5
+
+[v0.16.4...v0.16.5](https://github.com/Jannchie/lite-agent/compare/v0.16.4...v0.16.5)
+
+### :sparkles: Features
+
+- **usage**: add cached input tokens handling - By [Jannchie](mailto:jannchie@gmail.com) in [346607e](https://github.com/Jannchie/lite-agent/commit/346607e)
+
 ## v0.16.4
 
 [v0.16.3...v0.16.4](https://github.com/Jannchie/lite-agent/compare/v0.16.3...v0.16.4)

@@ -28,6 +28,7 @@ from lite_agent.types import (
     UsageEvent,
 )
 from lite_agent.utils.metrics import TimingMetrics
+from lite_agent.utils.usage import extract_cached_input_tokens
 
 
 class CompletionEventProcessor:
@@ -79,6 +80,7 @@ class CompletionEventProcessor:
                 usage = MessageUsage(
                     input_tokens=self._usage_data.get("input_tokens"),
                     output_tokens=self._usage_data.get("output_tokens"),
+                    cached_input_tokens=self._usage_data.get("cached_input_tokens"),
                 )
                 # Extract model information from chunk
                 model_name = getattr(chunk, "model", None)
@@ -160,6 +162,7 @@ class CompletionEventProcessor:
                 usage = MessageUsage(
                     input_tokens=self._usage_data.get("input_tokens"),
                     output_tokens=self._usage_data.get("output_tokens"),
+                    cached_input_tokens=self._usage_data.get("cached_input_tokens"),
                 )
                 # Extract model information from chunk
                 model_name = getattr(chunk, "model", None)
@@ -195,9 +198,13 @@ class CompletionEventProcessor:
                 prompt_tokens = usage.get("prompt_tokens")
             if completion_tokens is None and isinstance(usage, dict):
                 completion_tokens = usage.get("completion_tokens")
+            input_tokens = prompt_tokens if isinstance(prompt_tokens, int) else 0
+            output_tokens = completion_tokens if isinstance(completion_tokens, int) else 0
+            cached_input_tokens = extract_cached_input_tokens(usage)
 
-            self._usage_data["input_tokens"] = prompt_tokens
-            self._usage_data["output_tokens"] = completion_tokens
+            self._usage_data["input_tokens"] = input_tokens
+            self._usage_data["output_tokens"] = output_tokens
+            self._usage_data["cached_input_tokens"] = cached_input_tokens
 
             results = []
 
@@ -205,8 +212,9 @@ class CompletionEventProcessor:
             results.append(
                 UsageEvent(
                     usage=EventUsage(
-                        input_tokens=prompt_tokens,
-                        output_tokens=completion_tokens,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cached_input_tokens=cached_input_tokens,
                     ),
                 ),
             )

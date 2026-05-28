@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from lite_agent.processors.completion_event_processor import CompletionEventProcessor
@@ -208,6 +210,22 @@ def test_update_tool_calls_tool_call_type_param(processor, current_type, new_typ
 def test_update_tool_calls_no_current_message(processor):
     tool_calls = [DummyDeltaToolCall(id="id1", type_="function", function=DummyFunction(name="f", arguments="a"), index=0)]
     processor.update_tool_calls(tool_calls)
+
+
+def test_handle_usage_chunk_preserves_cached_prompt_tokens(processor):
+    usage = SimpleNamespace(
+        prompt_tokens=100,
+        completion_tokens=20,
+        prompt_tokens_details=SimpleNamespace(cached_tokens=35),
+    )
+    chunk = DummyChunk(usage=usage)
+
+    result = processor.handle_usage_chunk(chunk)
+
+    assert result[0].usage.input_tokens == 100
+    assert result[0].usage.output_tokens == 20
+    assert result[0].usage.cached_input_tokens == 35
+    assert processor._usage_data["cached_input_tokens"] == 35
 
 
 def test_finalize_message(processor):

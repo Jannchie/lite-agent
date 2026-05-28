@@ -20,6 +20,7 @@ from lite_agent.types import (
     UsageEvent,
 )
 from lite_agent.utils.metrics import TimingMetrics
+from lite_agent.utils.usage import extract_cached_input_tokens
 
 JSONValue: TypeAlias = dict[str, "JSONValue"] | list["JSONValue"] | str | int | float | bool | None
 
@@ -116,6 +117,7 @@ class ResponseEventProcessor:
                     usage = MessageUsage(
                         input_tokens=self._usage_data.get("input_tokens"),
                         output_tokens=self._usage_data.get("output_tokens"),
+                        cached_input_tokens=self._usage_data.get("cached_input_tokens"),
                         total_tokens=(self._usage_data.get("input_tokens") or 0) + (self._usage_data.get("output_tokens") or 0),
                     )
                     meta = AssistantMessageMeta(
@@ -156,6 +158,7 @@ class ResponseEventProcessor:
                 # Store usage data for meta information
                 self._usage_data["input_tokens"] = usage.input_tokens
                 self._usage_data["output_tokens"] = usage.output_tokens
+                self._usage_data["cached_input_tokens"] = extract_cached_input_tokens(usage)
                 # Also store usage time for later calculation
                 self._usage_data["usage_time"] = self._usage_time
 
@@ -167,6 +170,7 @@ class ResponseEventProcessor:
                         usage=EventUsage(
                             input_tokens=usage.input_tokens,
                             output_tokens=usage.output_tokens,
+                            cached_input_tokens=self._usage_data["cached_input_tokens"],
                         ),
                     ),
                 )

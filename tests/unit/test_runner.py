@@ -5,7 +5,7 @@ import pytest
 
 from lite_agent.agent import Agent
 from lite_agent.runner import Runner
-from lite_agent.types import AgentAssistantMessage, AgentChunk, AgentUserMessage, AssistantMessageEvent, UserTextContent
+from lite_agent.types import AgentAssistantMessage, AgentChunk, AgentUserMessage, AssistantMessageEvent, EventUsage, NewAssistantMessage, UsageEvent, UserTextContent
 
 
 class DummyAgent(Agent):
@@ -61,6 +61,34 @@ async def test_runner_init():
     runner = Runner(agent=agent)
     assert runner.agent == agent
     assert runner.messages == []
+
+
+@pytest.mark.asyncio
+async def test_runner_accumulates_cached_input_tokens():
+    mock_agent = Mock()
+    mock_agent.client = Mock()
+    mock_agent.client.model = "dummy-model"
+
+    async def async_gen(_: object, record_to_file=None, response_format=None, reasoning=None, *, streaming=True) -> AsyncGenerator[AgentChunk, None]:
+        yield AssistantMessageEvent(message=AgentAssistantMessage(content="done"))
+        yield UsageEvent(usage=EventUsage(input_tokens=100, output_tokens=50, cached_input_tokens=25))
+
+    mock_agent.responses = AsyncMock(side_effect=async_gen)
+    runner = Runner(agent=mock_agent, api="responses")
+
+    results = []
+    async for chunk in runner.run("hello"):
+        results.append(chunk)
+
+    assert runner.usage.input_tokens == 100
+    assert runner.usage.output_tokens == 50
+    assert runner.usage.total_tokens == 150
+    assert runner.usage.cached_input_tokens == 25
+    assert results[-1].usage.cached_input_tokens == 25
+    last_message = runner.messages[-1]
+    assert isinstance(last_message, NewAssistantMessage)
+    assert last_message.meta.usage is not None
+    assert last_message.meta.usage.cached_input_tokens == 25
 
 
 @pytest.mark.asyncio

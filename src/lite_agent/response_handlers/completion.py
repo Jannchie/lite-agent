@@ -10,6 +10,7 @@ from lite_agent.stream_handlers import openai_completion_stream_handler
 from lite_agent.types import AgentChunk
 from lite_agent.types.events import AssistantMessageEvent, Usage, UsageEvent
 from lite_agent.types.messages import AssistantMessageMeta, AssistantTextContent, AssistantToolCall, NewAssistantMessage
+from lite_agent.utils.usage import extract_cached_input_tokens
 
 
 class CompletionResponseHandler(ResponseHandler):
@@ -72,5 +73,6 @@ class CompletionResponseHandler(ResponseHandler):
             usage = Usage(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
+                cached_input_tokens=extract_cached_input_tokens(response.usage),
             )
             yield UsageEvent(usage=usage)

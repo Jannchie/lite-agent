@@ -47,7 +47,7 @@ class Runner:
         self.api = api
         self.streaming = streaming
         self._message_state_manager = MessageStateManager()
-        self.usage = MessageUsage(input_tokens=0, output_tokens=0, total_tokens=0)
+        self.usage = MessageUsage(input_tokens=0, output_tokens=0, cached_input_tokens=0, total_tokens=0)
 
     async def _start_assistant_message(self, content: str = "", meta: AssistantMessageMeta | None = None) -> None:
         """Start a new assistant message."""
@@ -476,13 +476,16 @@ class Runner:
                         if chunk.type in includes:
                             yield chunk
                     case "usage":
-                        logger.debug(f"Usage: {chunk.usage.input_tokens} input, {chunk.usage.output_tokens} output tokens")
+                        logger.debug(
+                            f"Usage: {chunk.usage.input_tokens} input, {chunk.usage.output_tokens} output, {chunk.usage.cached_input_tokens} cached input tokens",
+                        )
                         # Update the current or last assistant message with usage data and output_time_ms
                         usage_time = datetime.now(timezone.utc)
 
                         # Always accumulate usage in runner first
                         self.usage.input_tokens = (self.usage.input_tokens or 0) + (chunk.usage.input_tokens or 0)
                         self.usage.output_tokens = (self.usage.output_tokens or 0) + (chunk.usage.output_tokens or 0)
+                        self.usage.cached_input_tokens = (self.usage.cached_input_tokens or 0) + (chunk.usage.cached_input_tokens or 0)
                         self.usage.total_tokens = (self.usage.total_tokens or 0) + (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
 
                         # Try to find the assistant message to update
@@ -504,6 +507,7 @@ class Runner:
                                 target_message.meta.usage = MessageUsage()
                             target_message.meta.usage.input_tokens = chunk.usage.input_tokens
                             target_message.meta.usage.output_tokens = chunk.usage.output_tokens
+                            target_message.meta.usage.cached_input_tokens = chunk.usage.cached_input_tokens
                             target_message.meta.usage.total_tokens = (chunk.usage.input_tokens or 0) + (chunk.usage.output_tokens or 0)
 
                             # Calculate output_time_ms if latency_ms is available

@@ -460,7 +460,11 @@ class TestResponseEventProcessor:
         processor._first_output_time = datetime.now(timezone.utc)
         processor._output_complete_time = datetime.now(timezone.utc)
 
-        mock_usage = SimpleNamespace(input_tokens=100, output_tokens=50)
+        mock_usage = SimpleNamespace(
+            input_tokens=100,
+            output_tokens=50,
+            input_tokens_details=SimpleNamespace(cached_tokens=25),
+        )
         mock_response = SimpleNamespace(usage=mock_usage)
         event = SimpleNamespace(type="response.completed", response=mock_response)
 
@@ -473,6 +477,7 @@ class TestResponseEventProcessor:
         # 检查使用量数据
         assert result[0].usage.input_tokens == 100
         assert result[0].usage.output_tokens == 50
+        assert result[0].usage.cached_input_tokens == 25
 
         # 检查时间数据
         assert result[1].timing.latency_ms is not None
@@ -482,6 +487,7 @@ class TestResponseEventProcessor:
         assert processor._usage_time is not None
         assert processor._usage_data["input_tokens"] == 100
         assert processor._usage_data["output_tokens"] == 50
+        assert processor._usage_data["cached_input_tokens"] == 25
 
     def test_handle_response_completed_event_no_usage(self):
         """测试 ResponseCompletedEvent 无使用量数据的处理"""

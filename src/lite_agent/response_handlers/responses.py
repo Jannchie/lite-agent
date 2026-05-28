@@ -10,6 +10,7 @@ from lite_agent.stream_handlers import openai_response_stream_handler
 from lite_agent.types import AgentChunk
 from lite_agent.types.events import AssistantMessageEvent, Usage, UsageEvent
 from lite_agent.types.messages import AssistantMessageMeta, AssistantTextContent, AssistantToolCall, NewAssistantMessage
+from lite_agent.utils.usage import extract_cached_input_tokens
 
 
 class ResponsesAPIHandler(ResponseHandler):
@@ -76,5 +77,6 @@ class ResponsesAPIHandler(ResponseHandler):
             usage = Usage(
                 input_tokens=response.usage.input_tokens,
                 output_tokens=response.usage.output_tokens,
+                cached_input_tokens=extract_cached_input_tokens(response.usage),
             )
             yield UsageEvent(usage=usage)

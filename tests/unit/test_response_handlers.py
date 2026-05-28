@@ -1,6 +1,7 @@
 """Tests for response handlers."""
 
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -29,6 +30,7 @@ async def test_completion_handler_non_streaming_with_text():
     mock_usage = Mock()
     mock_usage.prompt_tokens = 10
     mock_usage.completion_tokens = 5
+    mock_usage.prompt_tokens_details = SimpleNamespace(cached_tokens=4)
     mock_response.usage = mock_usage
 
     # Collect chunks
@@ -52,6 +54,7 @@ async def test_completion_handler_non_streaming_with_text():
     assert isinstance(usage_chunk, UsageEvent)
     assert usage_chunk.usage.input_tokens == 10
     assert usage_chunk.usage.output_tokens == 5
+    assert usage_chunk.usage.cached_input_tokens == 4
 
 
 @pytest.mark.asyncio
@@ -145,6 +148,7 @@ async def test_responses_handler_non_streaming_with_text():
     mock_usage = Mock()
     mock_usage.input_tokens = 15
     mock_usage.output_tokens = 8
+    mock_usage.input_tokens_details = SimpleNamespace(cached_tokens=6)
     mock_response.usage = mock_usage
 
     # Collect chunks
@@ -167,6 +171,7 @@ async def test_responses_handler_non_streaming_with_text():
     assert isinstance(usage_chunk, UsageEvent)
     assert usage_chunk.usage.input_tokens == 15
     assert usage_chunk.usage.output_tokens == 8
+    assert usage_chunk.usage.cached_input_tokens == 6
 
 
 @pytest.mark.asyncio

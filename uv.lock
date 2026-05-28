@@ -964,7 +964,7 @@ wheels = [
 
 [[package]]
 name = "lite-agent"
-version = "0.16.3"
+version = "0.16.5"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
